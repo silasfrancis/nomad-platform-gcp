@@ -27,26 +27,85 @@ environment (dev / prod) — and only ever knows about its own cluster.
 4. Always logs the analysis (structured JSON to stdout — picked up by
    Grafana Alloy and shipped to Loki) and sends a Slack alert
 5. If severity is `high`/`critical` **and** confidence meets
-   `REMEDIATION_CONFIDENCE_THRESHOLD`, attempts automated remediation:
-   - `increase_memory` — patches the task's memory limit and resubmits the job
-   - `restart` — stops the allocation, Nomad reschedules it
-   - `revert` — reverts the job to its previous version
+   `REMEDIATION_CONFIDENCE_THRESHOLD`, the agent's behaviour depends on
+   `REMEDIATION_MODE`:
+   - **`execute`** — attempts automated remediation against the live Nomad
+     API: `increase_memory`, `restart`, or `revert`
+   - **`propose`** — takes no action against Nomad. Instead sends a clearly
+     labelled "ACTION REQUIRED" Slack alert stating exactly what the agent
+     would have done, so a human can act on it manually
 6. Tracks remediation attempts per job. After `MAX_REMEDIATION_ATTEMPTS`,
-   stops attempting and sends an escalation alert instead
-7. Applies a cooldown (`COOLDOWN_SECONDS`) after any remediation attempt to
-   avoid rapid repeated action on the same job
+   stops attempting/proposing and sends an escalation alert instead
+7. Applies a cooldown (`COOLDOWN_SECONDS`) after any remediation attempt
+   (executed or proposed) to avoid rapid repeated action on the same job
+
+## Remediation mode — autonomous vs human-in-the-loop
+
+`REMEDIATION_MODE` is a required, explicit setting per environment — there
+is no implicit default, because the blast radius of autonomous remediation
+should never depend on something easy to overlook.
+
+| Environment | `REMEDIATION_MODE` | Behaviour |
+|---|---|---|
+| dev | `execute` | Agent autonomously patches memory, restarts allocations, and reverts jobs. This is where the remediation logic is proven out and tuned. |
+| prod | `propose` | Agent does all the same detection and Gemini analysis, but never calls the Nomad API. It sends a Slack alert describing the proposed action; a human reviews and acts manually. |
+
+This is a deliberate staged-trust design: once the remediation logic has
+proven reliable in dev (and ideally once a stronger Gemini model is
+available), prod can be flipped to `execute` by changing one variable in
+the Nomad job spec — no code change required.
+
+In `propose` mode, the agent still goes through the same cooldown and
+max-attempt bookkeeping as `execute` mode. This is intentional — without
+it, the same proposal would be re-sent to Slack on every poll cycle
+(every 30 seconds by default) until a human acted on it.
 
 ## Architecture
 
 ```
 src/
-├── main.py            # control loop, remediation decision logic
+├── main.py            # control loop, remediation decision logic, mode gate
 ├── detector.py         # polls Nomad API, identifies anomalies, fetches logs
 ├── gemini_client.py     # builds prompts, calls Gemini, validates responses
-├── remediator.py        # executes remediation against the Nomad API
-├── alerter.py            # sends Slack webhook alerts
-├── state.py               # in-memory cooldown + attempt tracking
-└── config.py                # all configuration from environment variables
+├── remediator.py        # executes remediation against the Nomad API (execute mode only)
+├── alerter.py            # sends Slack webhook alerts (normal, proposal, escalation)
+├── history.py             # persists anomaly + outcome history to PostgreSQL (optional)
+├── state.py                # in-memory cooldown + attempt tracking
+└── config.py                 # all configuration from environment variables
+```
+
+## Anomaly history (optional)
+
+If `HISTORY_DATABASE_URL` is set, every anomaly the agent handles is
+persisted to a PostgreSQL table (`agent_anomalies`) — what was detected,
+what Gemini decided, and what actually happened. This reuses the same
+PostgreSQL instance `metrics-api` connects to (a separate table, same
+database), rather than introducing a second database to operate.
+
+This is purely additive. The table schema is created automatically on
+startup if it doesn't exist (`history.ensure_schema()`). If
+`HISTORY_DATABASE_URL` is unset, or the database is unreachable at any
+point, the agent logs a warning and continues operating exactly as it
+did before this feature existed — detection, Gemini analysis, Slack
+alerting, and remediation are never gated on a successful database
+write. This is deliberate: monitoring infrastructure should not be able
+to take itself down by losing its own logging backend.
+
+Each row records: environment, detection timestamp, job/alloc/task/
+namespace, anomaly type, restart count, Gemini's likely cause/severity/
+confidence/suggested action, the remediation mode in effect at the time,
+and an `outcome` — one of `alerted_only`, `proposed`, `remediated`,
+`remediation_failed`, `escalated`, or `skipped_cooldown` — plus a JSONB
+`outcome_detail` column for remediation specifics (e.g. old/new memory
+values) where applicable.
+
+```sql
+-- What got remediated most often this week?
+SELECT job_id, anomaly_type, COUNT(*)
+FROM agent_anomalies
+WHERE outcome = 'remediated' AND detected_at > now() - interval '7 days'
+GROUP BY job_id, anomaly_type
+ORDER BY count DESC;
 ```
 
 ## Configuration
@@ -62,17 +121,19 @@ are never present in the Docker image or job spec.
 | `NOMAD_TOKEN` | Yes | — | Nomad ACL token scoped for the agent |
 | `GEMINI_API_KEY` | Yes | — | Gemini API key, injected from Vault |
 | `SLACK_WEBHOOK_URL` | Yes | — | Slack incoming webhook URL, injected from Vault |
+| `REMEDIATION_MODE` | Yes | — | `execute` (autonomous, dev) or `propose` (alert-only, prod) — see above |
 | `ENVIRONMENT` | No | `unknown` | Label used in alerts/logs, e.g. `dev`, `prod` |
 | `POLL_INTERVAL_SECONDS` | No | `30` | Control loop interval |
 | `RESTART_THRESHOLD` | No | `3` | Restart count that triggers `restart_loop` |
 | `PENDING_THRESHOLD_SECONDS` | No | `120` | Time before `pending` is flagged |
 | `STARTING_THRESHOLD_SECONDS` | No | `180` | Time before `starting` is flagged |
 | `LOG_TAIL_LINES` | No | `200` | Log lines fetched per anomaly |
-| `REMEDIATION_CONFIDENCE_THRESHOLD` | No | `0.8` | Minimum Gemini confidence to remediate |
-| `MAX_REMEDIATION_ATTEMPTS` | No | `3` | Max auto-remediation attempts per job |
+| `REMEDIATION_CONFIDENCE_THRESHOLD` | No | `0.8` | Minimum Gemini confidence to remediate/propose |
+| `MAX_REMEDIATION_ATTEMPTS` | No | `3` | Max attempts (executed or proposed) per job before escalating |
 | `COOLDOWN_SECONDS` | No | `300` | Cooldown after a remediation attempt |
 | `GEMINI_MODEL` | No | `gemini-1.5-flash` | Gemini model name |
 | `WATCH_NAMESPACES` | No | (all) | Comma-separated Nomad namespaces to watch |
+| `HISTORY_DATABASE_URL` | No | (disabled) | PostgreSQL connection string for anomaly history — see above. Unset disables persistence entirely. |
 
 ## Running locally
 
@@ -86,6 +147,8 @@ export NOMAD_TOKEN=dev-token
 export GEMINI_API_KEY=your-key
 export SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 export ENVIRONMENT=dev
+export REMEDIATION_MODE=execute   # use 'propose' to test alert-only behaviour
+export HISTORY_DATABASE_URL=postgresql://user:pass@localhost:5432/metricsdb  # optional
 
 cd src
 python main.py
@@ -101,25 +164,43 @@ pip install -r requirements.txt
 pytest
 ```
 
-All Nomad, Gemini, and Slack calls are mocked in tests (`responses` for
-HTTP, `unittest.mock` for the Gemini SDK) — the test suite never makes a
-real network call.
+All Nomad, Gemini, Slack, and PostgreSQL calls are mocked in tests
+(`responses` for HTTP, `unittest.mock` for the Gemini SDK and
+`psycopg2.connect`) — the test suite never makes a real network or
+database call.
 
 ## Docker
 
 ```bash
 docker build -t nomad-ai-agent .
+
+# Dev — autonomous remediation, with history persistence
 docker run --rm \
   -e NOMAD_ADDR=http://nomad.service.consul:4646 \
   -e NOMAD_TOKEN=... \
   -e GEMINI_API_KEY=... \
   -e SLACK_WEBHOOK_URL=... \
   -e ENVIRONMENT=dev \
+  -e REMEDIATION_MODE=execute \
+  -e HISTORY_DATABASE_URL=postgresql://user:pass@metrics-postgres:5432/metricsdb \
+  nomad-ai-agent
+
+# Prod — alert-only, human acts manually
+docker run --rm \
+  -e NOMAD_ADDR=http://nomad.service.consul:4646 \
+  -e NOMAD_TOKEN=... \
+  -e GEMINI_API_KEY=... \
+  -e SLACK_WEBHOOK_URL=... \
+  -e ENVIRONMENT=prod \
+  -e REMEDIATION_MODE=propose \
   nomad-ai-agent
 ```
 
 ## Safety guardrails
 
+- `REMEDIATION_MODE` defaults to nothing — it must be set explicitly per
+  environment. Prod runs `propose` until the team is confident enough in
+  the model and logic to trust `execute` in production
 - Remediation only triggers above a confidence threshold — low-confidence
   Gemini responses always fall back to alert-only
 - `check_image` and `manual_intervention` never trigger automated action,

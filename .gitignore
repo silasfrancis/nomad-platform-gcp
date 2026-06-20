@@ -18,6 +18,7 @@
 *.tfstate*
 *.tfvars
 *~
+.env
 bin/
 build/
 Dockerfile.pip
@@ -26,3 +27,5 @@ obj/
 pkg/
 release/wi-kubernetes-manifests.yaml
 vendor/
+__pycache__/
+.pytest_cache/

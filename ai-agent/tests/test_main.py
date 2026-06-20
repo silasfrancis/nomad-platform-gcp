@@ -148,6 +148,111 @@ class TestHandleAnomaly:
         assert kwargs.get("escalate") is True
 
 
+class TestProposeMode:
+    """
+    Tests for REMEDIATION_MODE=propose — the agent must never call
+    remediator.remediate() in this mode, but must still send a clearly
+    labelled proposal alert and still respect cooldown/attempt bookkeeping.
+    """
+
+    def test_propose_mode_does_not_call_remediator(self, monkeypatch):
+        monkeypatch.setattr(main.config, "REMEDIATION_MODE", "propose")
+        tracker = StateTracker(cooldown_seconds=60, max_attempts=3)
+        analysis = {
+            "severity": "critical",
+            "confidence": 0.95,
+            "suggested_action": "increase_memory",
+            "likely_cause": "x",
+            "summary": "x",
+            "memory_increase_mb": 256,
+        }
+
+        with patch.object(main.gemini_client, "analyze", return_value=analysis), \
+             patch.object(main.alerter, "send_proposal_alert") as mock_propose, \
+             patch.object(main.alerter, "send_alert") as mock_alert, \
+             patch.object(main.remediator, "remediate") as mock_remediate:
+
+            main.handle_anomaly(_sample_anomaly(), tracker)
+
+        mock_remediate.assert_not_called()
+        mock_propose.assert_called_once()
+        mock_alert.assert_not_called()
+
+    def test_propose_mode_still_records_attempt_and_starts_cooldown(self, monkeypatch):
+        monkeypatch.setattr(main.config, "REMEDIATION_MODE", "propose")
+        tracker = StateTracker(cooldown_seconds=300, max_attempts=3)
+        analysis = {
+            "severity": "high",
+            "confidence": 0.9,
+            "suggested_action": "restart",
+            "likely_cause": "x",
+            "summary": "x",
+            "memory_increase_mb": 0,
+        }
+
+        with patch.object(main.gemini_client, "analyze", return_value=analysis), \
+             patch.object(main.alerter, "send_proposal_alert"), \
+             patch.object(main.remediator, "remediate") as mock_remediate:
+
+            main.handle_anomaly(_sample_anomaly(), tracker)
+
+        # Even though nothing was executed, attempt count and cooldown
+        # still apply — otherwise the same proposal re-fires every poll.
+        assert tracker.attempts("web-job") == 1
+        assert tracker.is_cooling_down("web-job") is True
+        mock_remediate.assert_not_called()
+
+    def test_propose_mode_low_confidence_still_only_alerts_normally(self, monkeypatch):
+        monkeypatch.setattr(main.config, "REMEDIATION_MODE", "propose")
+        tracker = StateTracker(cooldown_seconds=60, max_attempts=3)
+        analysis = {
+            "severity": "high",
+            "confidence": 0.2,  # below threshold
+            "suggested_action": "increase_memory",
+            "likely_cause": "x",
+            "summary": "x",
+            "memory_increase_mb": 256,
+        }
+
+        with patch.object(main.gemini_client, "analyze", return_value=analysis), \
+             patch.object(main.alerter, "send_alert") as mock_alert, \
+             patch.object(main.alerter, "send_proposal_alert") as mock_propose:
+
+            main.handle_anomaly(_sample_anomaly(), tracker)
+
+        # Below the remediation threshold entirely — normal alert path,
+        # propose-mode messaging only applies once should_remediate is True
+        mock_alert.assert_called_once()
+        mock_propose.assert_not_called()
+
+    def test_propose_mode_respects_max_attempts_escalation(self, monkeypatch):
+        monkeypatch.setattr(main.config, "REMEDIATION_MODE", "propose")
+        tracker = StateTracker(cooldown_seconds=0, max_attempts=1)
+        tracker.record_remediation("web-job")  # already at max, cooldown=0 so it's expired
+
+        analysis = {
+            "severity": "critical",
+            "confidence": 0.95,
+            "suggested_action": "restart",
+            "likely_cause": "x",
+            "summary": "x",
+            "memory_increase_mb": 0,
+        }
+
+        with patch.object(main.gemini_client, "analyze", return_value=analysis), \
+             patch.object(main.alerter, "send_alert") as mock_alert, \
+             patch.object(main.alerter, "send_proposal_alert") as mock_propose:
+
+            main.handle_anomaly(_sample_anomaly(), tracker)
+
+        # Max attempts reached -> escalation path, same as execute mode.
+        # Propose mode does not bypass the escalation cap.
+        mock_alert.assert_called_once()
+        _, kwargs = mock_alert.call_args
+        assert kwargs.get("escalate") is True
+        mock_propose.assert_not_called()
+
+
 class TestRunOnce:
     def test_run_once_processes_all_detected_anomalies(self):
         tracker = StateTracker(cooldown_seconds=60, max_attempts=3)

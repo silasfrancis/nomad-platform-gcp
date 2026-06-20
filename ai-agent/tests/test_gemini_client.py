@@ -2,6 +2,10 @@
 test_gemini_client.py
 Tests prompt building, response validation, and error fallback behaviour.
 The Gemini SDK call itself is mocked — these tests never hit the real API.
+
+Mocks target gemini_client._client.models.generate_content, matching the
+google-genai SDK's client-based call shape (not the legacy
+google.generativeai module-level GenerativeModel pattern).
 """
 
 import json
@@ -26,6 +30,19 @@ def _sample_anomaly():
     }
 
 
+def _valid_gemini_payload(**overrides):
+    payload = {
+        "likely_cause": "Heap exhaustion",
+        "severity": "high",
+        "suggested_action": "increase_memory",
+        "memory_increase_mb": 256,
+        "confidence": 0.92,
+        "summary": "Service needs more memory",
+    }
+    payload.update(overrides)
+    return payload
+
+
 class TestBuildPrompt:
     def test_prompt_includes_key_fields(self):
         anomaly = _sample_anomaly()
@@ -44,18 +61,10 @@ class TestBuildPrompt:
 
 class TestValidateResponse:
     def test_valid_response_passes_through(self):
-        parsed = {
-            "likely_cause": "Heap exhaustion",
-            "severity": "high",
-            "suggested_action": "increase_memory",
-            "memory_increase_mb": 256,
-            "confidence": 0.9,
-            "summary": "OOM detected",
-        }
-        result = gemini_client._validate_response(parsed)
+        result = gemini_client._validate_response(_valid_gemini_payload())
         assert result["severity"] == "high"
         assert result["suggested_action"] == "increase_memory"
-        assert result["confidence"] == 0.9
+        assert result["confidence"] == 0.92
         assert result["memory_increase_mb"] == 256
 
     def test_invalid_action_falls_back_to_manual_intervention(self):
@@ -98,50 +107,41 @@ class TestValidateResponse:
 class TestAnalyze:
     def test_analyze_returns_parsed_response_on_success(self):
         mock_response = MagicMock()
-        mock_response.text = json.dumps({
-            "likely_cause": "Heap exhaustion",
-            "severity": "high",
-            "suggested_action": "increase_memory",
-            "memory_increase_mb": 256,
-            "confidence": 0.92,
-            "summary": "Service needs more memory",
-        })
+        mock_response.text = json.dumps(_valid_gemini_payload())
 
-        with patch.object(gemini_client, "_model") as mock_model:
-            mock_model.generate_content.return_value = mock_response
+        with patch.object(gemini_client, "_client") as mock_client:
+            mock_client.models.generate_content.return_value = mock_response
             result = gemini_client.analyze(_sample_anomaly())
 
         assert result["severity"] == "high"
         assert result["suggested_action"] == "increase_memory"
         assert result["confidence"] == 0.92
 
-    def test_analyze_strips_markdown_fences(self):
+    def test_analyze_calls_generate_content_with_model_and_json_config(self):
+        """
+        Confirms the call uses the google-genai client shape:
+        client.models.generate_content(model=..., contents=..., config=...)
+        with response_mime_type='application/json' enforced server-side —
+        not the legacy module-level genai.GenerativeModel().generate_content().
+        """
         mock_response = MagicMock()
-        mock_response.text = (
-            "```json\n"
-            + json.dumps({
-                "likely_cause": "x",
-                "severity": "low",
-                "suggested_action": "none",
-                "memory_increase_mb": 0,
-                "confidence": 0.5,
-                "summary": "fine",
-            })
-            + "\n```"
-        )
+        mock_response.text = json.dumps(_valid_gemini_payload())
 
-        with patch.object(gemini_client, "_model") as mock_model:
-            mock_model.generate_content.return_value = mock_response
-            result = gemini_client.analyze(_sample_anomaly())
+        with patch.object(gemini_client, "_client") as mock_client:
+            mock_client.models.generate_content.return_value = mock_response
+            gemini_client.analyze(_sample_anomaly())
 
-        assert result["severity"] == "low"
+            call_kwargs = mock_client.models.generate_content.call_args.kwargs
+            assert call_kwargs["model"] == gemini_client.GEMINI_MODEL
+            assert "contents" in call_kwargs
+            assert call_kwargs["config"].response_mime_type == "application/json"
 
     def test_analyze_returns_safe_fallback_on_json_error(self):
         mock_response = MagicMock()
         mock_response.text = "this is not json at all"
 
-        with patch.object(gemini_client, "_model") as mock_model:
-            mock_model.generate_content.return_value = mock_response
+        with patch.object(gemini_client, "_client") as mock_client:
+            mock_client.models.generate_content.return_value = mock_response
             result = gemini_client.analyze(_sample_anomaly())
 
         assert result["suggested_action"] == "manual_intervention"
@@ -149,16 +149,16 @@ class TestAnalyze:
         assert "Gemini analysis unavailable" in result["likely_cause"]
 
     def test_analyze_returns_safe_fallback_on_api_exception(self):
-        with patch.object(gemini_client, "_model") as mock_model:
-            mock_model.generate_content.side_effect = Exception("API timeout")
+        with patch.object(gemini_client, "_client") as mock_client:
+            mock_client.models.generate_content.side_effect = Exception("API timeout")
             result = gemini_client.analyze(_sample_anomaly())
 
         assert result["suggested_action"] == "manual_intervention"
         assert result["confidence"] == 0.0
 
     def test_analyze_never_raises(self):
-        with patch.object(gemini_client, "_model") as mock_model:
-            mock_model.generate_content.side_effect = RuntimeError("boom")
+        with patch.object(gemini_client, "_client") as mock_client:
+            mock_client.models.generate_content.side_effect = RuntimeError("boom")
             # Should not raise
             result = gemini_client.analyze(_sample_anomaly())
             assert isinstance(result, dict)
