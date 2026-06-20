@@ -1,10 +1,15 @@
 """
 gemini_client.py
-Sends anomaly context to Gemini 1.5 Flash and parses the structured response.
+Sends anomaly context to Gemini and parses the structured response.
+
+Uses the google-genai SDK (the current, actively maintained Google GenAI
+SDK), NOT the legacy google-generativeai package, which was deprecated
+and reached end-of-life on November 30, 2025.
 
 The prompt is designed to:
   - Give Gemini enough context to distinguish crash types
-  - Request a strictly structured JSON response
+  - Request a strictly structured JSON response (enforced via
+    response_mime_type="application/json", not just prompt instructions)
   - Avoid ambiguous remediation suggestions
 
 Expected Gemini response shape:
@@ -19,18 +24,18 @@ Expected Gemini response shape:
 """
 
 import json
-from typing import Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import structlog
 
 from config import GEMINI_API_KEY, GEMINI_MODEL, ENVIRONMENT
 
 log = structlog.get_logger()
 
-# Configure the SDK once at import time
-genai.configure(api_key=GEMINI_API_KEY)
-_model = genai.GenerativeModel(GEMINI_MODEL)
+# google-genai uses a client object rather than module-level configure().
+# Created once at import time and reused across calls.
+_client = genai.Client(api_key=GEMINI_API_KEY)
 
 VALID_ACTIONS = {
     "increase_memory",
@@ -43,9 +48,30 @@ VALID_ACTIONS = {
 
 VALID_SEVERITIES = {"low", "medium", "high", "critical"}
 
+# Enforced server-side via response_mime_type/response_schema below, so
+# the model cannot return prose, markdown fences, or malformed JSON shape.
+_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "likely_cause": {"type": "string"},
+        "severity": {"type": "string", "enum": sorted(VALID_SEVERITIES)},
+        "suggested_action": {"type": "string", "enum": sorted(VALID_ACTIONS)},
+        "memory_increase_mb": {"type": "integer"},
+        "confidence": {"type": "number"},
+        "summary": {"type": "string"},
+    },
+    "required": [
+        "likely_cause",
+        "severity",
+        "suggested_action",
+        "memory_increase_mb",
+        "confidence",
+        "summary",
+    ],
+}
+
 _PROMPT_TEMPLATE = """\
 You are a platform reliability engineer analysing a Nomad workload failure.
-Respond with a single JSON object only. No markdown. No explanation outside the JSON.
 
 Environment: {environment}
 Anomaly type: {anomaly_type}
@@ -62,15 +88,7 @@ Recent task events (last 10):
 Recent logs ({log_type}, last {log_lines} lines):
 {logs}
 
-Respond with this exact JSON structure:
-{{
-  "likely_cause": "<concise technical explanation>",
-  "severity": "<low|medium|high|critical>",
-  "suggested_action": "<increase_memory|restart|revert|check_image|manual_intervention|none>",
-  "memory_increase_mb": <integer, 0 if not applicable>,
-  "confidence": <float 0.0 to 1.0>,
-  "summary": "<one sentence for Slack alert>"
-}}
+Determine the likely cause, severity, and suggested action.
 
 Rules:
 - suggested_action must be one of: increase_memory, restart, revert, check_image, manual_intervention, none
@@ -79,8 +97,9 @@ Rules:
 - Use revert when a recent deployment is the likely cause of the regression
 - Use check_image when the failure is clearly a missing or inaccessible Docker image
 - Use manual_intervention when the cause is unclear or requires human judgement
-- memory_increase_mb should be a reasonable increment: 128, 256, or 512 — not arbitrary large values
-- confidence reflects how certain you are given the available evidence
+- memory_increase_mb should be a reasonable increment: 128, 256, or 512 — not arbitrary large values, and 0 if increase_memory is not the suggested action
+- confidence reflects how certain you are given the available evidence, from 0.0 to 1.0
+- summary should be one sentence suitable for a Slack alert
 """
 
 
@@ -108,7 +127,8 @@ def _build_prompt(anomaly: dict) -> str:
 def _validate_response(parsed: dict) -> dict:
     """
     Validate and sanitise the Gemini response.
-    Returns a safe default if fields are missing or invalid.
+    The response schema constrains the shape server-side, but we still
+    re-validate defensively here in case of partial/empty fields.
     """
     suggested_action = parsed.get("suggested_action", "manual_intervention")
     if suggested_action not in VALID_ACTIONS:
@@ -146,18 +166,16 @@ def analyze(anomaly: dict) -> dict:
     prompt = _build_prompt(anomaly)
 
     try:
-        response = _model.generate_content(prompt)
-        raw_text = response.text.strip()
+        response = _client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=_RESPONSE_SCHEMA,
+            ),
+        )
 
-        # Strip markdown code fences if Gemini wraps the JSON
-        if raw_text.startswith("```"):
-            lines = raw_text.splitlines()
-            raw_text = "\n".join(
-                line for line in lines
-                if not line.strip().startswith("```")
-            )
-
-        parsed = json.loads(raw_text)
+        parsed = json.loads(response.text)
         result = _validate_response(parsed)
 
         log.info(

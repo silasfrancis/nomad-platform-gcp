@@ -70,9 +70,37 @@ GEMINI_MODEL: str = _optional("GEMINI_MODEL", "gemini-1.5-flash")
 # Environment label for alerts and logs (e.g. dev, prod)
 ENVIRONMENT: str = _optional("ENVIRONMENT", "unknown")
 
+# Remediation mode — controls whether the agent is allowed to act on its own:
+#   "execute" — agent calls the Nomad API and performs the remediation (autonomous)
+#   "propose" — agent builds the same decision and Slack alert, but takes no
+#               action against Nomad. The alert clearly states what the agent
+#               WOULD have done, so a human can act on it manually.
+#
+# No default is assumed silently — this must be set explicitly per
+# environment in the Nomad job spec (REMEDIATION_MODE=execute in dev,
+# REMEDIATION_MODE=propose in prod). This is deliberate: the blast radius
+# of autonomous remediation should never depend on an implicit default.
+_RAW_REMEDIATION_MODE = _require("REMEDIATION_MODE").strip().lower()
+if _RAW_REMEDIATION_MODE not in ("execute", "propose"):
+    print(
+        f"[FATAL] REMEDIATION_MODE must be 'execute' or 'propose', "
+        f"got '{_RAW_REMEDIATION_MODE}'.",
+        flush=True,
+    )
+    sys.exit(1)
+REMEDIATION_MODE: str = _RAW_REMEDIATION_MODE
+
 # Namespaces to watch — comma-separated, empty means all
 WATCH_NAMESPACES: list[str] = [
     ns.strip()
     for ns in _optional("WATCH_NAMESPACES", "").split(",")
     if ns.strip()
 ]
+
+# Optional: PostgreSQL connection string for persisting anomaly history.
+# Same database instance metrics-api uses, different table
+# (agent_anomalies) — see history.py. If unset, the agent runs exactly as
+# before with no persistence; this was never a hard dependency of the
+# monitoring loop and a DB outage must never block detection, analysis,
+# alerting, or remediation.
+HISTORY_DATABASE_URL: str = _optional("HISTORY_DATABASE_URL", "")

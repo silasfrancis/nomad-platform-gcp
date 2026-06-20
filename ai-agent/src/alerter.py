@@ -120,6 +120,67 @@ def _format_remediation(result: dict) -> str:
         return f"No automated action taken — {result.get('reason', 'requires manual review')}"
 
 
+def send_proposal_alert(anomaly: dict, analysis: dict) -> bool:
+    """
+    Send an alert describing the remediation the agent WOULD have taken,
+    without taking it. Used when REMEDIATION_MODE=propose (typically prod).
+    Visually distinct from a normal alert so it is unmistakable that no
+    action was executed against Nomad.
+    """
+    severity = analysis.get("severity", "medium")
+    color = _SEVERITY_COLOR.get(severity, "#888888")
+    suggested_action = analysis.get("suggested_action", "manual_intervention")
+
+    title = f":large_orange_diamond: ACTION REQUIRED — {anomaly.get('job_id', 'unknown')}"
+
+    fields = [
+        {"title": "Environment", "value": ENVIRONMENT, "short": True},
+        {"title": "Severity", "value": severity, "short": True},
+        {"title": "Job", "value": anomaly.get("job_id", "unknown"), "short": True},
+        {"title": "Task", "value": anomaly.get("task", "unknown"), "short": True},
+        {"title": "Namespace", "value": anomaly.get("namespace", "default"), "short": True},
+        {"title": "Anomaly Type", "value": anomaly.get("anomaly_type", "unknown"), "short": True},
+        {"title": "Confidence", "value": f"{analysis.get('confidence', 0.0):.2f}", "short": True},
+        {"title": "Likely Cause", "value": analysis.get("likely_cause", "Unknown"), "short": False},
+        {
+            "title": "Proposed Action (NOT executed)",
+            "value": _format_proposed_action(suggested_action, analysis),
+            "short": False,
+        },
+        {
+            "title": "Mode",
+            "value": "propose — agent did not modify Nomad. Manual action required.",
+            "short": False,
+        },
+    ]
+
+    payload = {
+        "text": title,
+        "attachments": [
+            {
+                "color": color,
+                "text": analysis.get("summary", ""),
+                "fields": fields,
+                "footer": "Nomad AI Monitoring Agent — propose mode",
+            }
+        ],
+    }
+
+    return _post_to_slack(payload)
+
+
+def _format_proposed_action(action: str, analysis: dict) -> str:
+    if action == "increase_memory":
+        mb = analysis.get("memory_increase_mb", 0)
+        return f"Increase task memory by {mb}MB"
+    elif action == "restart":
+        return "Restart the affected allocation"
+    elif action == "revert":
+        return "Revert the job to its previous version"
+    else:
+        return f"'{action}' — requires manual review"
+
+
 def _post_to_slack(payload: dict) -> bool:
     try:
         resp = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=10)
