@@ -1,0 +1,524 @@
+
+
+# ============================================================================
+# Online Boutique + metrics-api + AI Agent — Local Docker Compose
+# ============================================================================
+#
+# Purpose: local integration testing before any cloud infrastructure exists.
+# Every service is built from local source (./services/<name>) — no images
+# are pulled from Google's registry. Translates the reference Kubernetes
+# manifest 1:1 wherever Kubernetes and Compose concepts have a direct
+# equivalent, and documents the translation wherever they don't.
+#
+# Sensitive values (API keys, webhook URLs, DB passwords) are NOT hardcoded.
+# They are referenced as ${VARIABLE} and must be supplied via a .env file
+# (gitignored) or exported in your shell before running `docker compose up`.
+#
+# Usage:
+#   cp .env.example .env        # fill in real values
+#   docker compose up --build
+#
+# ============================================================================
+
+services:
+
+  # --------------------------------------------------------------------------
+  # FRONTEND
+  # K8s: Deployment "frontend" + Service "frontend" (ClusterIP) +
+  #      Service "frontend-external" (LoadBalancer)
+  # Compose translation: LoadBalancer has no meaning outside a cloud provider;
+  # its only real job was exposing the Service externally. We replace it with
+  # a host port mapping (8080:8080) — the direct Compose equivalent of
+  # "external access to this container".
+  # --------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    image: local/frontend:dev
+    container_name: frontend
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+      CART_SERVICE_ADDR: "cartservice:7070"
+      RECOMMENDATION_SERVICE_ADDR: "recommendationservice:8080"
+      SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+      CHECKOUT_SERVICE_ADDR: "checkoutservice:5050"
+      AD_SERVICE_ADDR: "adservice:9555"
+      ENABLE_PROFILER: "0"
+    depends_on:
+      productcatalogservice:
+        condition: service_healthy
+      currencyservice:
+        condition: service_healthy
+      cartservice:
+        condition: service_healthy
+      recommendationservice:
+        condition: service_healthy
+      shippingservice:
+        condition: service_healthy
+      checkoutservice:
+        condition: service_healthy
+      adservice:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/_healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # CURRENCY SERVICE
+  # K8s: Deployment "currencyservice" + Service "currencyservice" (ClusterIP)
+  # --------------------------------------------------------------------------
+  currencyservice:
+    build:
+      context: ./services/currencyservice
+      dockerfile: Dockerfile
+    image: local/currencyservice:dev
+    container_name: currencyservice
+    environment:
+      PORT: "7000"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "7000"
+    healthcheck:
+      # K8s used a gRPC readiness/liveness probe (grpc: port 7000). Docker
+      # Compose has no native gRPC health probe, so we use grpc_health_probe
+      # — the same tool the upstream services bundle for their own K8s grpc
+      # probes — invoked manually here as the Compose healthcheck command.
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:7000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # PRODUCT CATALOG SERVICE
+  # K8s: Deployment "productcatalogservice" + Service (ClusterIP)
+  # --------------------------------------------------------------------------
+  productcatalogservice:
+    build:
+      context: ./services/productcatalogservice
+      dockerfile: Dockerfile
+    image: local/productcatalogservice:dev
+    container_name: productcatalogservice
+    environment:
+      PORT: "3550"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "3550"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:3550"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # CHECKOUT SERVICE
+  # K8s: Deployment "checkoutservice" + Service (ClusterIP)
+  # --------------------------------------------------------------------------
+  checkoutservice:
+    build:
+      context: ./services/checkoutservice
+      dockerfile: Dockerfile
+    image: local/checkoutservice:dev
+    container_name: checkoutservice
+    environment:
+      PORT: "5050"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+      PAYMENT_SERVICE_ADDR: "paymentservice:50051"
+      EMAIL_SERVICE_ADDR: "emailservice:5000"
+      CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+      CART_SERVICE_ADDR: "cartservice:7070"
+    expose:
+      - "5050"
+    depends_on:
+      productcatalogservice:
+        condition: service_healthy
+      shippingservice:
+        condition: service_healthy
+      paymentservice:
+        condition: service_healthy
+      emailservice:
+        condition: service_healthy
+      currencyservice:
+        condition: service_healthy
+      cartservice:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:5050"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # SHIPPING SERVICE
+  # K8s: Deployment "shippingservice" + Service (ClusterIP)
+  # --------------------------------------------------------------------------
+  shippingservice:
+    build:
+      context: ./services/shippingservice
+      dockerfile: Dockerfile
+    image: local/shippingservice:dev
+    container_name: shippingservice
+    environment:
+      PORT: "50051"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "50051"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # CART SERVICE
+  # K8s: Deployment "cartservice" + Service (ClusterIP) + Deployment/Service
+  #      "redis-cart"
+  # Vault note: in the cloud architecture, REDIS_ADDR's password component
+  # comes from Vault at kv/data/{env}/cartservice/redis. Locally, Compose
+  # has no Vault, so the password is passed as a plain env var sourced from
+  # .env — this is the local stand-in for what Vault injects in Nomad.
+  # --------------------------------------------------------------------------
+  cartservice:
+    build:
+      context: ./services/cartservice
+      dockerfile: Dockerfile
+    image: local/cartservice:dev
+    container_name: cartservice
+    environment:
+      REDIS_ADDR: "redis-cart:6379,password=${REDIS_PASSWORD}"
+    expose:
+      - "7070"
+    depends_on:
+      redis-cart:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:7070"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # REDIS (cartservice's backing store)
+  # K8s: Deployment "redis-cart" + Service "redis-cart" (ClusterIP)
+  # Compose translation: emptyDir{} volume -> Compose has no ephemeral-only
+  # volume concept by default; we intentionally do NOT declare a named
+  # volume here, which makes Compose use an anonymous container-local
+  # filesystem layer that disappears on `down` — the closest equivalent to
+  # K8s emptyDir's "exists for pod lifetime only" semantics.
+  # --------------------------------------------------------------------------
+  redis-cart:
+    image: redis:alpine
+    container_name: redis-cart
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # EMAIL SERVICE
+  # K8s: Deployment "emailservice" + Service (ClusterIP, port 5000 ->
+  #      targetPort 8080)
+  # Note: the real emailservice does not send actual email or read any SMTP
+  # credentials — it only logs a mock confirmation. PORT and
+  # DISABLE_PROFILER are its only env vars in the source manifest.
+  # --------------------------------------------------------------------------
+  emailservice:
+    build:
+      context: ./services/emailservice
+      dockerfile: Dockerfile
+    image: local/emailservice:dev
+    container_name: emailservice
+    environment:
+      PORT: "8080"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # PAYMENT SERVICE
+  # K8s: Deployment "paymentservice" + Service (ClusterIP)
+  # Note: the real paymentservice mocks credit card charging in-process —
+  # it does not call any external payment provider or read an API key.
+  # PORT and DISABLE_PROFILER are its only env vars in the source manifest.
+  # --------------------------------------------------------------------------
+  paymentservice:
+    build:
+      context: ./services/paymentservice
+      dockerfile: Dockerfile
+    image: local/paymentservice:dev
+    container_name: paymentservice
+    environment:
+      PORT: "50051"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "50051"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # RECOMMENDATION SERVICE
+  # K8s: Deployment "recommendationservice" + Service (ClusterIP)
+  # --------------------------------------------------------------------------
+  recommendationservice:
+    build:
+      context: ./services/recommendationservice
+      dockerfile: Dockerfile
+    image: local/recommendationservice:dev
+    container_name: recommendationservice
+    environment:
+      PORT: "8080"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "8080"
+    depends_on:
+      productcatalogservice:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # AD SERVICE
+  # K8s: Deployment "adservice" + Service (ClusterIP)
+  # --------------------------------------------------------------------------
+  adservice:
+    build:
+      context: ./services/adservice
+      dockerfile: Dockerfile
+    image: local/adservice:dev
+    container_name: adservice
+    environment:
+      PORT: "9555"
+    expose:
+      - "9555"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:9555"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # LOAD GENERATOR
+  # K8s: Deployment "loadgenerator" with an initContainer "frontend-check"
+  #      that polls frontend:80/ until it returns HTTP 200, then exits 0,
+  #      allowing the main "main" container to start.
+  #
+  # Compose translation: Compose has no native initContainer concept. The
+  # idiomatic equivalent is `depends_on` with `condition: service_healthy`
+  # on the dependency — which we already use everywhere else in this file.
+  # However loadgenerator's init container polls an HTTP path (frontend's
+  # root "/", not frontend's own /_healthz), with custom retry/backoff
+  # logic, so the closest faithful translation is to keep it as a literal
+  # separate init service that runs the same retry script the K8s manifest
+  # used, gated by `service_completed_successfully`, with the main
+  # loadgenerator container then depending on that init service.
+  # --------------------------------------------------------------------------
+  loadgenerator-init:
+    image: busybox:latest
+    container_name: loadgenerator-init
+    environment:
+      FRONTEND_ADDR: "frontend:8080"
+    command:
+      - /bin/sh
+      - -exc
+      - |
+        MAX_RETRIES=12
+        RETRY_INTERVAL=10
+        for i in $$(seq 1 $$MAX_RETRIES); do
+          echo "Attempt $$i: Pinging frontend: $${FRONTEND_ADDR}..."
+          STATUSCODE=$$(wget --server-response http://$${FRONTEND_ADDR} 2>&1 | awk '/^  HTTP/{print $$2}')
+          if [ "$$STATUSCODE" = "200" ]; then
+              echo "Frontend is reachable."
+              exit 0
+          fi
+          echo "Error: Could not reach frontend - Status code: $${STATUSCODE}"
+          sleep $$RETRY_INTERVAL
+        done
+        echo "Failed to reach frontend after $$MAX_RETRIES attempts."
+        exit 1
+    depends_on:
+      frontend:
+        condition: service_healthy
+    networks:
+      - boutique-net
+
+  loadgenerator:
+    build:
+      context: ./services/loadgenerator
+      dockerfile: Dockerfile
+    image: local/loadgenerator:dev
+    container_name: loadgenerator
+    environment:
+      FRONTEND_ADDR: "frontend:8080"
+      USERS: "10"
+      RATE: "1"
+    depends_on:
+      loadgenerator-init:
+        condition: service_completed_successfully
+    networks:
+      - boutique-net
+    restart: "no"
+
+  # ============================================================================
+  # METRICS-API + POSTGRES
+  # Not part of Online Boutique. Custom platform-engineering demo service —
+  # see the README section "Why metrics-api exists" for the full rationale.
+  # In short: Online Boutique has no real database dependency, so it can't
+  # demonstrate Vault's dynamic database secrets engine. metrics-api exists
+  # purely to consume short-lived, auto-rotated PostgreSQL credentials
+  # issued live by Vault, proving the full dynamic-secret lifecycle.
+  #
+  # Locally, Vault doesn't exist yet, so metrics-api connects with static
+  # credentials from .env — the local stand-in for what Vault will issue
+  # dynamically once this moves to Nomad.
+  # ============================================================================
+  metrics-api:
+    build:
+      context: ./services/metrics-api
+      dockerfile: Dockerfile
+    image: local/metrics-api:dev
+    container_name: metrics-api
+    ports:
+      - "8090:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "postgresql://${METRICS_DB_USER}:${METRICS_DB_PASSWORD}@metrics-postgres:5432/${METRICS_DB_NAME}"
+    depends_on:
+      metrics-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - boutique-net
+
+  metrics-postgres:
+    image: postgres:16-alpine
+    container_name: metrics-postgres
+    environment:
+      POSTGRES_USER: "${METRICS_DB_USER}"
+      POSTGRES_PASSWORD: "${METRICS_DB_PASSWORD}"
+      POSTGRES_DB: "${METRICS_DB_NAME}"
+    volumes:
+      - metrics-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${METRICS_DB_USER} -d ${METRICS_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - boutique-net
+
+  # ============================================================================
+  # AI MONITORING AGENT
+  # Standalone platform tool — see ai-agent/README.md for full design.
+  # NOMAD_ADDR is intentionally left pointing at host.docker.internal so
+  # this container can reach a Nomad dev agent running natively on your
+  # host machine (`nomad agent -dev`), since Nomad needs direct access to
+  # the host's process/container runtime and should not itself be
+  # containerized for local testing.
+  #
+  # IMPORTANT: `nomad agent -dev` binds to 127.0.0.1 by default, which is
+  # NOT reachable from inside a container even with host-gateway mapped.
+  # Run it with `nomad agent -dev -bind=0.0.0.0 -network-interface=lo0`
+  # (or your platform's equivalent loopback override) so the agent
+  # container can actually reach it. See ai-agent/README.md.
+  #
+  # REMEDIATION_MODE=propose is the safe local default — this stack has no
+  # real Nomad cluster to mutate, and propose mode is what prod will run
+  # anyway, so it's the more representative default for local testing.
+  # ============================================================================
+  ai-agent:
+    build:
+      context: ./services/ai-agent
+      dockerfile: Dockerfile
+    image: local/ai-agent:dev
+    container_name: ai-agent
+    environment:
+      NOMAD_ADDR: "${NOMAD_ADDR:-http://host.docker.internal:4646}"
+      NOMAD_TOKEN: "${NOMAD_TOKEN}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL}"
+      ENVIRONMENT: "local"
+      REMEDIATION_MODE: "${REMEDIATION_MODE:-propose}"
+      # Anomaly history — reuses metrics-api's PostgreSQL instance, a
+      # separate table (agent_anomalies). Optional: the agent runs fine
+      # with this unset, it just won't persist anomaly history. See
+      # ai-agent/README.md "Anomaly history" section.
+      HISTORY_DATABASE_URL: "postgresql://${METRICS_DB_USER}:${METRICS_DB_PASSWORD}@metrics-postgres:5432/${METRICS_DB_NAME}"
+    depends_on:
+      metrics-postgres:
+        condition: service_healthy
+    extra_hosts:
+      # Lets the container resolve host.docker.internal on Linux too;
+      # Docker Desktop (Mac/Windows) provides this automatically.
+      - "host.docker.internal:host-gateway"
+    networks:
+      - boutique-net
+    restart: unless-stopped
+
+networks:
+  boutique-net:
+    driver: bridge
+
+volumes:
+  metrics-postgres-data:

@@ -2,6 +2,9 @@
 .eclipse.buildship.core.prefs
 .gradle/
 .idea/
+.kubernetes-manifests-*/
+.project
+.skaffold-*.yaml
 .terraform.lock.hcl
 .terraform/*
 .venv/
@@ -14,3 +17,15 @@
 *.swp
 *.tfstate*
 *.tfvars
+*~
+.env
+bin/
+build/
+Dockerfile.pip
+node_modules/
+obj/
+pkg/
+release/wi-kubernetes-manifests.yaml
+vendor/
+__pycache__/
+.pytest_cache/
