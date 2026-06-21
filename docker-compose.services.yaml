@@ -1,0 +1,360 @@
+# Docker Compose — Online Boutique Application Services (Local Development Only)
+#
+# Contains only the Online Boutique microservices themselves. Infra
+# dependencies (Redis, PostgreSQL) and platform tooling (metrics-api,
+# ai-agent) live in docker-compose.yml — see that file's header for why
+# they're split out, and the top-level README for the full rationale.
+#
+# NO HEALTHCHECKS ARE DEFINED IN THIS FILE, deliberately and consistently
+# across every service here. Most of these services use distroless or
+# chiseled base images upstream (gcr.io/distroless/static,
+# mcr.microsoft.com/dotnet/runtime-deps:...-chiseled) — no shell, no
+# curl/wget, by design, for a smaller attack surface. A few (currencyservice,
+# paymentservice on alpine+node; emailservice, recommendationservice on
+# python-alpine; adservice on eclipse-temurin-alpine) technically do have a
+# shell and COULD support a healthcheck, but we deliberately do not add one
+# selectively — mixing healthcheck and no-healthcheck services within the
+# same application tier is the inconsistency we're avoiding. Every service
+# here relies on Compose's `depends_on` startup ordering plus each
+# service's own internal retry/backoff logic instead.
+#
+# In the cloud architecture, proper health checks are configured using
+# Nomad's native check stanza (HTTP/TCP/gRPC checks performed externally
+# via Consul), which requires no tooling baked into the application image
+# at all — the same way a Kubernetes kubelet performs liveness/readiness
+# probes from outside the container. See nomad-jobs/ for that
+# configuration once it exists.
+#
+# Run together with the platform/infra file (this file alone will fail —
+# cartservice depends on redis-cart, metrics-api/ai-agent ports overlap
+# with nothing here but the network must be shared):
+#   docker compose -f docker-compose.yml -f docker-compose.services.yml up --build
+#
+# ============================================================================
+
+services:
+
+  # --------------------------------------------------------------------------
+  # REDIS (cartservice's backing store)
+  # K8s: Deployment "redis-cart" + Service "redis-cart" (ClusterIP)
+  # Compose translation: emptyDir{} volume -> Compose has no ephemeral-only
+  # volume concept by default; we intentionally do NOT declare a named
+  # volume here, which makes Compose use an anonymous container-local
+  # filesystem layer that disappears on `down` — the closest equivalent to
+  # K8s emptyDir's "exists for pod lifetime only" semantics.
+  # --------------------------------------------------------------------------
+  redis-cart:
+    image: redis:alpine
+    container_name: redis-cart
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # FRONTEND
+  # K8s: Deployment "frontend" + Service "frontend" (ClusterIP) +
+  #      Service "frontend-external" (LoadBalancer)
+  # Compose translation: LoadBalancer has no meaning outside a cloud provider;
+  # its only real job was exposing the Service externally. We replace it with
+  # a host port mapping (8080:8080) — the direct Compose equivalent of
+  # "external access to this container".
+  # Built from gcr.io/distroless/static.
+  # --------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    image: local/frontend:dev
+    container_name: frontend
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+      CART_SERVICE_ADDR: "cartservice:7070"
+      RECOMMENDATION_SERVICE_ADDR: "recommendationservice:8080"
+      SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+      CHECKOUT_SERVICE_ADDR: "checkoutservice:5050"
+      AD_SERVICE_ADDR: "adservice:9555"
+      ENABLE_PROFILER: "0"
+    depends_on:
+      - productcatalogservice
+      - currencyservice
+      - cartservice
+      - recommendationservice
+      - shippingservice
+      - checkoutservice
+      - adservice
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # CURRENCY SERVICE
+  # K8s: Deployment "currencyservice" + Service "currencyservice" (ClusterIP)
+  # --------------------------------------------------------------------------
+  currencyservice:
+    build:
+      context: ./services/currencyservice
+      dockerfile: Dockerfile
+    image: local/currencyservice:dev
+    container_name: currencyservice
+    environment:
+      PORT: "7000"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "7000"
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # PRODUCT CATALOG SERVICE
+  # K8s: Deployment "productcatalogservice" + Service (ClusterIP)
+  # Built from gcr.io/distroless/static.
+  # --------------------------------------------------------------------------
+  productcatalogservice:
+    build:
+      context: ./services/productcatalogservice
+      dockerfile: Dockerfile
+    image: local/productcatalogservice:dev
+    container_name: productcatalogservice
+    environment:
+      PORT: "3550"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "3550"
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # CHECKOUT SERVICE
+  # K8s: Deployment "checkoutservice" + Service (ClusterIP)
+  # Built from gcr.io/distroless/static.
+  # --------------------------------------------------------------------------
+  checkoutservice:
+    build:
+      context: ./services/checkoutservice
+      dockerfile: Dockerfile
+    image: local/checkoutservice:dev
+    container_name: checkoutservice
+    environment:
+      PORT: "5050"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      SHIPPING_SERVICE_ADDR: "shippingservice:50051"
+      PAYMENT_SERVICE_ADDR: "paymentservice:50051"
+      EMAIL_SERVICE_ADDR: "emailservice:5000"
+      CURRENCY_SERVICE_ADDR: "currencyservice:7000"
+      CART_SERVICE_ADDR: "cartservice:7070"
+    expose:
+      - "5050"
+    depends_on:
+      - productcatalogservice
+      - shippingservice
+      - paymentservice
+      - emailservice
+      - currencyservice
+      - cartservice
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # SHIPPING SERVICE
+  # K8s: Deployment "shippingservice" + Service (ClusterIP)
+  # Built from gcr.io/distroless/static.
+  # --------------------------------------------------------------------------
+  shippingservice:
+    build:
+      context: ./services/shippingservice
+      dockerfile: Dockerfile
+    image: local/shippingservice:dev
+    container_name: shippingservice
+    environment:
+      PORT: "50051"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "50051"
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # CART SERVICE
+  # K8s: Deployment "cartservice" + Service (ClusterIP) + Deployment/Service
+  #      "redis-cart"
+  # Vault note: in the cloud architecture, REDIS_ADDR's password component
+  # comes from Vault at kv/data/{env}/cartservice/redis. Locally, Compose
+  # has no Vault, so the password is passed as a plain env var sourced from
+  # .env — this is the local stand-in for what Vault injects in Nomad.
+  # Built from mcr.microsoft.com/dotnet/runtime-deps:...-chiseled.
+  # redis-cart is defined in docker-compose.yml (platform/infra file) —
+  # this works correctly across the two -f files because Compose merges
+  # them into a single project before resolving depends_on and networks.
+  # --------------------------------------------------------------------------
+  cartservice:
+    build:
+      context: ./services/cartservice/src
+      dockerfile: Dockerfile
+    image: local/cartservice:dev
+    container_name: cartservice
+    environment:
+      REDIS_ADDR: "redis-cart:6379,password=${REDIS_PASSWORD}"
+    expose:
+      - "7070"
+    depends_on:
+      redis-cart:
+        condition: service_healthy
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # EMAIL SERVICE
+  # K8s: Deployment "emailservice" + Service (ClusterIP, port 5000 ->
+  #      targetPort 8080)
+  # Note: the real emailservice does not send actual email or read any SMTP
+  # credentials — it only logs a mock confirmation. PORT and
+  # DISABLE_PROFILER are its only env vars in the source manifest.
+  # --------------------------------------------------------------------------
+  emailservice:
+    build:
+      context: ./services/emailservice
+      dockerfile: Dockerfile
+    image: local/emailservice:dev
+    container_name: emailservice
+    environment:
+      PORT: "8080"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "8080"
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # PAYMENT SERVICE
+  # K8s: Deployment "paymentservice" + Service (ClusterIP)
+  # Note: the real paymentservice mocks credit card charging in-process —
+  # it does not call any external payment provider or read an API key.
+  # PORT and DISABLE_PROFILER are its only env vars in the source manifest.
+  # --------------------------------------------------------------------------
+  paymentservice:
+    build:
+      context: ./services/paymentservice
+      dockerfile: Dockerfile
+    image: local/paymentservice:dev
+    container_name: paymentservice
+    environment:
+      PORT: "50051"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "50051"
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # RECOMMENDATION SERVICE
+  # K8s: Deployment "recommendationservice" + Service (ClusterIP)
+  # --------------------------------------------------------------------------
+  recommendationservice:
+    build:
+      context: ./services/recommendationservice
+      dockerfile: Dockerfile
+    image: local/recommendationservice:dev
+    container_name: recommendationservice
+    environment:
+      PORT: "8080"
+      PRODUCT_CATALOG_SERVICE_ADDR: "productcatalogservice:3550"
+      DISABLE_PROFILER: "1"
+    expose:
+      - "8080"
+    depends_on:
+      - productcatalogservice
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # AD SERVICE
+  # K8s: Deployment "adservice" + Service (ClusterIP)
+  # --------------------------------------------------------------------------
+  adservice:
+    build:
+      context: ./services/adservice
+      dockerfile: Dockerfile
+    image: local/adservice:dev
+    container_name: adservice
+    environment:
+      PORT: "9555"
+    expose:
+      - "9555"
+    networks:
+      - boutique-net
+
+  # --------------------------------------------------------------------------
+  # LOAD GENERATOR
+  # K8s: Deployment "loadgenerator" with an initContainer "frontend-check"
+  #      that polls frontend:80/ until it returns HTTP 200, then exits 0,
+  #      allowing the main "main" container to start.
+  #
+  # Compose translation: Compose has no native initContainer concept. Since
+  # frontend has no Compose healthcheck (see policy above), we keep the
+  # init container's own retry/polling logic as a literal separate
+  # service — this preserves the K8s manifest's actual init behaviour
+  # (poll frontend's HTTP root, custom retry count/interval) rather than
+  # relying on a Compose healthcheck that doesn't exist for frontend.
+  # --------------------------------------------------------------------------
+  loadgenerator-init:
+    image: busybox:latest
+    container_name: loadgenerator-init
+    environment:
+      FRONTEND_ADDR: "frontend:8080"
+    command:
+      - /bin/sh
+      - -exc
+      - |
+        MAX_RETRIES=12
+        RETRY_INTERVAL=10
+        for i in $$(seq 1 $$MAX_RETRIES); do
+          echo "Attempt $$i: Pinging frontend: $${FRONTEND_ADDR}..."
+          STATUSCODE=$$(wget --server-response http://$${FRONTEND_ADDR} 2>&1 | awk '/^  HTTP/{print $$2}')
+          if [ "$$STATUSCODE" = "200" ]; then
+              echo "Frontend is reachable."
+              exit 0
+          fi
+          echo "Error: Could not reach frontend - Status code: $${STATUSCODE}"
+          sleep $$RETRY_INTERVAL
+        done
+        echo "Failed to reach frontend after $$MAX_RETRIES attempts."
+        exit 1
+    depends_on:
+      - frontend
+    networks:
+      - boutique-net
+
+  loadgenerator:
+    build:
+      context: ./services/loadgenerator
+      dockerfile: Dockerfile
+    image: local/loadgenerator:dev
+    container_name: loadgenerator
+    environment:
+      FRONTEND_ADDR: "frontend:8080"
+      USERS: "10"
+      RATE: "1"
+    depends_on:
+      loadgenerator-init:
+        condition: service_completed_successfully
+    networks:
+      - boutique-net
+    restart: "no"
+
+networks:
+  boutique-net:
+    driver: bridge
+
+volumes:
+  redis-data:
