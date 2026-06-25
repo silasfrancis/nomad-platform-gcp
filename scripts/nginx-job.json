@@ -1,0 +1,27 @@
+{
+  "Job": {
+    "ID": "nginx",
+    "Name": "nginx",
+    "Type": "service",
+    "Datacenters": ["dc1"],
+    "TaskGroups": [
+      {
+        "Name": "web",
+        "Count": 1,
+        "Tasks": [
+          {
+            "Name": "nginx",
+            "Driver": "docker",
+            "Config": {
+              "image": "nginx:latest"
+            },
+            "Resources": {
+              "CPU": 100,
+              "MemoryMB": 128
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

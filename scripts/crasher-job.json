@@ -1,0 +1,48 @@
+{
+  "Job": {
+    "ID": "crasher",
+    "Name": "crasher",
+    "Type": "service",
+    "Datacenters": [
+      "dc1"
+    ],
+    "TaskGroups": [
+      {
+        "Name": "app",
+        "Count": 1,
+        "RestartPolicy": {
+          "Attempts": 3,
+          "Interval": 30000000000,
+          "Delay": 2000000000,
+          "Mode": "fail"
+        },
+        "ReschedulePolicy": {
+          "Attempts": 2,
+          "Unlimited": false,
+          "Delay": 5000000000,
+          "DelayFunction": "constant",
+          "Interval": 15000000000,
+          "MaxDelay": 5000000000
+        },
+        "Tasks": [
+          {
+            "Name": "app",
+            "Driver": "docker",
+            "Config": {
+              "image": "alpine",
+              "command": "sh",
+              "args": [
+                "-c",
+                "exit 1"
+              ]
+            },
+            "Resources": {
+              "CPU": 100,
+              "MemoryMB": 64
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

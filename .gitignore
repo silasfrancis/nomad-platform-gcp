@@ -29,3 +29,4 @@ release/wi-kubernetes-manifests.yaml
 vendor/
 __pycache__/
 .pytest_cache/
+scripts/output
