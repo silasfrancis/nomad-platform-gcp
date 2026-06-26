@@ -1,446 +1,159 @@
 #!/usr/bin/env bash
 
 ###############################################################################
-# Nomad API Reference Collection Script
+# Nomad API Reference Collector
 #
 # Purpose
 # -------
-# Creates sample Nomad jobs and collects real API responses that can be used
-# for:
-#
-#   - AI agent testing
-#   - Prompt engineering
-#   - CI/CD validation
-#   - Integration testing
-#   - Nomad API exploration
-#   - Building RAG datasets
-#
-#
-# Features
-# --------
-# - Creates nginx and crasher jobs
-# - Dynamically discovers allocation IDs
-# - Collects allocation details, stats, logs, nodes and evaluations
-# - Supports stdout mode (CI-friendly)
-# - Supports file mode (reference dataset generation)
-# - Handles empty log responses
-# - Avoids jq argument size limitations
-# - Works with changing allocation/evaluation IDs
-#
+# This script deploys sample Nomad jobs and collects API responses into a
+# structured JSON format for use in AI agents, RAG datasets, or CI testing.
 #
 # Usage
 # -----
+#   ./collect-nomad-data.sh [NOMAD_URL] [--stdout]
 #
-# Save responses to files:
+#   - NOMAD_URL: Optional. Default is http://localhost:4646
+#   - --stdout:  Optional. Prints JSON to terminal instead of saving files.
 #
-#   ./collect-nomad-data.sh
+# Output Format
+# -------------
+# Each request is logged as a JSON object containing:
+#   - schema_version, timestamp, method, endpoint, status_code, body_type, response
 #
-# Custom Nomad address:
-#
-#   ./collect-nomad-data.sh http://10.0.0.5:4646
-#
-# Print responses to stdout (CI mode):
-#
-#   ./collect-nomad-data.sh --stdout
-#
-# Custom address + stdout:
-#
-#   ./collect-nomad-data.sh http://10.0.0.5:4646 --stdout
-#
-#
-# Output Structure
-# ----------------
-#
-# scripts/output/<timestamp>/
-#
-#   create-nginx-job.json
-#   create-crasher-job.json
-#
-#   jobs.json
-#   job-nginx.json
-#   job-crasher.json
-#
-#   job-nginx-allocations.json
-#   job-crasher-allocations.json
-#
-#   allocation-nginx.json
-#   allocation-crasher.json
-#
-#   allocation-nginx-stats.json
-#   allocation-crasher-stats.json
-#
-#   allocation-nginx-stdout.json
-#   allocation-nginx-stderr.json
-#
-#   allocation-crasher-stdout.json
-#   allocation-crasher-stderr.json
-#
-#   nodes.json
-#   node.json
-#
-#   evaluation-nginx.json
-#   evaluation-crasher.json
-#
-#   endpoints.txt
+# Configuration
+# -------------
+# Jobs are defined in the JOBS array: "JOB_NAME|PAYLOAD_FILE|TASK_NAME"
 #
 ###############################################################################
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 NOMAD_ADDR="http://localhost:4646"
 STDOUT_MODE=false
 
 for arg in "$@"; do
   case "$arg" in
-    --stdout)
-      STDOUT_MODE=true
-      ;;
-    http://*|https://*)
-      NOMAD_ADDR="$arg"
-      ;;
+    --stdout) STDOUT_MODE=true ;;
+    http://*|https://*) NOMAD_ADDR="$arg" ;;
   esac
 done
 
-TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-OUTPUT_DIR="${SCRIPT_DIR}/output/${TIMESTAMP}"
+TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+DIR_NAME=$(date +"%Y%m%d-%H%M%S")
+OUTPUT_DIR="${SCRIPT_DIR}/output/${DIR_NAME}"
+[[ "$STDOUT_MODE" == "false" ]] && mkdir -p "$OUTPUT_DIR"
 
-if [[ "$STDOUT_MODE" == "false" ]]; then
-  mkdir -p "$OUTPUT_DIR"
-fi
+JOBS=(
+  "nginx|nginx-job.json|nginx"
+  "crasher|crasher-job.json|app"
+)
 
-###############################################################################
-# Helpers
-###############################################################################
+declare -A ALLOC_IDS
+declare -A EVAL_IDS
 
-save_response() {
-  local METHOD="$1"
-  local URL="$2"
-  local OUTPUT_FILE="$3"
-  local PAYLOAD_FILE="${4:-}"
-
-  local RESPONSE_FILE
-  RESPONSE_FILE=$(mktemp)
-
-  if [[ -n "$PAYLOAD_FILE" ]]; then
-    curl -s \
-      -X "$METHOD" \
-      -H "Content-Type: application/json" \
-      --data @"$PAYLOAD_FILE" \
-      "$URL" \
-      > "$RESPONSE_FILE"
-  else
-    curl -s \
-      -X "$METHOD" \
-      "$URL" \
-      > "$RESPONSE_FILE"
+# Function to perform requests and save in requested schema
+structured_request() {
+  local method="$1" endpoint="$2" outfile="$3" payload="${4:-}"
+  local tmp_resp; tmp_resp=$(mktemp)
+  local req_ts; req_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  
+  local curl_args=(-s -w "%{http_code}" -o "$tmp_resp" -X "$method")
+  if [[ -n "$payload" ]]; then
+    curl_args+=(-H "Content-Type: application/json" --data @"$payload")
   fi
+  
+  local status_code; status_code=$(curl "${curl_args[@]}" "${NOMAD_ADDR}${endpoint}" 2>/dev/null || echo "000")
+  
+  local response_bytes; response_bytes=$(wc -c < "$tmp_resp")
+  local success=false
+  [[ "$status_code" =~ ^2[0-9][0-9]$ ]] && success=true
+  
+  # --- IMPROVED PROCESSING ---
+  # We use jq's --slurpfile or simply pipe the content to avoid 'Argument list too long'
+  local final_json
+  final_json=$(
+    cat "$tmp_resp" | jq -R -s \
+      --arg sv "1" \
+      --arg ts "$req_ts" \
+      --arg m "$method" \
+      --arg e "$endpoint" \
+      --argjson sc "$status_code" \
+      --argjson succ "$success" \
+      --arg bt "$(file -b --mime-type "$tmp_resp")" \
+      --argjson rb "$response_bytes" \
+      '{schema_version: ($sv|tonumber), timestamp: $ts, method: $m, endpoint: $e, status_code: $sc, success: $succ, body_type: $bt, response_bytes: $rb, response: (fromjson? // .)}'
+  )
 
-  {
-    echo "{"
-    echo "  \"timestamp\": \"$(date -Iseconds)\","
-    echo "  \"method\": \"$METHOD\","
-    echo "  \"endpoint\": \"$URL\","
-
-    if [[ -n "$PAYLOAD_FILE" ]]; then
-      echo "  \"payload\":"
-      cat "$PAYLOAD_FILE"
-      echo ","
-    else
-      echo "  \"payload\": null,"
-    fi
-
-    echo "  \"response\":"
-    cat "$RESPONSE_FILE"
-    echo "}"
-  } > "$OUTPUT_FILE"
-
-  rm -f "$RESPONSE_FILE"
+  if [[ "$STDOUT_MODE" == "true" ]]; then echo "$final_json"; else echo "$final_json" > "$outfile"; fi
+  rm -f "$tmp_resp"
 }
 
-print_response() {
-  local METHOD="$1"
-  local URL="$2"
-  local PAYLOAD_FILE="${3:-}"
-
-  local RESPONSE_FILE
-  RESPONSE_FILE=$(mktemp)
-
-  if [[ -n "$PAYLOAD_FILE" ]]; then
-    curl -s \
-      -X "$METHOD" \
-      -H "Content-Type: application/json" \
-      --data @"$PAYLOAD_FILE" \
-      "$URL" \
-      > "$RESPONSE_FILE"
-  else
-    curl -s \
-      -X "$METHOD" \
-      "$URL" \
-      > "$RESPONSE_FILE"
-  fi
-
-  echo
-  echo "================================================================="
-  echo "$METHOD $URL"
-  echo "================================================================="
-
-  cat <<EOF
-{
-  "timestamp": "$(date -Iseconds)",
-  "method": "$METHOD",
-  "endpoint": "$URL",
-  "payload":
-EOF
-
-  if [[ -n "$PAYLOAD_FILE" ]]; then
-    cat "$PAYLOAD_FILE"
-  else
-    echo "null"
-  fi
-
-  echo ","
-  echo "\"response\":"
-
-  cat "$RESPONSE_FILE"
-
-  echo
-  echo "}"
-  echo
-
-  rm -f "$RESPONSE_FILE"
-}
-
-save_log() {
-  local URL="$1"
-  local OUTPUT_FILE="$2"
-
-  local RESPONSE
-  RESPONSE=$(curl -s "$URL" || true)
-
-  [[ -z "$RESPONSE" ]] && RESPONSE="NO_LOG_OUTPUT"
-
-  {
-    echo "{"
-    echo "  \"timestamp\": \"$(date -Iseconds)\","
-    echo "  \"method\": \"GET\","
-    echo "  \"endpoint\": \"$URL\","
-    echo "  \"payload\": null,"
-    echo "  \"response\":"
-    jq -Rn --arg text "$RESPONSE" '$text'
-    echo "}"
-  } > "$OUTPUT_FILE"
-}
-
-run_request() {
-  local METHOD="$1"
-  local URL="$2"
-  local OUTPUT_FILE="$3"
-  local PAYLOAD_FILE="${4:-}"
-
-  if [[ "$STDOUT_MODE" == "true" ]]; then
-    print_response "$METHOD" "$URL" "$PAYLOAD_FILE"
-  else
-    save_response "$METHOD" "$URL" "$OUTPUT_FILE" "$PAYLOAD_FILE"
-  fi
-}
-
-###############################################################################
-# Create Jobs
-###############################################################################
-
-echo "Creating nginx job..."
-
-run_request \
-  POST \
-  "${NOMAD_ADDR}/v1/jobs" \
-  "${OUTPUT_DIR}/create-nginx-job.json" \
-  "${SCRIPT_DIR}/nginx-job.json"
-
-echo "Creating crasher job..."
-
-run_request \
-  POST \
-  "${NOMAD_ADDR}/v1/jobs" \
-  "${OUTPUT_DIR}/create-crasher-job.json" \
-  "${SCRIPT_DIR}/crasher-job.json"
-
-echo "Waiting for allocations..."
-sleep 10
-
-###############################################################################
-# Fetch allocations separately for ID discovery
-###############################################################################
-
-NGINX_ALLOCATIONS=$(mktemp)
-CRASHER_ALLOCATIONS=$(mktemp)
-
-curl -s \
-  "${NOMAD_ADDR}/v1/job/nginx/allocations" \
-  > "$NGINX_ALLOCATIONS"
-
-curl -s \
-  "${NOMAD_ADDR}/v1/job/crasher/allocations" \
-  > "$CRASHER_ALLOCATIONS"
-
-NGINX_ALLOC_ID=$(jq -r '.[0].ID' "$NGINX_ALLOCATIONS")
-CRASHER_ALLOC_ID=$(jq -r '.[0].ID' "$CRASHER_ALLOCATIONS")
-
-echo "NGINX_ALLOC_ID=${NGINX_ALLOC_ID}"
-echo "CRASHER_ALLOC_ID=${CRASHER_ALLOC_ID}"
-
-###############################################################################
-# Jobs
-###############################################################################
-
-run_request GET "${NOMAD_ADDR}/v1/jobs" \
-  "${OUTPUT_DIR}/jobs.json"
-
-run_request GET "${NOMAD_ADDR}/v1/job/nginx" \
-  "${OUTPUT_DIR}/job-nginx.json"
-
-run_request GET "${NOMAD_ADDR}/v1/job/crasher" \
-  "${OUTPUT_DIR}/job-crasher.json"
-
-###############################################################################
-# Allocations
-###############################################################################
-
-run_request GET "${NOMAD_ADDR}/v1/job/nginx/allocations" \
-  "${OUTPUT_DIR}/job-nginx-allocations.json"
-
-run_request GET "${NOMAD_ADDR}/v1/job/crasher/allocations" \
-  "${OUTPUT_DIR}/job-crasher-allocations.json"
-
-run_request GET "${NOMAD_ADDR}/v1/allocation/${NGINX_ALLOC_ID}" \
-  "${OUTPUT_DIR}/allocation-nginx.json"
-
-run_request GET "${NOMAD_ADDR}/v1/allocation/${CRASHER_ALLOC_ID}" \
-  "${OUTPUT_DIR}/allocation-crasher.json"
-
-###############################################################################
-# Stats
-###############################################################################
-
-run_request GET \
-  "${NOMAD_ADDR}/v1/client/allocation/${NGINX_ALLOC_ID}/stats" \
-  "${OUTPUT_DIR}/allocation-nginx-stats.json"
-
-run_request GET \
-  "${NOMAD_ADDR}/v1/client/allocation/${CRASHER_ALLOC_ID}/stats" \
-  "${OUTPUT_DIR}/allocation-crasher-stats.json"
-
-###############################################################################
-# Logs
-###############################################################################
-
-if [[ "$STDOUT_MODE" == "false" ]]; then
-
-  save_log \
-    "${NOMAD_ADDR}/v1/client/fs/logs/${NGINX_ALLOC_ID}?task=nginx&type=stdout&plain=true" \
-    "${OUTPUT_DIR}/allocation-nginx-stdout.json"
-
-  save_log \
-    "${NOMAD_ADDR}/v1/client/fs/logs/${NGINX_ALLOC_ID}?task=nginx&type=stderr&plain=true" \
-    "${OUTPUT_DIR}/allocation-nginx-stderr.json"
-
-  save_log \
-    "${NOMAD_ADDR}/v1/client/fs/logs/${CRASHER_ALLOC_ID}?task=app&type=stdout&plain=true" \
-    "${OUTPUT_DIR}/allocation-crasher-stdout.json"
-
-  save_log \
-    "${NOMAD_ADDR}/v1/client/fs/logs/${CRASHER_ALLOC_ID}?task=app&type=stderr&plain=true" \
-    "${OUTPUT_DIR}/allocation-crasher-stderr.json"
-
-fi
-
-###############################################################################
-# Nodes
-###############################################################################
-
-NODES_FILE=$(mktemp)
-
-curl -s \
-  "${NOMAD_ADDR}/v1/nodes" \
-  > "$NODES_FILE"
-
-NODE_ID=$(jq -r '.[0].ID' "$NODES_FILE")
-
-run_request GET \
-  "${NOMAD_ADDR}/v1/nodes" \
-  "${OUTPUT_DIR}/nodes.json"
-
-run_request GET \
-  "${NOMAD_ADDR}/v1/node/${NODE_ID}" \
-  "${OUTPUT_DIR}/node.json"
-
-###############################################################################
-# Evaluations
-###############################################################################
-
-ALLOC_NGINX=$(mktemp)
-ALLOC_CRASHER=$(mktemp)
-
-curl -s \
-  "${NOMAD_ADDR}/v1/allocation/${NGINX_ALLOC_ID}" \
-  > "$ALLOC_NGINX"
-
-curl -s \
-  "${NOMAD_ADDR}/v1/allocation/${CRASHER_ALLOC_ID}" \
-  > "$ALLOC_CRASHER"
-
-NGINX_EVAL_ID=$(jq -r '.EvalID' "$ALLOC_NGINX")
-CRASHER_EVAL_ID=$(jq -r '.EvalID' "$ALLOC_CRASHER")
-
-run_request GET \
-  "${NOMAD_ADDR}/v1/evaluation/${NGINX_EVAL_ID}" \
-  "${OUTPUT_DIR}/evaluation-nginx.json"
-
-run_request GET \
-  "${NOMAD_ADDR}/v1/evaluation/${CRASHER_EVAL_ID}" \
-  "${OUTPUT_DIR}/evaluation-crasher.json"
-
-###############################################################################
-# Endpoint Index
-###############################################################################
-
-if [[ "$STDOUT_MODE" == "false" ]]; then
-
-cat > "${OUTPUT_DIR}/endpoints.txt" <<EOF
-GET /v1/jobs
-GET /v1/job/nginx
-GET /v1/job/crasher
-
-GET /v1/job/nginx/allocations
-GET /v1/job/crasher/allocations
-
-GET /v1/allocation/${NGINX_ALLOC_ID}
-GET /v1/allocation/${CRASHER_ALLOC_ID}
-
-GET /v1/client/allocation/${NGINX_ALLOC_ID}/stats
-GET /v1/client/allocation/${CRASHER_ALLOC_ID}/stats
-
-GET /v1/nodes
-GET /v1/node/${NODE_ID}
-
-GET /v1/evaluation/${NGINX_EVAL_ID}
-GET /v1/evaluation/${CRASHER_EVAL_ID}
-EOF
-
-fi
-
-rm -f \
-  "$NGINX_ALLOCATIONS" \
-  "$CRASHER_ALLOCATIONS" \
-  "$NODES_FILE" \
-  "$ALLOC_NGINX" \
-  "$ALLOC_CRASHER"
-
-echo
-echo "Done."
-
-if [[ "$STDOUT_MODE" == "false" ]]; then
-  echo "Output directory:"
-  echo "$OUTPUT_DIR"
-fi
+# --- Formatting Helpers ---
+header() { printf "\n# ------------------------------------------------------------------\n# %s\n# ------------------------------------------------------------------\n\n" "$1"; }
+check() { printf "✓ %s\n" "$1"; }
+
+# 1. Creating sample jobs
+header "Creating sample jobs"
+for entry in "${JOBS[@]}"; do
+  IFS='|' read -r job payload task <<< "$entry"
+  echo "Creating ${job}..."
+  structured_request POST "/v1/jobs" "${OUTPUT_DIR}/${job}-job-create.json" "${SCRIPT_DIR}/${payload}"
+  EVAL_IDS["$job"]="$(jq -r '.response.EvalID' "${OUTPUT_DIR}/${job}-job-create.json" 2>/dev/null || echo "")"
+  check "Created"
+done
+
+# 2. Waiting for allocations
+header "Waiting for allocations"
+for entry in "${JOBS[@]}"; do
+  IFS='|' read -r job payload task <<< "$entry"
+  echo "Waiting for ${job} allocation..."
+  while true; do
+    id=$(curl -s "${NOMAD_ADDR}/v1/job/${job}/allocations" | jq -r 'first(.[]?.ID)//empty')
+    if [[ -n "$id" ]]; then ALLOC_IDS["$job"]="$id"; check "Allocation: ${id:0:8}..."; break; fi
+    sleep 1
+  done
+done
+
+# 3. Collecting cluster information
+header "Collecting cluster information"
+structured_request GET "/v1/jobs" "${OUTPUT_DIR}/jobs.json"; check "Jobs"
+structured_request GET "/v1/allocations" "${OUTPUT_DIR}/allocations.json"; check "Allocations"
+
+# 4. Collecting allocation statistics
+header "Collecting allocation statistics"
+for job in "${!ALLOC_IDS[@]}"; do
+  structured_request GET "/v1/client/allocation/${ALLOC_IDS[$job]}/stats" "${OUTPUT_DIR}/stats-${job}.json"
+  check "${job} stats"
+done
+
+# 5. Collecting stdout logs
+header "Collecting stdout logs"
+for entry in "${JOBS[@]}"; do
+  IFS='|' read -r job payload task <<< "$entry"
+  structured_request GET "/v1/client/fs/logs/${ALLOC_IDS[$job]}?task=${task}&type=stdout&plain=true" "${OUTPUT_DIR}/${job}-stdout.json"
+  check "${job} stdout"
+done
+
+# 6. Collecting stderr logs
+header "Collecting stderr logs"
+for entry in "${JOBS[@]}"; do
+  IFS='|' read -r job payload task <<< "$entry"
+  structured_request GET "/v1/client/fs/logs/${ALLOC_IDS[$job]}?task=${task}&type=stderr&plain=true" "${OUTPUT_DIR}/${job}-stderr.json"
+  check "${job} stderr"
+done
+
+# 7. Collecting evaluations
+header "Collecting evaluations"
+for job in "${!EVAL_IDS[@]}"; do
+  structured_request GET "/v1/evaluation/${EVAL_IDS[$job]}" "${OUTPUT_DIR}/eval-${job}.json"
+  check "${job} evaluation"
+done
+
+# 8. Collecting node information
+header "Collecting node information"
+structured_request GET "/v1/nodes" "${OUTPUT_DIR}/nodes.json"; check "Nodes"
+NODE_ID=$(jq -r '.response[0].ID' "${OUTPUT_DIR}/nodes.json")
+structured_request GET "/v1/node/${NODE_ID}" "${OUTPUT_DIR}/node.json"; check "Node details"
+
+echo -e "\nDone.\n\nOutput:\noutput/${DIR_NAME}"
