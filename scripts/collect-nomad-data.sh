@@ -14,7 +14,28 @@
 #
 #   - NOMAD_URL: Optional. Default is http://localhost:4646
 #   - --stdout:  Optional. Prints JSON to terminal instead of saving files.
+# 
+# Job Configuration
+# -----------------
+# Jobs are defined in the JOBS array using the format:
 #
+#   JOB_NAME | PAYLOAD_FILE | TASK_NAME
+#
+# Example:
+#   JOBS=(
+#     "nginx|nginx-job.json|nginx"
+#     "crasher|crasher-job.json|app"
+#   )
+#
+# Where:
+#   JOB_NAME: The Nomad job name.
+#   PAYLOAD_FILE: The job specification file located in the same directory as this script.
+#   TASK_NAME: The task name inside the Nomad job. This is used when collecting
+#       stdout and stderr logs from the allocation.
+#
+# To add another sample job, simply add another entry to the JOBS array.
+# No other part of the script needs to be modified.
+# 
 # Output Format
 # -------------
 # Each request is logged as a JSON object containing:
@@ -44,6 +65,8 @@ DIR_NAME=$(date +"%Y%m%d-%H%M%S")
 OUTPUT_DIR="${SCRIPT_DIR}/output/${DIR_NAME}"
 [[ "$STDOUT_MODE" == "false" ]] && mkdir -p "$OUTPUT_DIR"
 
+# Job Configuration
+# jobname | payload | task name
 JOBS=(
   "nginx|nginx-job.json|nginx"
   "crasher|crasher-job.json|app"
@@ -69,8 +92,7 @@ structured_request() {
   local success=false
   [[ "$status_code" =~ ^2[0-9][0-9]$ ]] && success=true
   
-  # --- IMPROVED PROCESSING ---
-  # We use jq's --slurpfile or simply pipe the content to avoid 'Argument list too long'
+  # Response processing
   local final_json
   final_json=$(
     cat "$tmp_resp" | jq -R -s \
@@ -89,11 +111,11 @@ structured_request() {
   rm -f "$tmp_resp"
 }
 
-# --- Formatting Helpers ---
+# Formatting Helpers
 header() { printf "\n# ------------------------------------------------------------------\n# %s\n# ------------------------------------------------------------------\n\n" "$1"; }
 check() { printf "✓ %s\n" "$1"; }
 
-# 1. Creating sample jobs
+# Creating sample jobs
 header "Creating sample jobs"
 for entry in "${JOBS[@]}"; do
   IFS='|' read -r job payload task <<< "$entry"
@@ -103,7 +125,7 @@ for entry in "${JOBS[@]}"; do
   check "Created"
 done
 
-# 2. Waiting for allocations
+# Waiting for allocations
 header "Waiting for allocations"
 for entry in "${JOBS[@]}"; do
   IFS='|' read -r job payload task <<< "$entry"
@@ -115,19 +137,19 @@ for entry in "${JOBS[@]}"; do
   done
 done
 
-# 3. Collecting cluster information
+# Collecting cluster information
 header "Collecting cluster information"
 structured_request GET "/v1/jobs" "${OUTPUT_DIR}/jobs.json"; check "Jobs"
 structured_request GET "/v1/allocations" "${OUTPUT_DIR}/allocations.json"; check "Allocations"
 
-# 4. Collecting allocation statistics
+# Collecting allocation statistics
 header "Collecting allocation statistics"
 for job in "${!ALLOC_IDS[@]}"; do
   structured_request GET "/v1/client/allocation/${ALLOC_IDS[$job]}/stats" "${OUTPUT_DIR}/stats-${job}.json"
   check "${job} stats"
 done
 
-# 5. Collecting stdout logs
+# Collecting stdout logs
 header "Collecting stdout logs"
 for entry in "${JOBS[@]}"; do
   IFS='|' read -r job payload task <<< "$entry"
@@ -135,7 +157,7 @@ for entry in "${JOBS[@]}"; do
   check "${job} stdout"
 done
 
-# 6. Collecting stderr logs
+# Collecting stderr logs
 header "Collecting stderr logs"
 for entry in "${JOBS[@]}"; do
   IFS='|' read -r job payload task <<< "$entry"
@@ -143,14 +165,14 @@ for entry in "${JOBS[@]}"; do
   check "${job} stderr"
 done
 
-# 7. Collecting evaluations
+# Collecting evaluations
 header "Collecting evaluations"
 for job in "${!EVAL_IDS[@]}"; do
   structured_request GET "/v1/evaluation/${EVAL_IDS[$job]}" "${OUTPUT_DIR}/eval-${job}.json"
   check "${job} evaluation"
 done
 
-# 8. Collecting node information
+# Collecting node information
 header "Collecting node information"
 structured_request GET "/v1/nodes" "${OUTPUT_DIR}/nodes.json"; check "Nodes"
 NODE_ID=$(jq -r '.response[0].ID' "${OUTPUT_DIR}/nodes.json")
