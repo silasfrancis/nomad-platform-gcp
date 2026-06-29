@@ -83,11 +83,10 @@ NOMAD_PID=$!
 
 # Wait for the agent to be ready
 echo "Waiting for Nomad to start..."
-until curl -s "${NOMAD_ADDR}/v1/agent/health" | grep -q '"client":true'; do
+until curl -s "${NOMAD_ADDR}/v1/agent/health" | grep -q '"ok":true'; do
   sleep 1
 done
 echo "Nomad agent is ready (PID: $NOMAD_PID)."
-
 
 # Function to perform requests and save in requested schema
 structured_request() {
