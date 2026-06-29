@@ -60,6 +60,7 @@ for arg in "$@"; do
   esac
 done
 
+
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 DIR_NAME=$(date +"%Y%m%d-%H%M%S")
 OUTPUT_DIR="${SCRIPT_DIR}/output/${DIR_NAME}"
@@ -74,6 +75,19 @@ JOBS=(
 
 declare -A ALLOC_IDS
 declare -A EVAL_IDS
+
+# Start the Nomad agent in the background
+echo "Starting Nomad agent in -dev mode..."
+nomad agent -dev -bind 0.0.0.0 > nomad.log 2>&1 &
+NOMAD_PID=$!
+
+# Wait for the agent to be ready
+echo "Waiting for Nomad to start..."
+until curl -s "${NOMAD_ADDR}/v1/agent/health" | grep -q '"client":true'; do
+  sleep 1
+done
+echo "Nomad agent is ready (PID: $NOMAD_PID)."
+
 
 # Function to perform requests and save in requested schema
 structured_request() {
@@ -179,3 +193,10 @@ NODE_ID=$(jq -r '.response[0].ID' "${OUTPUT_DIR}/nodes.json")
 structured_request GET "/v1/node/${NODE_ID}" "${OUTPUT_DIR}/node.json"; check "Node details"
 
 echo -e "\nDone.\n\nOutput:\noutput/${DIR_NAME}"
+
+# Cleanup: Stop the agent when finished or on error
+cleanup() {
+  echo -e "\nCleaning up: Stopping Nomad agent (PID: $NOMAD_PID)..."
+  kill $NOMAD_PID
+}
+trap cleanup EXIT

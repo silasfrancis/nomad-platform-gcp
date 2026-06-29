@@ -8,12 +8,24 @@
       {
         "Name": "web",
         "Count": 1,
+        "Networks": [
+          {
+            "ReservedPorts": [
+              {
+                "Label": "http",
+                "Value": 8080,
+                "To": 80
+              }
+            ]
+          }
+        ],
         "Tasks": [
           {
             "Name": "nginx",
             "Driver": "docker",
             "Config": {
-              "image": "nginx:latest"
+              "image": "nginx:latest",
+              "ports": ["http"]
             },
             "Resources": {
               "CPU": 100,
