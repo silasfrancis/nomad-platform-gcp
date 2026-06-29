@@ -78,7 +78,7 @@ declare -A EVAL_IDS
 
 # Start the Nomad agent in the background
 echo "Starting Nomad agent in -dev mode..."
-nomad agent -dev -bind 0.0.0.0 > nomad.log 2>&1 &
+nomad agent -dev -bind 0.0.0.0 > "${OUTPUT_DIR}/nomad.log" 2>&1 &
 NOMAD_PID=$!
 
 # Wait for the agent to be ready
