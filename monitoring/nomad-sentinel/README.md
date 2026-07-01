@@ -1,7 +1,7 @@
-# Nomad AI Monitoring Agent
+# Nomad Sentinel (AI Monitoring & Remediation Agent)
 
 A Python control-loop agent that polls a Nomad cluster for anomalous allocations,
-sends context to Gemini 1.5 Flash for root-cause analysis, alerts via Slack, and
+sends context to Gemini 2.5 Flash for root-cause analysis, alerts via Slack, and
 performs bounded automated remediation.
 
 This is a standalone platform tool, deployed independently of the application
@@ -131,7 +131,7 @@ are never present in the Docker image or job spec.
 | `REMEDIATION_CONFIDENCE_THRESHOLD` | No | `0.8` | Minimum Gemini confidence to remediate/propose |
 | `MAX_REMEDIATION_ATTEMPTS` | No | `3` | Max attempts (executed or proposed) per job before escalating |
 | `COOLDOWN_SECONDS` | No | `300` | Cooldown after a remediation attempt |
-| `GEMINI_MODEL` | No | `gemini-1.5-flash` | Gemini model name |
+| `GEMINI_MODEL` | No | `gemini-2.5-flash` | Gemini model name |
 | `WATCH_NAMESPACES` | No | (all) | Comma-separated Nomad namespaces to watch |
 | `HISTORY_DATABASE_URL` | No | (disabled) | PostgreSQL connection string for anomaly history — see above. Unset disables persistence entirely. |
 

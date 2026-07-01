@@ -38,7 +38,7 @@ SLACK_WEBHOOK_URL: str = _require("SLACK_WEBHOOK_URL")
 
 # ── Optional with sensible defaults ───────────────────────────────────────────
 
-# How often the control loop polls Nomad (seconds)
+# How often the anomaly detection loop polls Nomad (seconds)
 POLL_INTERVAL_SECONDS: int = int(_optional("POLL_INTERVAL_SECONDS", "30"))
 
 # Number of restarts before an allocation is considered looping
@@ -65,7 +65,7 @@ MAX_REMEDIATION_ATTEMPTS: int = int(_optional("MAX_REMEDIATION_ATTEMPTS", "3"))
 COOLDOWN_SECONDS: int = int(_optional("COOLDOWN_SECONDS", "300"))
 
 # Gemini model to use
-GEMINI_MODEL: str = _optional("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL: str = _optional("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Environment label for alerts and logs (e.g. dev, prod)
 ENVIRONMENT: str = _optional("ENVIRONMENT", "unknown")
@@ -104,3 +104,20 @@ WATCH_NAMESPACES: list[str] = [
 # monitoring loop and a DB outage must never block detection, analysis,
 # alerting, or remediation.
 HISTORY_DATABASE_URL: str = _optional("HISTORY_DATABASE_URL", "")
+
+# ── HTTP server ───────────────────────────────────────────────────────────────
+
+# Port for the built-in Flask HTTP server.
+# GET /health — liveness probe (Consul health check, Nomad health gate).
+# GET /summary — on-demand cluster health summary (calls Nomad + Gemini).
+# Must match the port registered in the Nomad job spec service stanza
+# and the Prometheus scrape config.
+HTTP_PORT: int = int(_optional("HTTP_PORT", "8090"))
+
+# ── Scheduled summary ─────────────────────────────────────────────────────────
+
+# How often (in hours) to post a proactive cluster health summary to Slack.
+# This is independent of the anomaly detection loop — it fires whether or
+# not anything is wrong.
+# Set to 0 to disable scheduled summaries entirely.
+SUMMARY_INTERVAL_HOURS: float = float(_optional("SUMMARY_INTERVAL_HOURS", "6.0"))

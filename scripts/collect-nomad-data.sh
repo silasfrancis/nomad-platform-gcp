@@ -10,7 +10,7 @@
 #
 # Usage
 # -----
-#   ./collect-nomad-data.sh [NOMAD_URL] [--stdout]
+#   ./scripts/collect-nomad-data.sh [NOMAD_URL] [--stdout]
 #
 #   - NOMAD_URL: Optional. Default is http://localhost:4646
 #   - --stdout:  Optional. Prints JSON to terminal instead of saving files.
@@ -52,12 +52,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NOMAD_ADDR="http://localhost:4646"
 STDOUT_MODE=false
+DO_CLEANUP=true
 
 for arg in "$@"; do
   case "$arg" in
     --stdout) STDOUT_MODE=true ;;
     http://*|https://*) NOMAD_ADDR="$arg" ;;
   esac
+done
+
+for arg in "$@"; do
+  if [ "$arg" == "--no-cleanup" ]; then
+    DO_CLEANUP=false
+  fi
 done
 
 
@@ -195,7 +202,12 @@ echo -e "\nDone.\n\nOutput:\noutput/${DIR_NAME}"
 
 # Cleanup: Stop the agent when finished or on error
 cleanup() {
-  echo -e "\nCleaning up: Stopping Nomad agent (PID: $NOMAD_PID)..."
-  kill $NOMAD_PID
+  if [ "$DO_CLEANUP" = true ]; then
+    echo -e "\nCleaning up: Stopping Nomad agent (PID: $NOMAD_PID)..."
+    kill "$NOMAD_PID"
+  else
+    echo -e "\nSkipping cleanup as requested."
+  fi
 }
+
 trap cleanup EXIT

@@ -5,11 +5,23 @@ suggested_action. Every action is logged before and after execution.
 
 Supported actions:
   - increase_memory : patch the task's MemoryMB and resubmit the job
-  - restart         : stop the specific allocation, Nomad reschedules it
-  - revert          : revert the job to its previous version
-  - check_image     : no-op, alert only (outside agent's remediation scope)
+  - restart         : stop the specific allocation via /v1/allocation/:id/stop
+                      (no_shutdown_delay is a query parameter, not JSON body)
+  - revert          : revert the job to its previous version, with
+                      EnforceVersion as an optimistic concurrency lock
+  - check_image     : no-op, alert only
   - manual_intervention : no-op, alert only
   - none            : no-op
+
+API notes (verified against live Nomad API responses):
+  - POST /v1/allocation/:id/stop  — no_shutdown_delay is a QUERY PARAMETER,
+    not a JSON body field. Body is ignored by this endpoint.
+  - POST /v1/job/:id              — Namespace must be in the Job object in
+    the JSON body (already present when we deep-copy the fetched spec).
+    The params={"namespace": ...} query arg on POST is redundant and removed.
+  - POST /v1/job/:id/revert       — EnforceVersion should be set to the
+    current version as an optimistic lock to prevent reverting to the wrong
+    version if a concurrent change incremented it between our fetch and revert.
 """
 
 import copy
@@ -75,14 +87,18 @@ def _fetch_job(job_id: str, namespace: str) -> dict:
         raise RemediationError(f"failed to fetch job spec for {job_id}: {e}")
 
 
-def _submit_job(job_id: str, job_spec: dict, namespace: str) -> None:
+def _submit_job(job_id: str, job_spec: dict) -> None:
+    """
+    Submit an updated job spec to Nomad.
+    Namespace is already present in the job_spec dict (copied from the
+    fetched spec) — no need for a namespace query param on POST.
+    """
     url = f"{NOMAD_ADDR}/v1/job/{job_id}"
     payload = {"Job": job_spec}
     try:
         resp = requests.post(
             url,
             headers=_headers(),
-            params={"namespace": namespace},
             json=payload,
             timeout=15,
         )
@@ -120,7 +136,7 @@ def _increase_memory(anomaly: dict, analysis: dict) -> dict:
     if not task_found:
         raise RemediationError(f"task '{task_name}' not found in job spec for {job_id}")
 
-    _submit_job(job_id, job_spec, namespace)
+    _submit_job(job_id, job_spec)
 
     log.info(
         "memory_increased",
@@ -138,6 +154,14 @@ def _increase_memory(anomaly: dict, analysis: dict) -> dict:
 
 
 def _restart_allocation(anomaly: dict) -> dict:
+    """
+    Stop a specific allocation, causing Nomad to reschedule it.
+
+    Endpoint: POST /v1/allocation/:id/stop
+    no_shutdown_delay is a QUERY PARAMETER — the JSON body is ignored
+    by this endpoint. Passing it as a JSON body (the prior bug) had no
+    effect since the endpoint doesn't read the body at all.
+    """
     alloc_id = anomaly["alloc_id"]
     url = f"{NOMAD_ADDR}/v1/allocation/{alloc_id}/stop"
 
@@ -145,7 +169,7 @@ def _restart_allocation(anomaly: dict) -> dict:
         resp = requests.post(
             url,
             headers=_headers(),
-            json={"NoShutdownDelay": False},
+            params={"no_shutdown_delay": "false"},
             timeout=10,
         )
         resp.raise_for_status()
@@ -157,6 +181,14 @@ def _restart_allocation(anomaly: dict) -> dict:
 
 
 def _revert_job(anomaly: dict) -> dict:
+    """
+    Revert a job to its previous version.
+
+    EnforceVersion is set to the current version as an optimistic
+    concurrency lock: if another process incremented the version between
+    our fetch and this revert call, the API rejects the request rather
+    than silently reverting to the wrong version.
+    """
     job_id = anomaly["job_id"]
     namespace = anomaly.get("namespace", "default")
 
@@ -169,21 +201,32 @@ def _revert_job(anomaly: dict) -> dict:
     target_version = current_version - 1
     url = f"{NOMAD_ADDR}/v1/job/{job_id}/revert"
     payload = {
-        "JobID": job_id,
-        "JobVersion": target_version,
+        "JobID":          job_id,
+        "JobVersion":     target_version,
+        "EnforceVersion": current_version,
     }
 
     try:
         resp = requests.post(
             url,
             headers=_headers(),
-            params={"namespace": namespace},
             json=payload,
             timeout=15,
         )
         resp.raise_for_status()
     except requests.exceptions.RequestException as e:
-        raise RemediationError(f"failed to revert job {job_id} to version {target_version}: {e}")
+        raise RemediationError(
+            f"failed to revert job {job_id} to version {target_version}: {e}"
+        )
 
-    log.info("job_reverted", job=job_id, from_version=current_version, to_version=target_version)
-    return {"action_taken": "revert", "from_version": current_version, "to_version": target_version}
+    log.info(
+        "job_reverted",
+        job=job_id,
+        from_version=current_version,
+        to_version=target_version,
+    )
+    return {
+        "action_taken":   "revert",
+        "from_version":   current_version,
+        "to_version":     target_version,
+    }

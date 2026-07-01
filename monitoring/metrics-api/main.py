@@ -60,6 +60,17 @@ def _count_request():
     global _request_count
     _request_count += 1
 
+@app.route("/")
+def index():
+    return jsonify(
+        service="metrics-api",
+        status="ok",
+        endpoints={
+            "GET /health":   "liveness probe",
+            "GET /db-check": "PostgreSQL connectivity check showing connected user and credential expiry",
+            "GET /metrics":  "Prometheus-format metrics exposition",
+        },
+    ), 200
 
 @app.route("/health")
 def health():

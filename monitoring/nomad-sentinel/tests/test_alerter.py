@@ -196,3 +196,72 @@ class TestFormatRemediation:
         result = {"action_taken": "none", "reason": "requires human review"}
         text = alerter._format_remediation(result)
         assert "requires human review" in text
+
+
+class TestSendSummaryAlert:
+    def _sample_summary(self, status="healthy", issues=None, error=None):
+        result = {
+            "overall_status": status,
+            "healthy_count": 11,
+            "unhealthy_count": 0,
+            "pending_count": 0,
+            "total_allocs": 11,
+            "summary": "All 11 services healthy, 0 anomalies in the last 6 hours.",
+            "notable_issues": issues or [],
+            "confidence": 0.95,
+            "generated_at": "2026-06-30T00:00:00Z",
+        }
+        if error:
+            result["error"] = error
+        return result
+
+    @responses.activate
+    def test_sends_summary_successfully(self):
+        responses.add(responses.POST, SLACK_WEBHOOK_URL, json={"ok": True}, status=200)
+        result = alerter.send_summary_alert(self._sample_summary())
+        assert result is True
+        assert len(responses.calls) == 1
+
+    @responses.activate
+    def test_payload_includes_overall_status(self):
+        responses.add(responses.POST, SLACK_WEBHOOK_URL, json={"ok": True}, status=200)
+        alerter.send_summary_alert(self._sample_summary(status="degraded"))
+
+        sent_body = json.loads(responses.calls[0].request.body)
+        field_values = [f["value"] for f in sent_body["attachments"][0]["fields"]]
+        assert "DEGRADED" in field_values
+
+    @responses.activate
+    def test_payload_includes_notable_issues_when_present(self):
+        responses.add(responses.POST, SLACK_WEBHOOK_URL, json={"ok": True}, status=200)
+        alerter.send_summary_alert(
+            self._sample_summary(status="degraded", issues=["metrics-api restarted twice"])
+        )
+
+        sent_body = json.loads(responses.calls[0].request.body)
+        field_titles = [f["title"] for f in sent_body["attachments"][0]["fields"]]
+        assert "Notable Issues" in field_titles
+
+    @responses.activate
+    def test_payload_omits_notable_issues_field_when_empty(self):
+        responses.add(responses.POST, SLACK_WEBHOOK_URL, json={"ok": True}, status=200)
+        alerter.send_summary_alert(self._sample_summary(status="healthy", issues=[]))
+
+        sent_body = json.loads(responses.calls[0].request.body)
+        field_titles = [f["title"] for f in sent_body["attachments"][0]["fields"]]
+        assert "Notable Issues" not in field_titles
+
+    @responses.activate
+    def test_payload_includes_error_field_when_present(self):
+        responses.add(responses.POST, SLACK_WEBHOOK_URL, json={"ok": True}, status=200)
+        alerter.send_summary_alert(self._sample_summary(error="Nomad timeout"))
+
+        sent_body = json.loads(responses.calls[0].request.body)
+        field_titles = [f["title"] for f in sent_body["attachments"][0]["fields"]]
+        assert "Error" in field_titles
+
+    @responses.activate
+    def test_returns_false_on_webhook_failure(self):
+        responses.add(responses.POST, SLACK_WEBHOOK_URL, json={"error": "bad"}, status=500)
+        result = alerter.send_summary_alert(self._sample_summary())
+        assert result is False

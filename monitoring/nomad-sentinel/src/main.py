@@ -2,17 +2,27 @@
 main.py
 Entry point for the Nomad AI Monitoring Agent.
 
-Control loop:
-  1. Poll Nomad for anomalous allocations
-  2. For each anomaly not in cooldown:
-       - Send context to Gemini for analysis
-       - Always log the analysis and send a Slack alert
-       - If severity is high/critical and confidence is high enough:
-           - REMEDIATION_MODE=execute  -> call the Nomad API and remediate
-           - REMEDIATION_MODE=propose  -> take no action, but send a Slack
-             alert that clearly states the action the agent WOULD have
-             taken, so a human can act on it manually
-  3. Sleep and repeat
+Three concurrent loops, all running in the same process:
+
+  1. Anomaly detection loop (main thread)
+     Polls Nomad every POLL_INTERVAL_SECONDS, detects workload anomalies,
+     calls Gemini for root-cause analysis, alerts and optionally remediates.
+     Unchanged from the original implementation.
+
+  2. HTTP server (daemon thread — http_server.py)
+     Flask server on HTTP_PORT (default 8090).
+       GET /health  — liveness probe, instant response, no Nomad call.
+       GET /summary — on-demand cluster health summary: calls Nomad +
+                      Gemini and returns JSON. Hit this endpoint during a
+                      demo to show what the agent sees right now.
+
+  3. Scheduled summary (APScheduler background thread — scheduler.py)
+     Every SUMMARY_INTERVAL_HOURS (default 6h), posts a proactive cluster
+     health summary to Slack whether or not anything is wrong.
+     "All 11 services healthy, 0 anomalies in the last 6 hours" is a
+     genuinely useful operational message — it also proves continuous
+     Gemini integration, not just reactive alerting.
+     Set SUMMARY_INTERVAL_HOURS=0 to disable.
 
 REMEDIATION_MODE is set per environment in the Nomad job spec — typically
 "execute" in dev and "propose" in prod. This lets autonomous remediation
@@ -30,6 +40,8 @@ import gemini_client
 import remediator
 import alerter
 import history
+import http_server
+import scheduler
 from state import StateTracker
 
 structlog.configure(
@@ -133,6 +145,8 @@ def run() -> None:
         nomad_addr=config.NOMAD_ADDR,
         poll_interval=config.POLL_INTERVAL_SECONDS,
         remediation_mode=config.REMEDIATION_MODE,
+        http_port=config.HTTP_PORT,
+        summary_interval_hours=config.SUMMARY_INTERVAL_HOURS,
     )
 
     history.ensure_schema()
@@ -142,8 +156,20 @@ def run() -> None:
         max_attempts=config.MAX_REMEDIATION_ATTEMPTS,
     )
 
+    # Start HTTP server in a daemon thread.
+    # /health is used by Consul + Nomad health gates.
+    # /summary is the on-demand demo endpoint.
+    http_server.start_http_server()
+
+    # Start the scheduled summary (posts to Slack every SUMMARY_INTERVAL_HOURS).
+    # Returns None if disabled (SUMMARY_INTERVAL_HOURS=0).
+    sched = scheduler.start_scheduler()
+
     alerter.send_simple_alert(
-        f"AI monitoring agent started (remediation_mode={config.REMEDIATION_MODE})",
+        f"AI monitoring agent started "
+        f"(remediation_mode={config.REMEDIATION_MODE}, "
+        f"http_port={config.HTTP_PORT}, "
+        f"summary_interval={config.SUMMARY_INTERVAL_HOURS}h)",
         severity="low",
     )
 

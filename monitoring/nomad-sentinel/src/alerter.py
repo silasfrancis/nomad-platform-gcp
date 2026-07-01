@@ -30,6 +30,20 @@ _SEVERITY_COLOR = {
     "critical": "#8B0000",
 }
 
+_STATUS_EMOJI = {
+    "healthy":  ":large_green_circle:",
+    "degraded": ":large_yellow_circle:",
+    "critical": ":rotating_light:",
+    "unknown":  ":white_circle:",
+}
+
+_STATUS_COLOR = {
+    "healthy":  "#2ECC71",
+    "degraded": "#E8A33D",
+    "critical": "#8B0000",
+    "unknown":  "#888888",
+}
+
 
 def send_alert(
     anomaly: dict,
@@ -62,7 +76,6 @@ def send_alert(
     ]
 
     if remediation_result:
-        action_taken = remediation_result.get("action_taken", "none")
         fields.append({
             "title": "Remediation",
             "value": _format_remediation(remediation_result),
@@ -97,6 +110,94 @@ def send_simple_alert(message: str, severity: str = "medium") -> bool:
     payload = {
         "text": f"{emoji} [{ENVIRONMENT}] {message}",
     }
+    return _post_to_slack(payload)
+
+
+def send_summary_alert(summary_result: dict) -> bool:
+    """
+    Post a scheduled cluster health summary to Slack.
+
+    Called by scheduler.py on a configurable interval (default: every 6h).
+    This is a proactive status message — not triggered by an anomaly.
+    Visually distinct from anomaly alerts so it is easy to tell apart
+    in the Slack channel.
+
+    summary_result is the dict returned by summarizer.get_cluster_summary().
+    """
+    overall_status = summary_result.get("overall_status", "unknown")
+    emoji  = _STATUS_EMOJI.get(overall_status, ":white_circle:")
+    color  = _STATUS_COLOR.get(overall_status, "#888888")
+    generated_at = summary_result.get("generated_at", "unknown")
+
+    title = f"{emoji} Cluster Health Summary — {ENVIRONMENT}"
+
+    fields = [
+        {
+            "title": "Overall Status",
+            "value": overall_status.upper(),
+            "short": True,
+        },
+        {
+            "title": "Generated At",
+            "value": generated_at,
+            "short": True,
+        },
+        {
+            "title": "Healthy Allocations",
+            "value": str(summary_result.get("healthy_count", 0)),
+            "short": True,
+        },
+        {
+            "title": "Unhealthy Allocations",
+            "value": str(summary_result.get("unhealthy_count", 0)),
+            "short": True,
+        },
+        {
+            "title": "Pending Allocations",
+            "value": str(summary_result.get("pending_count", 0)),
+            "short": True,
+        },
+        {
+            "title": "Total Allocations",
+            "value": str(summary_result.get("total_allocs", 0)),
+            "short": True,
+        },
+        {
+            "title": "Confidence",
+            "value": f"{summary_result.get('confidence', 0.0):.2f}",
+            "short": True,
+        },
+    ]
+
+    notable_issues = summary_result.get("notable_issues") or []
+    if notable_issues:
+        fields.append({
+            "title": "Notable Issues",
+            "value": "\n".join(f"• {issue}" for issue in notable_issues),
+            "short": False,
+        })
+
+    # Include the error field if Nomad/Gemini failed, so Slack makes
+    # it obvious the summary is incomplete rather than silently misleading.
+    if "error" in summary_result:
+        fields.append({
+            "title": "Error",
+            "value": summary_result["error"],
+            "short": False,
+        })
+
+    payload = {
+        "text": title,
+        "attachments": [
+            {
+                "color": color,
+                "text": summary_result.get("summary", ""),
+                "fields": fields,
+                "footer": "Nomad AI Monitoring Agent — scheduled summary",
+            }
+        ],
+    }
+
     return _post_to_slack(payload)
 
 
