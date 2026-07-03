@@ -19,7 +19,7 @@ variable "crypto_key_members" {
 
     Use this to add SA emails or groups without touching locals:
       crypto_key_extra_members = {
-        "platform-storage/persistent-disk" = [
+        "platform/disk-cmek" = [
           "serviceAccount:some-other-sa@project.iam.gserviceaccount.com"
         ]
       }

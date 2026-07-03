@@ -2,19 +2,19 @@ locals {
   kms_keyrings = {
     "vault-unseal" = {
       keys = {
-        "vault-unseal-key" = {
+        "vault-unseal-cmek" = {
           purpose         = "ENCRYPT_DECRYPT"
           rotation_period = "31536000s"
         }
       }
     }
-    "platform-storage" = {
+    "platform" = {
       keys = {
-        "gcs-storage" = {
+        "storage-cmek" = {
           purpose         = "ENCRYPT_DECRYPT"
           rotation_period = "7776000s"
         }
-        "persistent-disk" = {
+        "disk-cmek" = {
           purpose         = "ENCRYPT_DECRYPT"
           rotation_period = "7776000s"
         }
@@ -44,25 +44,25 @@ locals {
   # Extra members (e.g. SA emails) are passed via var.crypto_key_extra_members
   # and merged in crypto_key_iam below.
   default_crypto_key_members = {
-    "platform-storage/gcs-storage" = [
+    "platform/storage-cmek" = [
       "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com",
       "serviceAccount:service-${var.project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com",
     ]
-    "platform-storage/persistent-disk" = [
+    "platform/disk-cmek" = [
       "serviceAccount:service-${var.project_number}@compute-system.iam.gserviceaccount.com",
     ]
-    "vault-unseal/vault-unseal-key" = []
+    "vault-unseal/vault-unseal-cmek" = []
     # No default members for vault-unseal — only management-vm-sa needs it,
     # passed via var.vault_unseal_key_members
   }
   
   key_ring_iam_bindings = {}
   crypto_key_iam = {
-    "platform-storage/gcs-storage" = {
+    "platform/storage-cmek" = {
       role = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
       members = toset(concat(
-        local.default_crypto_key_members["platform-storage/gcs-storage"],
-        lookup(var.crypto_key_members, "platform-storage/gcs-storage", [])
+        local.default_crypto_key_members["platform/storage-cmek"],
+        lookup(var.crypto_key_members, "platform/storage-cmek", [])
       ))
       condition = {
         title       = null
@@ -71,11 +71,11 @@ locals {
       }
     }
 
-    "platform-storage/persistent-disk" = {
+    "platform/disk-cmek" = {
       role = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
       members = toset(concat(
-        local.default_crypto_key_members["platform-storage/persistent-disk"],
-        lookup(var.crypto_key_members, "platform-storage/persistent-disk", [])
+        local.default_crypto_key_members["platform/disk-cmek"],
+        lookup(var.crypto_key_members, "platform/disk-cmek", [])
       ))
       condition = {
         title       = null
@@ -84,11 +84,11 @@ locals {
       }
     }
 
-    "vault-unseal/vault-unseal-key" = {
+    "vault-unseal/vault-unseal-cmek" = {
       role = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
       members = toset(concat(
-        local.default_crypto_key_members["vault-unseal/vault-unseal-key"],
-        lookup(var.crypto_key_members, "vault-unseal/vault-unseal-key", [])
+        local.default_crypto_key_members["vault-unseal/vault-unseal-cmek"],
+        lookup(var.crypto_key_members, "vault-unseal/vault-unseal-cmek", [])
       ))
       condition = {
         title       = null
