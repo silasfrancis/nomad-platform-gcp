@@ -35,9 +35,9 @@ variable "environment" {
 
 # ── KMS ──────────────────────────────────────────────────────────────────────
 
-variable "gcs_storage_key_id" {
+variable "storage_cmek" {
   description = <<-EOT
-    Full resource ID of the KMS key used to encrypt GCS buckets.
+    Full resource ID of the KMS key used for storage encryption.
     Format: projects/<project>/locations/<region>/keyRings/<ring>/cryptoKeys/<key>
     Output from the kms module after bootstrap applies.
     Passed in after first apply or read from remote state in subsequent layers.

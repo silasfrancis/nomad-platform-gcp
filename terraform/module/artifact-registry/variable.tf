@@ -10,7 +10,7 @@ variable "artifact_registry_repo" {
   type = string
 }
 
-variable "gcs_storage_key_id"{
+variable "storage_cmek"{
   type = string
 }
 

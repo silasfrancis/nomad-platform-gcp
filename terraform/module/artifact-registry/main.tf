@@ -59,10 +59,7 @@ resource "google_artifact_registry_repository" "platform" {
   format        = "DOCKER"
   description   = "Platform Docker images — nomad-sentinel, metrics-api, Online Boutique services (13 total)"
 
-  # CMEK — same gcs-storage key used for GCS buckets.
-  # Artifact Registry supports the same KMS key as GCS since both are
-  # storage-layer resources in the same region.
-  kms_key_name = var.gcs_storage_key_id
+  kms_key_name = var.storage_cmek
 
   # PREVENT: refuse terraform destroy on this resource.
   # Images are reproducible from source but rebuilding all 13 services

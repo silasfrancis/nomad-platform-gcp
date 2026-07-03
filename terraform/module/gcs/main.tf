@@ -11,7 +11,7 @@ locals {
     deletion_policy             = "PREVENT"
     versioning_enabled          = true
     soft_delete_retention       = 604800  # 7 days minimum
-    kms_key_id                  = var.gcs_storage_key_id
+    kms_key_id                  = var.storage_cmek
 
     # Universal labels — applied to every bucket automatically.
     # Do not put environment or purpose here — those are per-bucket concerns.
