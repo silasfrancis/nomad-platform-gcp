@@ -2,11 +2,33 @@ variable "project_id" {
   type = string
 }
 
-variable "location" {
+
+variable "project_number" {
   type = string
 }
 
-variable "vault_vm_sa_member" {
-  type    = string
-  description = "The full IAM member string for the Vault VM's service account. Example: serviceAccount:vault-vm-sa@<project-id>.iam.gserviceaccount.com"
+variable "region" {
+  type = string
+}
+
+variable "crypto_key_members" {
+  description = <<-EOT
+    Extra IAM members to add to specific KMS keys, merged with the default
+    service agent members. Map key must match a "<keyring>/<key>" entry
+    in local.kms_keyrings.
+
+    Use this to add SA emails or groups without touching locals:
+      crypto_key_extra_members = {
+        "platform-storage/persistent-disk" = [
+          "serviceAccount:some-other-sa@project.iam.gserviceaccount.com"
+        ]
+      }
+
+    Role is inherited from the crypto_key_iam entry for that key —
+    all extra members get the same role as the default members.
+    If you need a different role on the same key, add a separate
+    crypto_key_iam entry with a unique binding name.
+  EOT
+  type    = map(list(string))
+  default = {}
 }
