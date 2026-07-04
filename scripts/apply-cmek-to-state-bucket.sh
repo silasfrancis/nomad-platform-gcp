@@ -21,17 +21,23 @@
 set -euo pipefail
 
 PROJECT_ID="${1:-}"
-STATE_BUCKET="${2:-}"
+REGION="${2:-europe-west1}"
+STATE_BUCKET="${3:-}"
 
 if [[ -z "$PROJECT_ID" || -z "$STATE_BUCKET" ]]; then
-  echo "Usage: $0 <project_id> <state_bucket_name>"
+  echo "Usage: $0 <project_id> [region] <state_bucket_name>"
   exit 1
 fi
+
+echo "==> Project:      $PROJECT_ID"
+echo "==> Region:       $REGION"
+echo "==> State bucket: gs://$STATE_BUCKET"
+echo ""
 
 echo "==> Reading gcs-storage key ID from Terraform bootstrap outputs"
 cd terraform/bootstrap
 
-KEY_ID=$(terraform output -raw storage-cmek 2>/dev/null || echo "")
+KEY_ID=$(terraform output -raw kms_keys["storage-cmek"].id 2>/dev/null || echo "")
 
 if [[ -z "$KEY_ID" ]]; then
   echo "ERROR: storage_cmek_id output is empty."
@@ -39,15 +45,15 @@ if [[ -z "$KEY_ID" ]]; then
   exit 1
 fi
 
-echo "==> Applying CMEK to gs://$STATE_BUCKET"
+echo "==> Applying CMEK to gs://$PROJECT_ID-$REGION-$STATE_BUCKET"
 echo "    Key: $KEY_ID"
 
-gcloud storage buckets update "gs://$STATE_BUCKET" \
+gcloud storage buckets update "gs://$PROJECT_ID-$REGION-$STATE_BUCKET" \
   --default-encryption-key="$KEY_ID"
 
 echo ""
 echo "============================================================"
-echo "CMEK applied to gs://$STATE_BUCKET"
+echo "CMEK applied to gs://$PROJECT_ID-$REGION-$STATE_BUCKET"
 echo ""
 echo "Note: Existing state objects are encrypted with Google-managed"
 echo "keys until next write. Run terraform apply in any layer to"

@@ -30,4 +30,5 @@ vendor/
 __pycache__/
 .pytest_cache/
 scripts/output
-state.conf
+state.config
+secret*.tfvars

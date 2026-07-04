@@ -44,17 +44,9 @@ locals {
   # Extra members (e.g. SA emails) are passed via var.crypto_key_extra_members
   # and merged in crypto_key_iam below.
   default_crypto_key_members = {
-    "platform/storage-cmek" = [
-      "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com",
-      "serviceAccount:service-${var.project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com",
-      "serviceAccount:service-${var.project_number}@gcp-sa-secretmanager.iam.gserviceaccount.com",
-    ]
-    "platform/disk-cmek" = [
-      "serviceAccount:service-${var.project_number}@compute-system.iam.gserviceaccount.com",
-    ]
+    "platform/storage-cmek" = []
+    "platform/disk-cmek" = []
     "vault-unseal/vault-unseal-cmek" = []
-    # No default members for vault-unseal — only management-vm-sa needs it,
-    # passed via var.vault_unseal_key_members
   }
   
   key_ring_iam_bindings = {}

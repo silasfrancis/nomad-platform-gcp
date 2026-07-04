@@ -65,6 +65,17 @@ module "kms" {
   project_number = var.project_number
   region = var.region
   crypto_key_members = {
+    
+    "platform/storage-cmek" = [
+      "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com",
+      "serviceAccount:service-${var.project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com",
+      "serviceAccount:service-${var.project_number}@gcp-sa-secretmanager.iam.gserviceaccount.com",
+    ]
+
+    "platform/disk-cmek" = [
+      "serviceAccount:service-${var.project_number}@compute-system.iam.gserviceaccount.com",
+    ]
+
     "vault-unseal/vault-unseal-cmek" = [
       module.service_account.service_accounts["management-vm-sa"].member
     ]
@@ -80,7 +91,7 @@ module "gcs_bucket" {
   region     = var.region
   additional_labels = local.labels
   environment = var.environment
-  storage_cmek = module.kms.kms_keys["platform/storage-cmek"].id
+  storage_cmek = module.kms.kms_keys["storage-cmek"].id
   platform_artifacts_creator_members = [
     module.service_account.service_accounts["management-vm-sa"].member,
     module.service_account.service_accounts["nomad-client-sa"].member
@@ -106,7 +117,7 @@ module "artifact_registry" {
   project_id = var.project_id
   region     = var.region
   artifact_registry_repo = local.project
-  storage_cmek = module.kms.kms_keys["platform/storage-cmek"].id
+  storage_cmek = module.kms.kms_keys["storage-cmek"].id
   artifact_registry_writer_members = [
     module.service_account.service_accounts["management-vm-sa"].member
   ]
@@ -130,7 +141,7 @@ module "artifact_registry" {
 module "secrets" {
   source       = "../modules/secret-manager"
   project_id   = var.project_id
-  storage_cmek = module.kms.kms_keys["platform/storage-cmek"].id
+  storage_cmek = module.kms.kms_keys["storage-cmek"].id
 
   labels = local.labels
 

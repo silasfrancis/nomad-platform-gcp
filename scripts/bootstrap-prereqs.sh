@@ -27,18 +27,18 @@ set -euo pipefail
 # ── Args ──────────────────────────────────────────────────────────────────────
 
 PROJECT_ID="${1:-}"
-STATE_BUCKET="${2:-}"
-REGION="${3:-europe-west1}"
+REGION="${2:-europe-west1}"
+STATE_BUCKET="${3:-}"
 
 if [[ -z "$PROJECT_ID" || -z "$STATE_BUCKET" ]]; then
-  echo "Usage: $0 <project_id> <state_bucket_name> [region]"
-  echo "Example: $0 nomad-platform-gcp nomad-platform-gcp-tfstate europe-west1"
+  echo "Usage: $0 <project_id> [region] <state_bucket_name> "
+  echo "Example: $0 nomad-platform-gcp europe-west1 nomad-platform-gcp-tfstate"
   exit 1
 fi
 
 echo "==> Project:      $PROJECT_ID"
-echo "==> State bucket: gs://$STATE_BUCKET"
 echo "==> Region:       $REGION"
+echo "==> State bucket: gs://$STATE_BUCKET"
 echo ""
 
 # ── Step 1: Set active project ────────────────────────────────────────────────
@@ -69,13 +69,13 @@ echo "    Done."
 #   - retention_period not set — we want state files to be mutable
 #     (Terraform overwrites state on every apply)
 
-echo "==> [3/4] Creating Terraform state bucket: gs://$STATE_BUCKET"
+echo "==> [3/4] Creating Terraform state bucket: gs://$PROJECT_ID-$REGION-$STATE_BUCKET"
 
 # Check if bucket already exists to make script idempotent
-if gcloud storage buckets describe "gs://$STATE_BUCKET" &>/dev/null; then
+if gcloud storage buckets describe "gs://$PROJECT_ID-$REGION-$STATE_BUCKET" &>/dev/null; then
   echo "    Bucket already exists — skipping creation."
 else
-  gcloud storage buckets create "gs://$STATE_BUCKET" \
+  gcloud storage buckets create "gs://$PROJECT_ID-$REGION-$STATE_BUCKET" \
     --location="$REGION" \
     --uniform-bucket-level-access \
     --public-access-prevention
@@ -91,12 +91,12 @@ echo "==> [4/4] Configuring state bucket"
 # Versioning — keeps every version of every state file.
 # On a failed terraform apply that corrupts state, you can restore the
 # previous version: gcloud storage cp gs://<bucket>/path#<generation> ./terraform.tfstate
-gcloud storage buckets update "gs://$STATE_BUCKET" \
+gcloud storage buckets update "gs://$PROJECT_ID-$REGION-$STATE_BUCKET" \
   --versioning
 
 # Soft delete — 7 days recovery window before permanent deletion.
 # Protects against accidental gsutil rm or gcloud storage rm on state files.
-gcloud storage buckets update "gs://$STATE_BUCKET" \
+gcloud storage buckets update "gs://$PROJECT_ID-$REGION-$STATE_BUCKET" \
   --soft-delete-duration=604800s
 
 # Labels — consistent with Terraform-managed resources.
@@ -135,7 +135,7 @@ LIFECYCLE_JSON=$(cat <<'EOF'
 EOF
 )
 
-echo "$LIFECYCLE_JSON" | gcloud storage buckets update "gs://$STATE_BUCKET" \
+echo "$LIFECYCLE_JSON" | gcloud storage buckets update "gs://$PROJECT_ID-$REGION-$STATE_BUCKET" \
   --lifecycle-file=/dev/stdin
 
 echo "    Configuration complete."
@@ -146,5 +146,5 @@ echo ""
 echo "  1. cd terraform/bootstrap"
 echo "  2. terraform init"
 echo "  3. terraform apply -var-file=dev.tfvars"
-echo "  4. ./scripts/apply-cmek-to-state-bucket.sh $PROJECT_ID $STATE_BUCKET"
+echo "  4. ./scripts/apply-cmek-to-state-bucket.sh $PROJECT_ID $REGION $STATE_BUCKET"
 echo "============================================================"
