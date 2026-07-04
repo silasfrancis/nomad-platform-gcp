@@ -14,15 +14,6 @@ variable "additional_labels" {
   default     = {}
 }
 
-variable "project_number" {
-  description = <<-EOT
-    GCP project number — not the project ID.
-    Required to construct GCP service agent email addresses for KMS IAM bindings.
-    Find it: gcloud projects describe <project_id> --format='value(projectNumber)'
-  EOT
-  type        = string
-}
-
 variable "environment" {
   description = <<-EOT
     Environment label applied to resources as a label fallback.
@@ -33,7 +24,6 @@ variable "environment" {
   default     = "shared"
 }
 
-# ── KMS ──────────────────────────────────────────────────────────────────────
 
 variable "storage_cmek" {
   description = <<-EOT
@@ -47,26 +37,6 @@ variable "storage_cmek" {
   # Default empty so bootstrap can create the key and bucket in one apply.
   # The bucket resource depends_on the KMS IAM binding so ordering is safe.
   # If you want to pass an existing key from a previous apply, set this.
-}
-
-# ── Buckets ───────────────────────────────────────────────────────────────────
-
-variable "tfstate_bucket" {
-  description = <<-EOT
-    Name of the GCS bucket used for Terraform remote state.
-    Created manually before bootstrap runs — Terraform cannot create
-    its own state backend. After bootstrap applies, run:
-      gcloud storage buckets update gs://<name> \
-        --default-encryption-key=<gcs_storage key ID>
-    to apply CMEK retroactively.
-  EOT
-  type        = string
-}
-
-variable "artifact_registry_repo" {
-  description = "Name of the Artifact Registry Docker repository"
-  type        = string
-  default     = "platform"
 }
 
 variable "backup_retention_days" {

@@ -1,5 +1,3 @@
-# bootstrap/main.tf
-#
 # Project-wide GCP infrastructure primitives.
 # Applied once — not per-environment. Dev and prod share these resources.
 #
@@ -9,7 +7,7 @@
 #        --default-encryption-key=<gcs_storage key ID>
 #   3. Proceed to terraform/network
 
-# ── GCP APIs ─────────────────────────────────────────────────────────────────
+# GCP APIs
 #
 # cloudresourcemanager.googleapis.com must be enabled manually before this
 # runs — it is the API that enables other APIs and cannot enable itself.
@@ -20,8 +18,6 @@
 # and clean up manually if the project is decommissioned.
 
 locals {
-
-  # ── APIs ───────────────────────────────────────────────────────────────────
   apis = [
     "compute.googleapis.com",                # VMs, disks, networking, MIGs
     "iam.googleapis.com",                    # service accounts, IAM bindings
@@ -35,5 +31,124 @@ locals {
     "monitoring.googleapis.com",            # Cloud Monitoring
     "securitycenter.googleapis.com",         # GCP Security Command Center (Standard tier)
     "dns.googleapis.com",                   # Cloud DNS (public + private zones)
+  ]
+
+  project = "nomad-platform-gcp"
+  labels = {
+    "environment" = "shared"
+    "managed-by" = "terraform"
+  }
+}
+
+resource "google_project_service" "apis" {
+  for_each = toset(local.apis)
+
+  project            = var.project_id
+  service            = each.value
+  disable_on_destroy = false
+}
+
+# Service Accounts
+
+module "service_account" {
+  source = "../modules/service-account"
+
+  project_id = var.project_id
+}
+
+# KMS
+
+module "kms" {
+  source = "../modules/kms"
+
+  project_id = var.project_id
+  project_number = var.project_number
+  region = var.region
+  crypto_key_members = {
+    "vault-unseal/vault-unseal-cmek" = [
+      module.service_account.service_accounts["management-vm-sa"].member
+    ]
+  }
+}
+
+# GCS Buckets
+
+module "gcs_bucket" {
+  source = "../modules/gcs"
+
+  project_id = var.project_id
+  region     = var.region
+  additional_labels = local.labels
+  environment = var.environment
+  storage_cmek = module.kms.kms_keys["platform/storage-cmek"].id
+  platform_artifacts_creator_members = [
+    module.service_account.service_accounts["management-vm-sa"].member,
+    module.service_account.service_accounts["nomad-client-sa"].member
+  ]
+  platform_artifacts_viewer_members = [
+    module.service_account.service_accounts["management-vm-sa"].member,
+    module.service_account.service_accounts["nomad-client-sa"].member
+  ]
+  cicd_artifacts_creator_members = [
+    module.service_account.service_accounts["management-vm-sa"].member
+  ]
+  cicd_artifacts_viewer_members = [
+    module.service_account.service_accounts["management-vm-sa"].member
+  ]
+
+}
+
+# Artifact Registry
+
+module "artifact_registry" {
+  source = "../modules/artifact-registry"
+
+  project_id = var.project_id
+  region     = var.region
+  artifact_registry_repo = local.project
+  storage_cmek = module.kms.kms_keys["platform/storage-cmek"].id
+  artifact_registry_writer_members = [
+    module.service_account.service_accounts["management-vm-sa"].member
+  ]
+  artifact_registry_reader_members = [
+    module.service_account.service_accounts["management-vm-sa"].member,
+    module.service_account.service_accounts["nomad-client-sa"].member
+  ]
+  additional_registry_iam = {}
+  immutable_tags = true
+  additional_labels = local.labels
+
+}
+
+# Secret Manager
+#
+# Root and admin tier accessors both resolve to management-vm-sa for now —
+# a deliberate cost tradeoff, since the mgmt VM already hosts Vault, Octopus,
+# the GitHub runner, and Grafana. Root tokens are used once during initial
+# setup regardless, so the shared SA doesn't add meaningful risk here.
+
+module "secrets" {
+  source       = "../modules/secret-manager"
+  project_id   = var.project_id
+  storage_cmek = module.kms.kms_keys["platform/storage-cmek"].id
+
+  labels = local.labels
+
+  # Only net-new secrets go here. Do NOT repeat keys from default_secrets —
+  # the module's validation block will fail the plan if you do.
+  secrets = {
+    # "new-service-token" = {
+    #   labels = { purpose = "new-service", tier = "app" }
+    # }
+  }
+
+  root_tier_accessor_members  = [
+    module.service_account.service_accounts["management-vm-sa"].member
+  ]
+  admin_tier_accessor_members = [
+    module.service_account.service_accounts["management-vm-sa"].member
+  ]
+  app_tier_accessor_members   = [
+    module.service_account.service_accounts["nomad-client-sa"].member
   ]
 }

@@ -68,7 +68,7 @@ locals {
 
   buckets = {
 
-    "platform-artifacts" = {
+    "${var.project_id}-${var.region}-platform-artifacts" = {
       backup_retention_days = 90
       enable_tiering        = true
 
@@ -93,7 +93,7 @@ locals {
       }
     }
 
-    "ci-cd-artifacts" = {
+    "${var.project_id}-${var.region}-ci-cd-artifacts" = {
       backup_retention_days = 30
       enable_tiering        = false
 

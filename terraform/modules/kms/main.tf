@@ -47,6 +47,7 @@ locals {
     "platform/storage-cmek" = [
       "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com",
       "serviceAccount:service-${var.project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com",
+      "serviceAccount:service-${var.project_number}@gcp-sa-secretmanager.iam.gserviceaccount.com",
     ]
     "platform/disk-cmek" = [
       "serviceAccount:service-${var.project_number}@compute-system.iam.gserviceaccount.com",

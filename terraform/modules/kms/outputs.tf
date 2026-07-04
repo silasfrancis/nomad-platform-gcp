@@ -5,6 +5,15 @@ output "key_rings" {
   }
 }
 
+output "kms_keys" {
+  description = "A map of KMS key names to their resource IDs."
+  value = {
+    for key_ref, key in google_kms_crypto_key.keys : key_ref => {
+      id   = key.id
+      name = key.name
+    }
+  }
+}
 
 output "kms_key_access_control" {
   description = "A summary of the KMS keys and the service accounts authorized to use them."

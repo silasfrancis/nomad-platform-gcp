@@ -14,12 +14,6 @@ variable "storage_cmek"{
   type = string
 }
 
-variable "additional_labels" {
-  type        = map(string)
-  description = "Additional labels to apply to the repository."
-  default     = {}
-}
-
 variable "artifact_registry_writer_members" {
   description = <<-EOT
     IAM members granted roles/artifactregistry.writer on the platform repository.
