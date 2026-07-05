@@ -48,6 +48,17 @@ resource "google_project_service" "apis" {
   disable_on_destroy = false
 }
 
+# OS Login
+#
+# Project-wide: Replaces static SSH keys with Google-managed IAM authentication.
+# All VMs (present and future) will require IAM roles for access.
+
+resource "google_compute_project_metadata_item" "os_login" {
+  project = var.project_id
+  key     = "enable-oslogin"
+  value   = "TRUE"
+}
+
 # Service Accounts
 
 module "service_account" {
@@ -70,6 +81,7 @@ module "kms" {
       "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com",
       "serviceAccount:service-${var.project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com",
       "serviceAccount:service-${var.project_number}@gcp-sa-secretmanager.iam.gserviceaccount.com",
+      "serviceAccount:service-${var.project_number}@gcp-sa-logging.iam.gserviceaccount.com",
     ]
 
     "platform/disk-cmek" = [
