@@ -8,7 +8,15 @@
 #   2. Proceed to terraform/compute
 
 
-#add remote state
+data "terraform_remote_state" "bootstrap" {
+  backend = "gcs"
+
+  config = {
+    bucket = var.platform_tfstate_bucket
+    prefix = var.bootstrap_tfstate_key
+  }
+}
+
 locals {
   labels = {
     "environment" = "shared"
@@ -63,16 +71,27 @@ module "dns" {
   labels             = local.labels
 }
 
-# Logging — Custom Bucket For VPC Flow Logs
+
+# Logging — Configurable Log Buckets
 #
-# Flow logs (enabled on prod subnets only, see modules/vpc) get their own
-# Cloud Logging bucket with 7-day retention instead of the project's
-# _Default 30-day bucket, and are excluded from _Default so they aren't
-# stored (and billed) twice.
+# Add a new entry to var.log_buckets (module input, or edit the module's
+# own default in variables.tf) to create another bucket — sink + _Default
+# exclusion generated automatically per entry. All buckets share
+# storage-cmek unless an entry overrides it.
 
 module "logging" {
   source     = "../modules/logging"
   project_id = var.project_id
   region     = var.region
-  storage-cmek = ""
+
+  default_cmek_key            = data.terraform_remote_state.bootstrap.outputs.kms_keys["storage-cmek"].id
+
+    # Add more here as new logging needs come up, e.g.:
+    # "secret-access" = {
+    #   location       = optional(string)
+    #   retention_days = 30
+    #   filter         = "resource.type=\"audited_resource\" AND protoPayload.serviceName=\"secretmanager.googleapis.com\""
+    #   description = ""
+    #   cmek_key       = optional(string)
+    # }
 }

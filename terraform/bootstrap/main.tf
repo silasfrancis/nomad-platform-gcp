@@ -82,6 +82,7 @@ module "kms" {
       "serviceAccount:service-${var.project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com",
       "serviceAccount:service-${var.project_number}@gcp-sa-secretmanager.iam.gserviceaccount.com",
       "serviceAccount:service-${var.project_number}@gcp-sa-logging.iam.gserviceaccount.com",
+      "serviceAccount:cmek-${var.project_id}@gcp-sa-logging.iam.gserviceaccount.com",
     ]
 
     "platform/disk-cmek" = [
