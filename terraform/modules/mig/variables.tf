@@ -36,6 +36,6 @@ variable "migs" {
     # Ran on spot-preemption notice (ACPI G2 Soft Off), 30s before terminate.
     # Ignored for on-demand pools (spot = false).
     shutdown_script          = optional(string, "")
-    cpu_target               = optional(number, 0.6) # doc: 60% average CPU
+    cpu_target               = optional(number, 0.6) # 60% average CPU
   }))
 }

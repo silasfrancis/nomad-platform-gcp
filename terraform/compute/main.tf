@@ -137,7 +137,7 @@ locals {
       machine_type            = "e2-standard-2"
       subnetwork               = local.network.subnets["subnet-dev-private"].self_link
       min_replicas             = 1
-      max_replicas             = 5
+      max_replicas             = 2
       spot                     = false
       service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "dev", pool = "ondemand" }
@@ -147,7 +147,7 @@ locals {
       machine_type            = "e2-standard-2"
       subnetwork               = local.network.subnets["subnet-dev-private"].self_link
       min_replicas             = 0
-      max_replicas             = 5
+      max_replicas             = 3
       spot                     = true
       service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "dev", pool = "spot" }
@@ -158,7 +158,7 @@ locals {
       machine_type            = "e2-standard-2"
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
       min_replicas             = 2
-      max_replicas             = 10
+      max_replicas             = 4
       spot                     = false
       service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "prod", pool = "ondemand" }
@@ -168,7 +168,7 @@ locals {
       machine_type            = "e2-standard-2"
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
       min_replicas             = 1
-      max_replicas             = 10
+      max_replicas             = 4
       spot                     = true
       service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "prod", pool = "spot" }
