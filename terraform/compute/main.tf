@@ -2,12 +2,11 @@ locals {
   bootstrap = data.terraform_remote_state.bootstrap.outputs
   network   = data.terraform_remote_state.network.outputs
 
-  # SA emails needed as raw strings (service_account block wants the bare
-  # email, not the "serviceAccount:..." member format bootstrap outputs).
-  management_vm_sa_email = trimprefix(local.bootstrap.management_vm_sa_member, "serviceAccount:")
-  nomad_client_sa_email   = trimprefix(local.bootstrap.nomad_client_sa_member, "serviceAccount:")
-  nomad_server_sa_email   = trimprefix(local.bootstrap.nomad_server_sa_member, "serviceAccount:")
-  traefik_sa_email        = trimprefix(local.bootstrap.traefik_sa_member, "serviceAccount:")
+  # Service account members
+  management_vm_sa_member = local.bootstrap.service_accounts["management-vm-sa"].member
+  nomad_client_sa_member  = local.bootstrap.service_accounts["nomad-client-sa"].member
+  nomad_server_sa_member  = local.bootstrap.service_accounts["nomad-server-sa"].member
+  traefik_vm_sa_member       = local.bootstrap.service_accounts["traefik-vm-sa"].member
 
   zones = ["${var.region}-a", "${var.region}-b", "${var.region}-c"]
 
@@ -23,12 +22,21 @@ locals {
       zone                     = local.zones[0]
       subnetwork               = local.network.subnets["subnet-mgmt"].self_link
       external_ip              = false
-      service_account_email    = local.management_vm_sa_email
+      service_account_email    = local.management_vm_sa_member
       boot_disk_size_gb        = 50
       tags                     = ["mgmt"]
       labels                   = { role = "mgmt" }
       # startup_script wired in once the Ansible bootstrap/cloud-init
       # sequence for Vault/Octopus/Grafana/internal-Traefik is written.
+
+      # Separate persistent disks for Vault's storage backend and SQL
+      # Server's data files — kept off the boot disk so either can be
+      # resized/snapshotted independently and survives a boot disk rebuild.
+      # Sizes are placeholders; adjust once real data volume is known.
+      additional_disks = [
+        { name = "vault-data", size_gb = 20 },
+        { name = "sql-data",   size_gb = 30 },
+      ]
     }
   }
 
@@ -45,7 +53,7 @@ locals {
       zone                     = local.zones[i % length(local.zones)]
       subnetwork               = local.network.subnets["subnet-dev-private"].self_link
       external_ip              = false
-      service_account_email    = local.nomad_server_sa_email
+      service_account_email    = local.nomad_server_sa_member
       boot_disk_size_gb        = 20
       tags                     = ["nomad-server", "consul-server"]
       labels                   = { role = "nomad-server", environment = "dev" }
@@ -58,7 +66,7 @@ locals {
       zone                     = local.zones[i % length(local.zones)]
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
       external_ip              = false
-      service_account_email    = local.nomad_server_sa_email
+      service_account_email    = local.nomad_server_sa_member
       boot_disk_size_gb        = 20
       tags                     = ["nomad-server", "consul-server"]
       labels                   = { role = "nomad-server", environment = "prod" }
@@ -71,7 +79,7 @@ locals {
       zone                     = local.zones[0]
       subnetwork               = local.network.subnets["subnet-dev-public"].self_link
       external_ip              = true
-      service_account_email    = local.traefik_sa_email
+      service_account_email    = local.traefik_vm_sa_member
       boot_disk_size_gb        = 20
       tags                     = ["traefik"]
       labels                   = { role = "traefik", environment = "dev" }
@@ -81,7 +89,7 @@ locals {
       zone                     = local.zones[0]
       subnetwork               = local.network.subnets["subnet-prod-public"].self_link
       external_ip              = true
-      service_account_email    = local.traefik_sa_email
+      service_account_email    = local.traefik_vm_sa_member
       boot_disk_size_gb        = 20
       tags                     = ["traefik"]
       labels                   = { role = "traefik", environment = "prod" }
@@ -104,6 +112,24 @@ locals {
   # nothing else.
   instances = merge(local.shared_instances, local.active_env_instances)
 
+  # Runs during the ~30s ACPI soft-off window GCP gives before actually
+  # killing a preempted Spot instance. Best-effort: if the drain doesn't
+  # finish in time, GCP terminates anyway and Nomad's normal client-failure
+  # handling picks up from there (allocations get rescheduled once the
+  # client is marked down). Only wired into *-spot entries below — the
+  # module itself also gates shutdown-script on each.value.spot, so this
+  # would be a no-op on on-demand pools even if set there too.
+  nomad_drain_shutdown_script = <<-EOT
+    #!/bin/bash
+    set -uo pipefail
+    echo "$(date -u +%FT%TZ): shutdown signal received, draining Nomad node"
+    if command -v nomad >/dev/null 2>&1; then
+      nomad node drain -self -enable -deadline 25s -yes >>/var/log/nomad-drain.log 2>&1
+    else
+      echo "nomad binary not found, skipping drain" >>/var/log/nomad-drain.log
+    fi
+  EOT
+
   # Nomad Client MIGs — same env-gating as the static VMs above. All four
   # are env-scoped; there's no "shared" MIG the way mgmt-vm is a shared VM.
   all_migs = {
@@ -113,7 +139,7 @@ locals {
       min_replicas             = 1
       max_replicas             = 5
       spot                     = false
-      service_account_email    = local.nomad_client_sa_email
+      service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "dev", pool = "ondemand" }
       environment              = "dev"
     }
@@ -123,29 +149,31 @@ locals {
       min_replicas             = 0
       max_replicas             = 5
       spot                     = true
-      service_account_email    = local.nomad_client_sa_email
+      service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "dev", pool = "spot" }
       environment              = "dev"
+      shutdown_script          = local.nomad_drain_shutdown_script
     }
     "nomad-prod-ondemand" = {
-      machine_type            = "e2-standard-4"
+      machine_type            = "e2-standard-2"
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
       min_replicas             = 2
       max_replicas             = 10
       spot                     = false
-      service_account_email    = local.nomad_client_sa_email
+      service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "prod", pool = "ondemand" }
       environment              = "prod"
     }
     "nomad-prod-spot" = {
-      machine_type            = "e2-standard-4"
+      machine_type            = "e2-standard-2"
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
       min_replicas             = 1
       max_replicas             = 10
       spot                     = true
-      service_account_email    = local.nomad_client_sa_email
+      service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "prod", pool = "spot" }
       environment              = "prod"
+      shutdown_script          = local.nomad_drain_shutdown_script
     }
   }
 
@@ -153,6 +181,22 @@ locals {
     for name, cfg in local.all_migs : name => cfg
     if contains(var.active_environments, cfg.environment)
   }
+}
+
+# Operator Access — IAP SSH + OS Login
+#
+# Project-wide grant to a single human identity
+
+resource "google_project_iam_member" "operator_iap_tunnel" {
+  project = var.project_id
+  role    = "roles/iap.tunnelResourceAccessor"
+  member  = "user:${var.platform_admin_email}"
+}
+
+resource "google_project_iam_member" "operator_os_login" {
+  project = var.project_id
+  role    = "roles/compute.osAdminLogin"
+  member  = "user:${var.platform_admin_email}"
 }
 
 # Static VMs
@@ -164,10 +208,10 @@ module "static_vm" {
   instances     = local.instances
 }
 
-# Nomad Client MIGs
+# MIGs
 
-module "nomad_client_mig" {
-  source        = "../modules/nomad-client-mig"
+module "mig" {
+  source        = "../modules/mig"
   project_id    = var.project_id
   region        = var.region
   disk_cmek_key = local.bootstrap.disk_cmek_key_id

@@ -6,6 +6,22 @@ variable "region" {
   type = string
 }
 
+variable "platform_admin_email" {
+  type = string
+}
+
+variable "platform_tfstate_bucket" {
+  type = string
+}
+
+variable "network_tfstate_key" {
+  type = string
+}
+
+variable "bootstrap_tfstate_key" {
+  type = string
+}
+
 variable "active_environments" {
   description = "Which environments to actually provision. Start with [\"dev\"], test it, then add \"prod\" and re-apply. Resources not in this set are never created — not created-then-stopped, genuinely absent. mgmt-vm and other shared resources are unconditional and ignore this entirely."
   type        = set(string)

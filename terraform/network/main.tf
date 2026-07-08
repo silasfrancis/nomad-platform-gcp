@@ -7,17 +7,10 @@
 #   1. terraform apply (this file)
 #   2. Proceed to terraform/compute
 
-
-data "terraform_remote_state" "bootstrap" {
-  backend = "gcs"
-
-  config = {
-    bucket = var.platform_tfstate_bucket
-    prefix = var.bootstrap_tfstate_key
-  }
-}
-
+ 
 locals {
+  bootstrap = data.terraform_remote_state.bootstrap.outputs
+
   labels = {
     "environment" = "shared"
     "managed-by"  = "terraform"
@@ -84,7 +77,7 @@ module "logging" {
   project_id = var.project_id
   region     = var.region
 
-  default_cmek_key            = data.terraform_remote_state.bootstrap.outputs.kms_keys["storage-cmek"].id
+  default_cmek_key            = local.bootstrap.kms_keys["storage-cmek"].id
 
     # Add more here as new logging needs come up, e.g.:
     # "secret-access" = {

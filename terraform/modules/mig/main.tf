@@ -25,7 +25,9 @@ resource "google_compute_instance_template" "this" {
     disk_type    = "pd-balanced"
     boot         = true
     auto_delete  = true
-    kms_key_self_link = var.disk_cmek_key
+    disk_encryption_key {
+      kms_key_self_link = var.disk_cmek_key
+    }
   }
 
   network_interface {
@@ -46,7 +48,7 @@ resource "google_compute_instance_template" "this" {
     # DELETE (not STOP) — client nodes are stateless workers; the MIG
     # replaces a terminated Spot instance rather than restarting a
     # stopped one, matching "MIG detects terminated instance and
-    # replaces it automatically" from architecture doc 1.3.
+    # replaces it automatically"
     instance_termination_action = each.value.spot ? "DELETE" : null
   }
 
@@ -60,8 +62,7 @@ resource "google_compute_instance_template" "this" {
   }
 }
 
-# Basic TCP health check on Nomad's client API port. Not in the
-# architecture doc explicitly — added because a MIG without auto-healing
+# Basic TCP health check on Nomad's client API port. An MIG without auto-healing
 # only replaces instances GCP itself terminates (Spot preemption); it
 # won't catch a client whose Nomad agent has hung but is still running.
 resource "google_compute_health_check" "this" {
@@ -101,6 +102,10 @@ resource "google_compute_region_instance_group_manager" "this" {
     name = "nomad-api"
     port = 4646
   }
+
+  lifecycle{
+    ignore_changes = [ target_size ]
+  }
 }
 
 resource "google_compute_region_autoscaler" "this" {
@@ -115,6 +120,7 @@ resource "google_compute_region_autoscaler" "this" {
     min_replicas    = each.value.min_replicas
     max_replicas    = each.value.max_replicas
     cooldown_period = 90
+    stabilization_period = ""
 
     cpu_utilization {
       target = each.value.cpu_target

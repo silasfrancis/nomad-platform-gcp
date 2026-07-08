@@ -11,6 +11,32 @@
 # GCP's standard defaults (on_host_maintenance = MIGRATE, automatic
 # restart) rather than configured explicitly.
 
+
+locals {
+  disks_flat = merge([
+    for inst_key, inst in var.instances : {
+      for disk in inst.additional_disks : "${inst_key}-${disk.name}" => merge(disk, {
+        instance_key = inst_key
+        zone         = inst.zone
+      })
+    }
+  ]...)
+}
+
+resource "google_compute_disk" "additional" {
+  for_each = local.disks_flat
+
+  project = var.project_id
+  name    = each.key
+  zone    = each.value.zone
+  size    = each.value.size_gb
+  type    = each.value.disk_type
+
+  disk_encryption_key {
+    kms_key_self_link = var.disk_cmek_key
+  }
+}
+
 resource "google_compute_instance" "this" {
   for_each = var.instances
 
@@ -29,6 +55,17 @@ resource "google_compute_instance" "this" {
       type  = "pd-balanced"
     }
     kms_key_self_link = var.disk_cmek_key
+  }
+
+  # One attached_disk block per entry in this instance's additional_disks —
+  # filtered out of the flattened map by instance_key.
+  dynamic "attached_disk" {
+    for_each = {
+      for k, v in local.disks_flat : k => v if v.instance_key == each.key
+    }
+    content {
+      source = google_compute_disk.additional[attached_disk.key].id
+    }
   }
 
   network_interface {

@@ -1,15 +1,15 @@
 data "terraform_remote_state" "bootstrap" {
   backend = "gcs"
   config = {
-    bucket = "nomad-platform-gcp-tfstate"
-    prefix = "bootstrap"
+    bucket = var.platform_tfstate_bucket
+    prefix = var.bootstrap_tfstate_key
   }
 }
 
 data "terraform_remote_state" "network" {
   backend = "gcs"
   config = {
-    bucket = "nomad-platform-gcp-tfstate"
-    prefix = "network"
+    bucket = var.platform_tfstate_bucket
+    prefix = var.network_tfstate_key
   }
 }

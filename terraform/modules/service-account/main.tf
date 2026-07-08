@@ -28,6 +28,11 @@ locals {
         "roles/monitoring.metricWriter",
       ]
     }
+    "traefik-vm-sa" = {
+      display_name  = "Management VM SA"
+      description   = "Attached to mgmt VM. Covers Vault, GitHub runner, Octopus, Grafana, internal Traefik."
+      project_roles = []
+    }
   }
   # Flattened map for project-level IAM bindings
   # Format: "sa_name/role" = { sa_name, role }
