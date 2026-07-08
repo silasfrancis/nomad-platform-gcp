@@ -117,13 +117,23 @@ resource "google_compute_region_autoscaler" "this" {
   target  = google_compute_region_instance_group_manager.this[each.key].id
 
   autoscaling_policy {
-    min_replicas    = each.value.min_replicas
-    max_replicas    = each.value.max_replicas
-    cooldown_period = 90
-    stabilization_period = ""
+    min_replicas         = each.value.min_replicas
+    max_replicas         = each.value.max_replicas
+    cooldown_period      = 90
+    stabilization_period = each.value.spot ? null : 300
 
     cpu_utilization {
       target = each.value.cpu_target
+    }
+
+    dynamic "scale_in_control" {
+      for_each = each.value.scale_in_control != null ? [each.value.scale_in_control] : []
+      content {
+        max_scaled_in_replicas {
+          fixed = scale_in_control.value.max_scaled_in_replicas_fixed
+        }
+        time_window_sec = scale_in_control.value.time_window_sec
+      }
     }
   }
 }

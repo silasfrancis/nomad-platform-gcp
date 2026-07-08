@@ -1,3 +1,8 @@
+data "google_compute_zones" "available" {
+  region = var.region
+  status = "UP"
+}
+
 locals {
   bootstrap = data.terraform_remote_state.bootstrap.outputs
   network   = data.terraform_remote_state.network.outputs
@@ -8,7 +13,8 @@ locals {
   nomad_server_sa_member  = local.bootstrap.service_accounts["nomad-server-sa"].member
   traefik_vm_sa_member       = local.bootstrap.service_accounts["traefik-vm-sa"].member
 
-  zones = ["${var.region}-a", "${var.region}-b", "${var.region}-c"]
+
+  zones = slice(data.google_compute_zones.available.names, 0, 3)
 
   # Shared, Unconditional — Not Gated By active_environments
   #
@@ -137,17 +143,18 @@ locals {
       machine_type            = "e2-standard-2"
       subnetwork               = local.network.subnets["subnet-dev-private"].self_link
       min_replicas             = 1
-      max_replicas             = 2
+      max_replicas             = 5
       spot                     = false
       service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "dev", pool = "ondemand" }
       environment              = "dev"
+      scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
     }
     "nomad-dev-spot" = {
       machine_type            = "e2-standard-2"
       subnetwork               = local.network.subnets["subnet-dev-private"].self_link
       min_replicas             = 0
-      max_replicas             = 3
+      max_replicas             = 5
       spot                     = true
       service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "dev", pool = "spot" }
@@ -158,17 +165,18 @@ locals {
       machine_type            = "e2-standard-2"
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
       min_replicas             = 2
-      max_replicas             = 4
+      max_replicas             = 10
       spot                     = false
       service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "prod", pool = "ondemand" }
       environment              = "prod"
+      scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
     }
     "nomad-prod-spot" = {
       machine_type            = "e2-standard-2"
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
       min_replicas             = 1
-      max_replicas             = 4
+      max_replicas             = 10
       spot                     = true
       service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "prod", pool = "spot" }
