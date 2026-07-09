@@ -33,6 +33,17 @@ locals {
       description   = "Attached to mgmt VM. Covers Vault, GitHub runner, Octopus, Grafana, internal Traefik."
       project_roles = []
     }
+    "packer-builder-sa" = {
+      display_name  = "Packer Builder SA"
+      description   = "Used by Packer to build golden VM images (nomad-server, nomad-client, mgmt-vm). Attached to ephemeral build VMs only."
+      project_roles = [
+        "roles/compute.instanceAdmin.v1",
+        "roles/compute.storageAdmin",
+        "roles/iam.serviceAccountUser",
+        "roles/iap.tunnelResourceAccessor",
+        "roles/compute.networkViewer",
+      ]
+    }
   }
   # Flattened map for project-level IAM bindings
   # Format: "sa_name/role" = { sa_name, role }

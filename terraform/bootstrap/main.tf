@@ -59,7 +59,9 @@ resource "google_compute_project_metadata_item" "os_login" {
   value   = "TRUE"
 }
 
-# Service Accounts
+# Service Accounts 
+# Creates GCP Service Accounts for VM Identities (Management VM, Nomad Server VM, Nomad Client VM, Traefik VM)
+# and Packer Image Builder
 
 module "service_account" {
   source = "../modules/service-account"
