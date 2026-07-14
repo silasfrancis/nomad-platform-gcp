@@ -1,0 +1,37 @@
+# Dynamic Inventory — google.cloud.gcp_compute Plugin. Requires The
+# google.cloud Collection (ansible-galaxy collection install google.cloud)
+# And requests+google-auth Python Packages On The Control Node (Your
+# Laptop). Authenticates Using Your Own gcloud/ADC Credentials — No
+# Service Account Key File Needed As Long As `gcloud auth
+# application-default login` Has Been Run.
+#
+# DEPENDS ON: compute/main.tf Setting labels = { role = "mgmt" |
+# "nomad-server" | "nomad-client", env = "dev" | "prod" } On Every Instance
+# Resource. mgmt-vm Has No env Label (It Serves Both), So It Will Only Be
+# Grouped Under role_mgmt, Not Under "dev" Or "prod" — group_vars/dev.yml
+# And prod.yml Deliberately Don't Apply To It.
+
+plugin: google.cloud.gcp_compute
+projects:
+  - "{{ lookup('env', 'GCP_PROJECT_ID') }}"
+auth_kind: application
+zones:
+  - us-central1-a
+  - us-central1-b
+  - us-central1-c
+
+hostnames:
+  - name
+
+# Produces Groups: role_mgmt, role_nomad_server, role_nomad_client, And
+# (Since prefix Is Empty For The env Key) Groups Named Exactly "dev" /
+# "prod" — Matching Ansible's Standard group_vars/<groupname>.yml
+# Auto-Loading Convention.
+keyed_groups:
+  - key: labels.role
+    prefix: role
+  - key: labels.env
+    prefix: ""
+
+compose:
+  ansible_host: name

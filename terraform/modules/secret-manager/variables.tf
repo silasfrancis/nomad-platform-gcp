@@ -30,7 +30,6 @@ variable "default_secrets" {
 
     "nomad-acl-root-token"  = { labels = { purpose = "nomad", tier = "root" } }
     "nomad-acl-admin-token" = { labels = { purpose = "nomad", tier = "admin" } }
-    "nomad-sentinel-token"  = { labels = { purpose = "nomad", tier = "app" } }
 
     "consul-acl-root-token"  = { labels = { purpose = "consul", tier = "root" } }
     "consul-acl-admin-token" = { labels = { purpose = "consul", tier = "admin" } }
@@ -41,9 +40,6 @@ variable "default_secrets" {
     "postgres-admin-password" = { labels = { purpose = "database", tier = "admin" } }
 
     "github-bot-pat" = { labels = { purpose = "cicd", tier = "admin" } }
-
-    "gemini-api-key"    = { labels = { purpose = "sentinel", tier = "app" } }
-    "slack-webhook-url" = { labels = { purpose = "sentinel", tier = "app" } }
   }
 }
 

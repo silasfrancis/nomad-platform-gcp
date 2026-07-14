@@ -1,0 +1,26 @@
+---
+nomad_version: "1.11.0"
+
+# "server" Or "client" — Set Per-Playbook.
+nomad_mode: "client"
+
+nomad_user: nomad
+nomad_group: nomad
+
+nomad_bin_dir: /usr/local/bin
+nomad_config_dir: /etc/nomad.d
+nomad_tls_dir: /etc/nomad.d/tls
+nomad_data_dir: /opt/nomad/data
+nomad_log_dir: /var/log/nomad
+
+nomad_download_url: "https://releases.hashicorp.com/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_linux_amd64.zip"
+
+nomad_docker_driver_enabled: "{{ true if nomad_mode == 'client' else false }}"
+nomad_acl_enabled: true
+nomad_telemetry_prometheus_enabled: true
+
+# Vault Address Is Static (Single Vault Node On mgmt-vm, Reachable By Both
+# Environments). vault_jwt_auth_backend_path Comes From group_vars/dev.yml
+# Or prod.yml.
+nomad_vault_address: "https://vault.platform.lefrancis.org:8200"
+nomad_vault_enabled: true

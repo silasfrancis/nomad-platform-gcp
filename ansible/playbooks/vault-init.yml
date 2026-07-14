@@ -1,0 +1,14 @@
+---
+# Run Against: role_mgmt Group. Run This SEPARATELY, After mgmt.yml Has
+# Already Run At Least Once (Vault Must Already Be Installed, Configured,
+# And Started By The vault Role's Main Tasks) — And BEFORE Applying The
+# Terraform service-config Layer, Which Needs The Root Token This
+# Playbook Writes To Secret Manager. Safe To Re-Run: init.yml Guards On
+# Vault's Own initialized Status.
+
+- name: One-Time Vault Operator Init
+  hosts: role_mgmt
+  become: true
+  roles:
+    - role: vault
+      tasks_from: init.yml

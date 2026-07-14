@@ -1,0 +1,41 @@
+---
+# Native Binary Install Per Traefik's Own Docs (Not Docker) — See
+# https://doc.traefik.io/traefik/getting-started/install-traefik/
+
+traefik_version: "3.3.1"
+traefik_download_url: >-
+  https://github.com/traefik/traefik/releases/download/v{{ traefik_version }}/traefik_v{{ traefik_version }}_linux_amd64.tar.gz
+
+# One Of: "dev-public", "prod-public", "internal" — Set Per-Playbook/Host.
+traefik_mode: "internal"
+
+traefik_user: traefik
+traefik_group: traefik
+
+traefik_bin_dir: /usr/local/bin
+traefik_config_dir: /etc/traefik
+traefik_dynamic_config_dir: /etc/traefik/dynamic
+traefik_log_dir: /var/log/traefik
+
+traefik_http_port: 80
+traefik_https_port: 443
+
+traefik_acme_email: "ops@lefrancis.org"
+
+# Only Meaningful In dev-public/prod-public Mode.
+traefik_public_domain: "dev.boutique.lefrancis.org"
+
+# Only Meaningful In internal Mode — Cloudflare DNS-01 For The Wildcard
+# Cert. Requires secret_cloudflare_api_token To Already Exist In Secret
+# Manager (Manually Seeded, Like octopus-api-key And github-bot-pat — Not
+# In default_secrets Yet, Add It There Before Running This Role).
+traefik_internal_domain: "platform.lefrancis.org"
+secret_cloudflare_api_token: "cloudflare-api-token"
+
+# Which Environment's Nomad/Consul Leader nomad.platform.lefrancis.org And
+# consul.platform.lefrancis.org Point At — The Architecture Doc's Routing
+# Table Doesn't Distinguish Dev Vs Prod For These Two Rows. Defaults To
+# dev; Override Or Split Into Per-Env Subdomains If You Want Both
+# Reachable Simultaneously.
+traefik_internal_nomad_target: "nomad-dev-server-0"
+traefik_internal_consul_target: "nomad-dev-server-0"

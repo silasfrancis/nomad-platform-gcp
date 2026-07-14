@@ -1,0 +1,16 @@
+[Unit]
+Description=Octopus Deploy Server
+Documentation=https://octopus.com/docs
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart={{ octopus_bin }} run --instance {{ octopus_instance }} --console
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

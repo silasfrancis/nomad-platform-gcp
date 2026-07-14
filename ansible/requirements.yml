@@ -1,0 +1,14 @@
+---
+# Install With: ansible-galaxy collection install -r requirements.yml
+# Also Requires On The Control Node (Your Laptop):
+#   pip install requests google-auth --break-system-packages
+
+collections:
+  - name: google.cloud
+    version: ">=1.4.0"
+  - name: ansible.posix
+    version: ">=1.5.0"
+  - name: community.general
+    version: ">=8.0.0"
+  - name: community.crypto
+    version: ">=2.16.0"

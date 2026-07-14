@@ -1,0 +1,22 @@
+[Unit]
+Description=Nomad Agent
+Documentation=https://developer.hashicorp.com/nomad
+Wants=network-online.target consul.service
+After=network-online.target consul.service
+
+[Service]
+User={{ nomad_user }}
+Group={{ nomad_group }}
+ExecStart={{ nomad_bin_dir }}/nomad agent -config={{ nomad_config_dir }}
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+KillSignal=SIGINT
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+LimitNPROC=infinity
+TasksMax=infinity
+OOMScoreAdjust=-1000
+
+[Install]
+WantedBy=multi-user.target

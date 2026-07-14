@@ -1,0 +1,133 @@
+---
+# Install + Configure + Start Only. `vault operator init` Lives In
+# tasks/init.yml, Called Only By playbooks/vault-init.yml — Never From
+# This File — Since It's A Genuine One-Time Operation That Must Not Run
+# As Part Of A Routine site.yml/mgmt.yml Pass.
+
+- name: Create Vault Group
+  ansible.builtin.group:
+    name: "{{ vault_group }}"
+    system: true
+
+- name: Create Vault User
+  ansible.builtin.user:
+    name: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ vault_data_dir }}"
+    create_home: false
+
+- name: Create Vault Directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0750"
+  loop:
+    - "{{ vault_config_dir }}"
+    - "{{ vault_tls_dir }}"
+    - "{{ vault_data_dir }}"
+    - "{{ vault_log_dir }}"
+
+- name: Download And Unarchive Vault Binary
+  ansible.builtin.unarchive:
+    src: "{{ vault_download_url }}"
+    dest: "{{ vault_bin_dir }}"
+    remote_src: true
+    mode: "0755"
+    creates: "{{ vault_bin_dir }}/vault"
+
+- name: Grant Vault Binary mlock Capability
+  community.general.capabilities:
+    path: "{{ vault_bin_dir }}/vault"
+    capability: cap_ipc_lock+ep
+    state: present
+
+# --- Self-Signed TLS For Vault's Own Listener ---
+- name: Generate Vault Self-Signed TLS Private Key
+  community.crypto.openssl_privatekey:
+    path: "{{ vault_tls_dir }}/vault-key.pem"
+    type: RSA
+    size: 4096
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0600"
+
+- name: Generate Vault Self-Signed TLS CSR
+  community.crypto.openssl_csr:
+    path: "{{ vault_tls_dir }}/vault-csr.pem"
+    privatekey_path: "{{ vault_tls_dir }}/vault-key.pem"
+    common_name: "{{ vault_internal_dns }}"
+    subject_alt_name:
+      - "DNS:{{ vault_internal_dns }}"
+      - "DNS:localhost"
+      - "IP:127.0.0.1"
+
+- name: Generate Vault Self-Signed TLS Certificate
+  community.crypto.x509_certificate:
+    path: "{{ vault_tls_dir }}/vault-cert.pem"
+    privatekey_path: "{{ vault_tls_dir }}/vault-key.pem"
+    csr_path: "{{ vault_tls_dir }}/vault-csr.pem"
+    provider: selfsigned
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0644"
+
+# --- Attached vault-data Disk — Raft Storage Must Live Here, Never On The
+# Boot Disk. fstab Entry Only; Formatting/Mounting Happens Below, Guarded
+# So It's Safe Whether The Disk Is Already Formatted Or Not. ---
+- name: Check If Vault Data Disk Is Already Formatted
+  ansible.builtin.command: blkid /dev/disk/by-id/google-vault-data
+  register: vault_disk_blkid
+  failed_when: false
+  changed_when: false
+
+- name: Format Vault Data Disk (Only If Unformatted)
+  community.general.filesystem:
+    fstype: ext4
+    dev: /dev/disk/by-id/google-vault-data
+  when: vault_disk_blkid.rc != 0
+
+- name: Add Vault Data Disk Fstab Entry And Mount
+  ansible.posix.mount:
+    path: "{{ vault_data_dir }}"
+    src: /dev/disk/by-id/google-vault-data
+    fstype: ext4
+    opts: defaults,nofail
+    state: mounted
+
+- name: Ensure Vault Data Directory Ownership
+  ansible.builtin.file:
+    path: "{{ vault_data_dir }}"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0750"
+    state: directory
+
+# --- Configuration + Service ---
+- name: Template Vault Configuration
+  ansible.builtin.template:
+    src: vault.hcl.j2
+    dest: "{{ vault_config_dir }}/vault.hcl"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0640"
+  notify: Restart Vault
+
+- name: Template Vault Systemd Unit
+  ansible.builtin.template:
+    src: vault.service.j2
+    dest: /etc/systemd/system/vault.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Systemd Daemon
+
+- name: Enable And Start Vault
+  ansible.builtin.systemd:
+    name: vault
+    enabled: true
+    state: started
+    daemon_reload: true

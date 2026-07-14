@@ -1,0 +1,9 @@
+---
+- name: Restart SSH
+  ansible.builtin.systemd:
+    name: ssh
+    state: restarted
+
+- name: Reload Sysctl
+  ansible.builtin.command: sysctl --system
+  changed_when: true

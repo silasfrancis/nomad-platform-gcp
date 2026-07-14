@@ -1,0 +1,23 @@
+---
+consul_version: "1.19.2"
+
+# "server" Or "client" — Set Per-Playbook (nomad-servers.yml Sets server,
+# nomad-clients.yml Sets client). Determines The server = true/false Line
+# And Whether bootstrap_expect Is Written.
+consul_mode: "client"
+
+consul_user: consul
+consul_group: consul
+
+consul_bin_dir: /usr/local/bin
+consul_config_dir: /etc/consul.d
+consul_tls_dir: /etc/consul.d/tls
+consul_data_dir: /opt/consul/data
+consul_log_dir: /var/log/consul
+
+consul_download_url: "https://releases.hashicorp.com/consul/{{ consul_version }}/consul_{{ consul_version }}_linux_amd64.zip"
+
+consul_connect_enabled: true
+consul_acl_enabled: true
+consul_acl_default_policy: "deny"
+consul_telemetry_prometheus_enabled: true

@@ -1,0 +1,24 @@
+---
+vault_version: "1.18.1"
+
+vault_user: vault
+vault_group: vault
+
+vault_bin_dir: /usr/local/bin
+vault_config_dir: /etc/vault.d
+vault_tls_dir: /etc/vault.d/tls
+vault_data_dir: /opt/vault/data
+vault_log_dir: /var/log/vault
+
+vault_download_url: "https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
+
+# Vault Is A Project-Wide Singleton On mgmt-vm — These Are Genuinely
+# Static, Safe To Bake. Override With Real Values From
+# terraform_remote_state (bootstrap Outputs) At Run Time.
+vault_gcp_kms_project: "CHANGEME-project-id"
+vault_gcp_kms_region: "us-central1"
+vault_gcp_kms_key_ring: "vault-unseal"
+vault_gcp_kms_crypto_key: "vault-unseal-key"
+
+vault_listener_address: "0.0.0.0:8200"
+vault_ui_enabled: true

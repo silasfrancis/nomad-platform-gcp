@@ -1,0 +1,22 @@
+---
+# Full Bootstrap — Chains mgmt.yml, nomad-servers.yml, And
+# nomad-clients.yml In Order. Deliberately Does NOT Include vault-init.yml
+# — That's A Separate One-Time Step Run By Hand After This, Per Its Own
+# Header Comment (Needs Vault Already Up And Configured First, Which This
+# Playbook Does Provide Via mgmt.yml).
+#
+# Run With: ansible-playbook playbooks/site.yml
+# Then, Once: ansible-playbook playbooks/vault-init.yml
+# Then: Apply The Terraform service-config Layer.
+
+- name: Full Platform Bootstrap
+  import_playbook: mgmt.yml
+
+- name: Full Platform Bootstrap (Nomad Servers)
+  import_playbook: nomad-servers.yml
+
+- name: Full Platform Bootstrap (Nomad Clients)
+  import_playbook: nomad-clients.yml
+
+- name: Full Platform Bootstrap (Public Traefik)
+  import_playbook: traefik-public.yml

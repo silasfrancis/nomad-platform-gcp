@@ -1,0 +1,150 @@
+---
+# NOTE: ACL Bootstrap + Tokens Are Handled By The Terraform service-config
+# Layer, Not By Ansible. This Role Only Turns The acl.enabled Feature Flag
+# On — It Never Runs `consul acl bootstrap` Or Manages Tokens.
+#
+# consul_datacenter / consul_retry_join / consul_bootstrap_expect Come From
+# inventory/group_vars/dev.yml Or prod.yml When This Role Runs Directly
+# Against A Real Host (nomad-servers.yml, nomad-clients.yml Run Via
+# Dynamic Inventory). When This SAME Role Is Instead Invoked By Packer To
+# Bake The Shared nomad-client-mig Image, No Env-Specific Group Vars Are
+# In Scope — consul.hcl.j2 Simply Omits Those Lines In That Case, And The
+# GCP Startup Script Supplies Them In A Separate 99-instance.hcl At Real
+# Boot (Merged By Consul's Directory-Based Config Loading).
+
+- name: Create Consul Group
+  ansible.builtin.group:
+    name: "{{ consul_group }}"
+    system: true
+
+- name: Create Consul User
+  ansible.builtin.user:
+    name: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ consul_data_dir }}"
+    create_home: false
+
+- name: Create Consul Directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    mode: "0750"
+  loop:
+    - "{{ consul_config_dir }}"
+    - "{{ consul_data_dir }}"
+    - "{{ consul_log_dir }}"
+
+- name: Download And Unarchive Consul Binary
+  ansible.builtin.unarchive:
+    src: "{{ consul_download_url }}"
+    dest: "{{ consul_bin_dir }}"
+    remote_src: true
+    mode: "0755"
+    creates: "{{ consul_bin_dir }}/consul"
+
+# --- TLS: CA Is Public, Safe To Copy Regardless Of Mode (Direct Run Or
+# Packer Bake). Generated Once By playbooks/pki-bootstrap.yml Into
+# ../pki-local On The Control Node. ---
+- name: Create Consul TLS Directory
+  ansible.builtin.file:
+    path: "{{ consul_tls_dir }}"
+    state: directory
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    mode: "0750"
+
+- name: Copy Consul CA Certificate
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../pki-local/consul-ca-cert.pem"
+    dest: "{{ consul_tls_dir }}/ca.pem"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    mode: "0644"
+
+# --- Server/Client Cert + Key: Only Copied Directly When consul_datacenter
+# Is In Scope (Direct Runs Against Real Hosts — Server Nodes Always, Or A
+# By-Hand Run Against A Live Client). When This Role Is Baked Via Packer
+# For The Shared nomad-client-mig Image, consul_datacenter Is Undefined
+# (No Env-Specific Group Vars In Scope For The Build VM) — The GCP Startup
+# Script Fetches The Per-Environment Consul Client Cert/Key From Secret
+# Manager At Real Boot Instead, Since The Shared Image Can't Contain
+# Env-Specific Material.
+- name: Copy Consul Server/Client Certificate (Direct Runs Only)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../pki-local/consul-{{ consul_mode }}-cert-{{ consul_datacenter | regex_replace('^dc-', '') }}.pem"
+    dest: "{{ consul_tls_dir }}/cert.pem"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    mode: "0644"
+  when: consul_datacenter is defined
+
+- name: Copy Consul Server/Client Private Key (Direct Runs Only)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../pki-local/consul-{{ consul_mode }}-key-{{ consul_datacenter | regex_replace('^dc-', '') }}.pem"
+    dest: "{{ consul_tls_dir }}/key.pem"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    mode: "0600"
+  when: consul_datacenter is defined
+
+- name: Read Consul Gossip Encryption Key From Secret Manager (Direct Runs Only)
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=consul-gossip-key-{{ consul_datacenter | regex_replace('^dc-', '') }}
+    --project={{ gcp_project_id }}
+  register: consul_gossip_key_read
+  no_log: true
+  changed_when: false
+  when: consul_datacenter is defined
+
+- name: Set Consul Gossip Key Fact (Direct Runs Only)
+  ansible.builtin.set_fact:
+    consul_gossip_key: "{{ consul_gossip_key_read.stdout }}"
+  no_log: true
+  when: consul_datacenter is defined
+
+- name: Template Consul Configuration
+  ansible.builtin.template:
+    src: consul.hcl.j2
+    dest: "{{ consul_config_dir }}/consul.hcl"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    mode: "0640"
+  register: consul_config_result
+
+- name: Template Consul Systemd Unit
+  ansible.builtin.template:
+    src: consul.service.j2
+    dest: /etc/systemd/system/consul.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Systemd Daemon
+
+# Only Start The Service When Enough Info Is Actually Present To Produce A
+# Working Config (i.e. Direct Runs Against Real Hosts). During A Packer
+# Bake, consul_datacenter Is Undefined, So This Is Skipped — Enabled Only,
+# Matching The "Enabled But Not Started At Bake Time" Design.
+- name: Enable Consul Service
+  ansible.builtin.systemd:
+    name: consul
+    enabled: true
+    daemon_reload: true
+
+- name: Start Consul (Only When Running Directly Against A Real Host)
+  ansible.builtin.systemd:
+    name: consul
+    state: started
+  when: consul_datacenter is defined
+
+- name: Restart Consul If Config Changed (Only When Already Started)
+  ansible.builtin.systemd:
+    name: consul
+    state: restarted
+  when:
+    - consul_datacenter is defined
+    - consul_config_result.changed

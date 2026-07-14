@@ -1,0 +1,22 @@
+# Reference Only — NOT Applied By This Role. GitHub's Own ./svc.sh install
+# (Called In tasks/main.yml) Generates And Owns The Actual Systemd Unit,
+# Tightly Coupled To Its runsvc.sh Wrapper. Hand-Replacing It Risks
+# Breaking The Runner's Own Update Mechanism. Kept Here Purely As A
+# Human-Readable Reference For What svc.sh Produces.
+
+[Unit]
+Description=GitHub Actions Runner ({{ github_runner_name }})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart={{ github_runner_home }}/runsvc.sh
+User={{ github_runner_user }}
+WorkingDirectory={{ github_runner_home }}
+KillMode=process
+KillSignal=SIGTERM
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

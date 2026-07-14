@@ -1,0 +1,66 @@
+# Managed By Ansible (traefik Role, Internal Mode Only) — A Small Fixed Set
+# Of Internal Tools, Per The Architecture Doc's Section 4.3 Routing Table.
+#
+# nomad.{{ traefik_internal_domain }} And consul.{{ traefik_internal_domain }}
+# Point At A Single Environment Below (traefik_internal_nomad_target/
+# traefik_internal_consul_target) Since The Doc's Routing Table Doesn't
+# Distinguish Dev Vs Prod For These Two Rows. If You Want Both Reachable,
+# Split Into nomad-dev./nomad-prod. Subdomains Instead — Worth Deciding
+# Before Relying On This.
+
+http:
+  routers:
+    grafana:
+      rule: "Host(`grafana.{{ traefik_internal_domain }}`)"
+      service: grafana
+      tls:
+        certResolver: letsencrypt
+    vault:
+      rule: "Host(`vault.{{ traefik_internal_domain }}`)"
+      service: vault
+      tls:
+        certResolver: letsencrypt
+    nomad:
+      rule: "Host(`nomad.{{ traefik_internal_domain }}`)"
+      service: nomad
+      tls:
+        certResolver: letsencrypt
+    consul:
+      rule: "Host(`consul.{{ traefik_internal_domain }}`)"
+      service: consul
+      tls:
+        certResolver: letsencrypt
+    octopus:
+      rule: "Host(`octopus.{{ traefik_internal_domain }}`)"
+      service: octopus
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:3000"
+    vault:
+      loadBalancer:
+        servers:
+          # Vault's Own Listener Is Already TLS (Self-Signed) — insecureSkipVerify
+          # Is Set Below Since Traefik Doesn't Trust That Cert By Default.
+          - url: "https://127.0.0.1:8200"
+        serversTransport: vault-transport
+    nomad:
+      loadBalancer:
+        servers:
+          - url: "http://{{ traefik_internal_nomad_target | default('nomad-dev-server-0') }}:4646"
+    consul:
+      loadBalancer:
+        servers:
+          - url: "http://{{ traefik_internal_consul_target | default('nomad-dev-server-0') }}:8500"
+    octopus:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:{{ octopus_web_port }}"
+
+  serversTransports:
+    vault-transport:
+      insecureSkipVerify: true

@@ -1,0 +1,70 @@
+# Managed By Ansible (consul Role).
+#
+# datacenter/retry_join/bootstrap_expect Only Render When The Corresponding
+# Group Vars Are Defined — True For Direct Runs Against Real Inventory
+# Hosts (dev.yml/prod.yml Supply Them), False When Packer Bakes This Role
+# Into The Shared nomad-client-mig Image Without Env-Specific Group Vars
+# In Scope. In The Latter Case The GCP Startup Script Supplies Them In
+# 99-instance.hcl At Real Boot.
+
+data_dir  = "{{ consul_data_dir }}"
+log_level = "INFO"
+log_file  = "{{ consul_log_dir }}/"
+
+server = {{ 'true' if consul_mode == 'server' else 'false' }}
+
+{% if consul_datacenter is defined %}
+datacenter = "{{ consul_datacenter }}"
+node_name  = "{{ inventory_hostname }}"
+
+bind_addr      = "0.0.0.0"
+advertise_addr = "{{ ansible_default_ipv4.address }}"
+
+retry_join = {{ retry_join | to_json }}
+
+{% if consul_mode == 'server' %}
+bootstrap_expect = {{ bootstrap_expect }}
+{% endif %}
+
+encrypt = "{{ consul_gossip_key }}"
+{% endif %}
+
+# TLS — CA Is Always Baked (Public, Safe). cert_file/key_file Are Only
+# Present When Placed By A Direct Ansible Run; The MIG Startup Script
+# Places Them At The Same Fixed Paths When This Role Was Baked Via Packer,
+# So Consul Doesn't Need To Know Which Mechanism Put Them There.
+tls {
+  defaults {
+    ca_file   = "{{ consul_tls_dir }}/ca.pem"
+    cert_file = "{{ consul_tls_dir }}/cert.pem"
+    key_file  = "{{ consul_tls_dir }}/key.pem"
+    verify_incoming = true
+    verify_outgoing = true
+  }
+  internal_rpc {
+    verify_server_hostname = true
+  }
+}
+
+ui_config {
+  enabled = true
+}
+
+connect {
+  enabled = {{ consul_connect_enabled | lower }}
+}
+
+acl {
+  enabled                  = {{ consul_acl_enabled | lower }}
+  default_policy           = "{{ consul_acl_default_policy }}"
+  enable_token_persistence = true
+}
+
+telemetry {
+  prometheus_retention_time = "24h"
+  disable_hostname          = true
+}
+
+performance {
+  raft_multiplier = 1
+}

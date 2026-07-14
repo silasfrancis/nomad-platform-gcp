@@ -1,0 +1,24 @@
+# Managed By Ansible (falco Role).
+
+engine:
+  kind: {{ falco_engine_kind }}
+
+rules_file:
+  - /etc/falco/falco_rules.yaml
+  - {{ falco_config_dir }}/falco_rules.local.yaml
+
+json_output: true
+json_include_output_property: true
+
+http_output:
+  enabled: true
+  url: "{{ falco_webhook_url }}"
+
+log_level: info
+priority: {{ falco_alert_severity_threshold }}
+
+syscall_event_drops:
+  actions:
+    - log
+  rate: 0.03333
+  max_burst: 10

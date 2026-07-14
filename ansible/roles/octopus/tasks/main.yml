@@ -1,0 +1,199 @@
+---
+# NOTE: Environments, Projects, And Deployment Targets Are Created By The
+# Terraform service-config Layer (Via Octopus's REST API/Provider), Not By
+# This Role. This Role Only Gets Octopus Itself Running And Reachable.
+#
+# Requires The docker Role To Have Already Run (common Playbook Ordering
+# In mgmt.yml Handles This) Since Step 1 Runs SQL Server Express Via
+# Docker Compose.
+
+# --- Step 1: Deploy SQL Server Express Via Docker Compose ---
+- name: Check If Sql-Data Disk Is Already Formatted
+  ansible.builtin.command: blkid /dev/disk/by-id/google-sql-data
+  register: sql_disk_blkid
+  failed_when: false
+  changed_when: false
+
+- name: Format Sql-Data Disk (Only If Unformatted)
+  community.general.filesystem:
+    fstype: ext4
+    dev: /dev/disk/by-id/google-sql-data
+  when: sql_disk_blkid.rc != 0
+
+- name: Ensure Mssql Data Mount Point Exists
+  ansible.builtin.file:
+    path: "{{ mssql_data_dir }}"
+    state: directory
+    mode: "0777"
+
+- name: Mount Sql-Data Disk
+  ansible.posix.mount:
+    path: "{{ mssql_data_dir }}"
+    src: /dev/disk/by-id/google-sql-data
+    fstype: ext4
+    opts: defaults,nofail
+    state: mounted
+
+- name: Attempt To Read Existing SA Password From Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret={{ secret_octopus_sql_admin_password }} --project={{ gcp_project_id }}
+  register: sql_password_existing
+  no_log: true
+  changed_when: false
+  failed_when: false
+
+- name: Generate New SA Password (Only If None Exists Yet)
+  ansible.builtin.command: openssl rand -base64 24
+  register: sql_password_generated
+  no_log: true
+  changed_when: false
+  when: sql_password_existing.rc != 0
+
+- name: Set SA Password Fact
+  ansible.builtin.set_fact:
+    mssql_sa_password: >-
+      {{ sql_password_generated.stdout | default('') if sql_password_existing.rc != 0
+         else sql_password_existing.stdout }}
+  no_log: true
+
+- name: Write New SA Password To Secret Manager (Only If Freshly Generated)
+  ansible.builtin.shell: >
+    echo -n "{{ mssql_sa_password }}" |
+    gcloud secrets versions add {{ secret_octopus_sql_admin_password }}
+    --data-file=- --project={{ gcp_project_id }}
+  when: sql_password_existing.rc != 0
+  no_log: true
+  changed_when: true
+
+- name: Ensure Mssql Compose Directory Exists
+  ansible.builtin.file:
+    path: "{{ mssql_compose_dir }}"
+    state: directory
+    mode: "0750"
+
+- name: Write Mssql .env File
+  ansible.builtin.copy:
+    dest: "{{ mssql_compose_dir }}/.env"
+    content: "MSSQL_SA_PASSWORD={{ mssql_sa_password }}\n"
+    mode: "0600"
+  no_log: true
+
+- name: Template Mssql Docker Compose File
+  ansible.builtin.template:
+    src: docker-compose.mssql.yml.j2
+    dest: "{{ mssql_compose_dir }}/docker-compose.yml"
+    mode: "0640"
+
+- name: Start Mssql Container Via Docker Compose
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ mssql_compose_dir }}"
+  register: mssql_compose_up
+  changed_when: "'Started' in mssql_compose_up.stdout or 'Created' in mssql_compose_up.stdout"
+
+# --- Step 2: Wait For SQL Server Port 1433 To Be Ready ---
+- name: Wait For Mssql Container To Report Healthy
+  ansible.builtin.command: >
+    docker inspect --format='{{ '{{' }}.State.Health.Status{{ '}}' }}' {{ mssql_container_name }}
+  register: mssql_health
+  until: mssql_health.stdout == "healthy"
+  retries: 20
+  delay: 5
+  changed_when: false
+
+# --- Step 3: Install Octopus Deploy Binary ---
+- name: Add Octopus Deploy Apt GPG Key
+  ansible.builtin.get_url:
+    url: "https://apt.octopus.com/public.key"
+    dest: /etc/apt/keyrings/octopus.asc
+    mode: "0644"
+
+- name: Add Octopus Deploy Apt Repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://apt.octopus.com/ trusty main"
+    state: present
+    filename: octopus
+
+- name: Install Octopus Deploy Server Package
+  ansible.builtin.apt:
+    name: octopusdeploy-server
+    state: present
+    update_cache: true
+
+- name: Ensure Octopus Home Directory Exists
+  ansible.builtin.file:
+    path: "{{ octopus_home_dir }}"
+    state: directory
+    mode: "0750"
+
+# --- Step 4: Write Octopus Connection String → localhost:1433 ---
+# NOTE ON MECHANISM: Octopus's Only Officially Supported Way To Set This Up
+# Is Via Its Own Octopus.Server CLI (create-instance / configure /
+# database --create) — There Isn't Really A Standalone JSON Config File
+# Octopus Reads Directly For This. octopus-connection.json.j2 Below Is
+# Written As A Human-Readable Record Of What Was Configured (Useful For
+# Debugging/Audit), While The Actual Configuration Still Goes Through The
+# CLI. Verify This Reasoning Against Current Octopus Linux Docs Before A
+# Real Run — CLI Flags Have Shifted Across Versions.
+- name: Check If Octopus Instance Already Exists
+  ansible.builtin.command: "{{ octopus_bin }} show-configuration --instance {{ octopus_instance }}"
+  register: octopus_instance_check
+  failed_when: false
+  changed_when: false
+
+- name: Create Octopus Instance (Only If It Doesn't Exist Yet)
+  ansible.builtin.command: >
+    {{ octopus_bin }} create-instance --instance {{ octopus_instance }}
+    --config /etc/octopus/OctopusServer/OctopusServer.config
+  when: octopus_instance_check.rc != 0
+  changed_when: true
+
+- name: Configure Octopus Instance (Database Connection, Ports)
+  ansible.builtin.command: >
+    {{ octopus_bin }} configure --instance {{ octopus_instance }}
+    --storageConnectionString "Server=localhost,1433;Database=OctopusDeploy;User Id=sa;Password={{ mssql_sa_password }};TrustServerCertificate=True"
+    --home {{ octopus_home_dir }}
+    --upgradeCheck false
+    --webListenPrefixes "http://localhost:{{ octopus_web_port }}"
+  when: octopus_instance_check.rc != 0
+  no_log: true
+  changed_when: true
+
+- name: Create Octopus Database (Only If Instance Was Just Created)
+  ansible.builtin.command: "{{ octopus_bin }} database --instance {{ octopus_instance }} --create"
+  when: octopus_instance_check.rc != 0
+  changed_when: true
+
+- name: Write Octopus Connection Reference File
+  ansible.builtin.template:
+    src: octopus-connection.json.j2
+    dest: "{{ octopus_home_dir }}/connection-reference.json"
+    mode: "0640"
+
+# --- Step 5: Start Octopus Systemd Service ---
+- name: Template Octopus Systemd Unit
+  ansible.builtin.template:
+    src: octopus.service.j2
+    dest: /etc/systemd/system/octopus.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Systemd Daemon
+
+- name: Enable And Start Octopus Service
+  ansible.builtin.systemd:
+    name: octopus
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# --- Step 6: Wait For Octopus API Port To Be Ready ---
+- name: Wait For Octopus API To Respond
+  ansible.builtin.uri:
+    url: "http://localhost:{{ octopus_web_port }}/api"
+    status_code: 200
+  register: octopus_api_check
+  until: octopus_api_check.status == 200
+  retries: 20
+  delay: 5

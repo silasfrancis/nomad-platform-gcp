@@ -1,0 +1,56 @@
+# Managed By Ansible (nomad Role) — Shared Base, Merged With Either
+# server.hcl Or client.hcl Via Nomad's Directory-Based Config Loading
+# (-config={{ nomad_config_dir }}).
+
+data_dir  = "{{ nomad_data_dir }}"
+log_level = "INFO"
+log_file  = "{{ nomad_log_dir }}/"
+
+{% if nomad_datacenter is defined %}
+datacenter = "{{ nomad_datacenter }}"
+name       = "{{ inventory_hostname }}"
+bind_addr  = "0.0.0.0"
+
+advertise {
+  http = "{{ ansible_default_ipv4.address }}"
+  rpc  = "{{ ansible_default_ipv4.address }}"
+  serf = "{{ ansible_default_ipv4.address }}"
+}
+{% endif %}
+
+acl {
+  enabled = {{ nomad_acl_enabled | lower }}
+}
+
+consul {
+  address = "127.0.0.1:8500"
+}
+
+vault {
+  enabled = {{ nomad_vault_enabled | lower }}
+  address = "{{ nomad_vault_address }}"
+  {% if vault_jwt_auth_backend_path is defined %}
+  jwt_auth_backend_path = "{{ vault_jwt_auth_backend_path }}"
+  {% endif %}
+}
+
+telemetry {
+  prometheus_metrics         = {{ nomad_telemetry_prometheus_enabled | lower }}
+  publish_allocation_metrics = true
+  publish_node_metrics       = true
+}
+
+# TLS — Not Gated On Any Per-Instance/Per-Env Condition Since Nomad's
+# Cert Is Shared Across Both Environments (See tasks/main.yml). Always
+# Present Regardless Of Direct Run Or Packer Bake.
+tls {
+  http = true
+  rpc  = true
+
+  ca_file   = "{{ nomad_tls_dir }}/ca.pem"
+  cert_file = "{{ nomad_tls_dir }}/cert.pem"
+  key_file  = "{{ nomad_tls_dir }}/key.pem"
+
+  verify_server_hostname = true
+  verify_https_client    = false
+}

@@ -1,0 +1,16 @@
+---
+# Applies Automatically To Any Host Labeled env=dev In GCP (See
+# inventory/gcp.yml's keyed_groups). Does NOT Apply To mgmt-vm, Which Has
+# No env Label Since It Serves Both Environments.
+
+nomad_datacenter: "dc-dev"
+consul_datacenter: "dc-dev"
+vault_jwt_auth_backend_path: "jwt-nomad-dev"
+vault_kv_prefix: "kv/data/dev"
+
+bootstrap_expect: 1
+
+# Real Internal Names/IPs Of The Nomad+Consul Server Nodes In This
+# Environment — Fill In Once compute/ Has Applied.
+retry_join:
+  - "nomad-dev-server-0"

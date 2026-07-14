@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  role_name: traefik
+  description: >
+    Installs Traefik as a native binary (cap_net_bind_service, not root)
+    with a systemd unit, per Traefik's own docs. Three modes via
+    traefik_mode: dev-public/prod-public use the Consul catalog provider
+    with Let's Encrypt HTTP-01; internal uses a static file provider with
+    Let's Encrypt DNS-01 via Cloudflare for the *.platform.lefrancis.org
+    wildcard, no public IP.
+  min_ansible_version: "2.15"
+
+dependencies:
+  - common

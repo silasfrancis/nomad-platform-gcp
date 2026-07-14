@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: consul
+  description: >
+    Installs the Consul agent (server or client mode via consul_mode) and
+    a single consul.hcl. ACL bootstrap and token management are handled by
+    the Terraform service-config layer, not this role — it only enables
+    the ACL feature flag.
+  min_ansible_version: "2.15"
+
+dependencies:
+  - common

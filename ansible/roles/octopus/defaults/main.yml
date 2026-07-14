@@ -1,0 +1,14 @@
+---
+# mgmt-vm Only. Mssql (Octopus's Database) Is Folded Into This Role As
+# Steps 1-2 Rather Than Being A Separate Role, Per The Project's Role
+# Layout — Nothing Else Consumes SQL Server Express.
+
+mssql_compose_dir: /opt/mssql
+mssql_data_dir: /opt/mssql/data
+mssql_image: "mcr.microsoft.com/mssql/server:2022-latest"
+mssql_container_name: "octopus-mssql"
+
+octopus_instance: "OctopusServer"
+octopus_home_dir: "/etc/octopus/OctopusServer"
+octopus_bin: "/opt/octopus/OctopusServer/Octopus.Server"
+octopus_web_port: 8080

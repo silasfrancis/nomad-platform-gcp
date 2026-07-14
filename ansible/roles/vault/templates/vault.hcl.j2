@@ -1,0 +1,31 @@
+# Managed By Ansible (vault Role). Vault Is A Project-Wide Singleton On
+# mgmt-vm — No Per-Instance Overrides Needed.
+
+storage "raft" {
+  path    = "{{ vault_data_dir }}"
+  node_id = "vault-mgmt-vm"
+}
+
+seal "gcpckms" {
+  project    = "{{ vault_gcp_kms_project }}"
+  region     = "{{ vault_gcp_kms_region }}"
+  key_ring   = "{{ vault_gcp_kms_key_ring }}"
+  crypto_key = "{{ vault_gcp_kms_crypto_key }}"
+}
+
+listener "tcp" {
+  address       = "{{ vault_listener_address }}"
+  tls_cert_file = "{{ vault_tls_dir }}/vault-cert.pem"
+  tls_key_file  = "{{ vault_tls_dir }}/vault-key.pem"
+}
+
+api_addr     = "https://{{ vault_internal_dns }}:8200"
+cluster_addr = "https://{{ vault_internal_dns }}:8201"
+
+ui = {{ vault_ui_enabled | lower }}
+
+log_level = "INFO"
+log_file  = "{{ vault_log_dir }}/"
+
+# Audit Logging (File Device) Is Enabled Post-Init By tasks/init.yml —
+# Requires An Unsealed Vault And A Valid Token, Neither Available Here.

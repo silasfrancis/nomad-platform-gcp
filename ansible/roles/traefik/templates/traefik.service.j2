@@ -1,0 +1,20 @@
+[Unit]
+Description=Traefik ({{ traefik_mode }})
+Documentation=https://doc.traefik.io/traefik/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ traefik_user }}
+Group={{ traefik_group }}
+{% if traefik_mode == 'internal' %}
+EnvironmentFile={{ traefik_config_dir }}/traefik.env
+{% endif %}
+ExecStart={{ traefik_bin_dir }}/traefik --configFile={{ traefik_config_dir }}/traefik.yml
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: github-runner
+  description: >
+    Downloads and registers the GitHub Actions self-hosted runner, using a
+    freshly-fetched ~1 hour registration token obtained via the long-lived
+    github-bot-pat secret (Secret Manager). The ephemeral token itself is
+    never persisted anywhere.
+  min_ansible_version: "2.15"
+
+dependencies:
+  - common

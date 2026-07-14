@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: nomad
+  description: >
+    Installs Nomad and writes nomad.hcl plus either server.hcl or
+    client.hcl depending on nomad_mode. Namespaces and ACL policies are
+    handled by the Terraform service-config layer, not this role.
+  min_ansible_version: "2.15"
+
+dependencies:
+  - common
+  - consul

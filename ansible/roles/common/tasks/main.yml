@@ -1,0 +1,93 @@
+---
+# Base Packages, OS Hardening, Sysctl Tuning, System Users. Runs On Every
+# Host Regardless Of Role. Docker Is Its Own Role (roles/docker) — Only
+# Included By nomad-clients.yml And mgmt.yml's Octopus/Mssql Step, Not
+# Universally.
+
+- name: Update Apt Cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Upgrade All Packages Safely
+  ansible.builtin.apt:
+    upgrade: safe
+
+- name: Install Common Base Packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Set System Timezone
+  community.general.timezone:
+    name: "{{ common_timezone }}"
+
+- name: Install And Enable Unattended Upgrades
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+  when: common_enable_unattended_upgrades | bool
+
+- name: Enable Periodic Unattended Upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+  when: common_enable_unattended_upgrades | bool
+
+- name: Set Unattended Upgrades Auto-Reboot Behaviour
+  ansible.builtin.lineinfile:
+    path: /etc/apt/apt.conf.d/50unattended-upgrades
+    regexp: '^\s*//?\s*Unattended-Upgrade::Automatic-Reboot\b'
+    line: 'Unattended-Upgrade::Automatic-Reboot "{{ common_unattended_upgrades_auto_reboot | lower }}";'
+    create: true
+  when: common_enable_unattended_upgrades | bool
+
+# --- OS Hardening ---
+- name: Disable SSH Password Authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+  notify: Restart SSH
+  when: common_disable_ssh_password_auth | bool
+
+- name: Disable SSH Root Login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PermitRootLogin'
+    line: 'PermitRootLogin no'
+  notify: Restart SSH
+  when: common_disable_ssh_root_login | bool
+
+- name: Disable Uncommon Filesystem Modules
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/disable-unused-fs.conf
+    content: |
+      install cramfs /bin/true
+      install freevxfs /bin/true
+      install jffs2 /bin/true
+      install hfs /bin/true
+      install hfsplus /bin/true
+      install udf /bin/true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Template Sysctl Tuning File
+  ansible.builtin.template:
+    src: sysctl.conf.j2
+    dest: /etc/sysctl.d/99-nomad-platform.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Sysctl
+
+# --- System Users (Homes Created By The Roles That Actually Use Them —
+# consul And nomad Roles Create Their Own consul/nomad System Users
+# Alongside Package Install, Not Here, So Uid/Gid Setup Stays Next To The
+# Binary Install That Needs It) ---

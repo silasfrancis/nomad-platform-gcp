@@ -1,0 +1,113 @@
+---
+# Called ONLY From playbooks/vault-init.yml — Never Included By
+# tasks/main.yml Or Any Routine site.yml/mgmt.yml Pass. `vault operator
+# init` Must Run Exactly Once, Ever, Per Cluster; This File Guards That
+# With Vault's Own initialized Status Rather Than An External Marker.
+
+- name: Check Vault Status
+  ansible.builtin.command: vault status -format=json
+  register: vault_status_raw
+  until: vault_status_raw.rc in [0, 2]
+  retries: 15
+  delay: 2
+  changed_when: false
+  failed_when: false
+  environment:
+    VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
+    VAULT_SKIP_VERIFY: "true"
+
+- name: Parse Vault Status
+  ansible.builtin.set_fact:
+    vault_status: "{{ vault_status_raw.stdout | from_json }}"
+
+- name: Run Vault Operator Init (Only If Not Already Initialized)
+  ansible.builtin.command: vault operator init -format=json
+  register: vault_init_raw
+  when: not vault_status.initialized
+  no_log: true
+  environment:
+    VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
+    VAULT_SKIP_VERIFY: "true"
+
+- name: Parse Vault Init Output
+  ansible.builtin.set_fact:
+    vault_init_result: "{{ vault_init_raw.stdout | from_json }}"
+  when: not vault_status.initialized
+  no_log: true
+
+- name: Write Vault Root Token To Secret Manager
+  ansible.builtin.shell: >
+    echo -n "{{ vault_init_result.root_token }}" |
+    gcloud secrets versions add {{ secret_vault_root_token }}
+    --data-file=- --project={{ gcp_project_id }}
+  when: not vault_status.initialized
+  no_log: true
+  changed_when: true
+
+- name: Write Vault Recovery Keys To Secret Manager
+  ansible.builtin.shell: >
+    echo -n "{{ vault_init_result.recovery_keys_b64 | join(',') }}" |
+    gcloud secrets versions add {{ secret_vault_recovery_keys }}
+    --data-file=- --project={{ gcp_project_id }}
+  when: not vault_status.initialized
+  no_log: true
+  changed_when: true
+
+- name: Confirm Vault Is Initialized And Auto-Unsealed
+  ansible.builtin.command: vault status -format=json
+  register: vault_status_final
+  changed_when: false
+  environment:
+    VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
+    VAULT_SKIP_VERIFY: "true"
+
+- name: Assert Vault Is Unsealed (GCP KMS Auto-Unseal Should Have Handled This)
+  ansible.builtin.assert:
+    that:
+      - (vault_status_final.stdout | from_json).sealed == false
+    fail_msg: >
+      Vault reports sealed=true after init. Check the seal "gcpckms" block
+      in vault.hcl and the KMS key's IAM bindings before proceeding to
+      Terraform's service-config layer.
+
+- name: Read Root Token From Secret Manager (Needed On Re-Runs Where Init Already Happened Previously)
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret={{ secret_vault_root_token }} --project={{ gcp_project_id }}
+  register: vault_root_token_from_secret
+  no_log: true
+  changed_when: false
+  when: vault_status.initialized
+
+- name: Set Effective Root Token Fact
+  ansible.builtin.set_fact:
+    vault_effective_root_token: >-
+      {{ vault_init_result.root_token if not vault_status.initialized
+         else vault_root_token_from_secret.stdout }}
+  no_log: true
+
+- name: Check If Audit Logging Is Already Enabled
+  ansible.builtin.command: vault audit list -format=json
+  register: vault_audit_list
+  changed_when: false
+  environment:
+    VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
+    VAULT_SKIP_VERIFY: "true"
+    VAULT_TOKEN: "{{ vault_effective_root_token }}"
+
+- name: Enable File Audit Device (Only If Not Already Enabled)
+  ansible.builtin.command: vault audit enable file file_path={{ vault_log_dir }}/audit.log
+  when: (vault_audit_list.stdout | from_json) == {}
+  no_log: true
+  changed_when: true
+  environment:
+    VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
+    VAULT_SKIP_VERIFY: "true"
+    VAULT_TOKEN: "{{ vault_effective_root_token }}"
+
+- name: Report Init Outcome
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'Vault was already initialized — no action taken.'
+         if vault_status.initialized
+         else 'Vault initialized for the first time. Root token and recovery keys written to Secret Manager, audit logging enabled.' }}

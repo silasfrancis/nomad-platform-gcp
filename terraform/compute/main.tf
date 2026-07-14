@@ -118,26 +118,26 @@ locals {
   # nothing else.
   instances = merge(local.shared_instances, local.active_env_instances)
 
-  # Runs during the ~30s ACPI soft-off window GCP gives before actually
-  # killing a preempted Spot instance. Best-effort: if the drain doesn't
-  # finish in time, GCP terminates anyway and Nomad's normal client-failure
-  # handling picks up from there (allocations get rescheduled once the
-  # client is marked down). Only wired into *-spot entries below — the
-  # module itself also gates shutdown-script on each.value.spot, so this
-  # would be a no-op on on-demand pools even if set there too.
-  nomad_drain_shutdown_script = <<-EOT
-    #!/bin/bash
-    set -uo pipefail
-    echo "$(date -u +%FT%TZ): shutdown signal received, draining Nomad node"
-    if command -v nomad >/dev/null 2>&1; then
-      nomad node drain -self -enable -deadline 25s -yes >>/var/log/nomad-drain.log 2>&1
-    else
-      echo "nomad binary not found, skipping drain" >>/var/log/nomad-drain.log
-    fi
-  EOT
+  # --- Startup/Shutdown Scripts For The Nomad Client MIGs ---
+  # Both Live In compute/startup-scripts/, Not The Root scripts/ Folder —
+  # That's Reserved For Standalone Operational CLI Helpers (Vault Init,
+  # ACL Bootstrap), Not Instance-Lifecycle Scripts Consumed By Terraform.
+  #
+  # nomad_client_startup_script Runs On Every Client Boot (On-Demand AND
+  # Spot) — Writes 99-instance.hcl, Fetches The Per-Env Consul TLS
+  # Material From Secret Manager, Starts Consul Then Nomad.
+  #
+  # nomad_client_spot_shutdown_script Runs Only On *-spot Entries, During
+  # GCP's ~30s ACPI Soft-Off Window Before A Preempted Instance Is Killed.
+  # Supersedes The Old Inline nomad_drain_shutdown_script Heredoc — Same
+  # Core Drain Command, Now Version-Controlled As An Actual .sh File With
+  # Real Linting/Shellcheck Support Instead Of A String Embedded In HCL.
+  nomad_client_startup_script        = file("${path.module}/startup-scripts/nomad-client-startup.sh")
+  nomad_client_spot_shutdown_script  = file("${path.module}/startup-scripts/nomad-client-spot-shutdown.sh")
 
-  # Nomad Client MIGs — same env-gating as the static VMs above. All four
-  # are env-scoped; there's no "shared" MIG the way mgmt-vm is a shared VM.
+  # nomad_drain_shutdown_script <<-EOT ... EOT — REMOVED, replaced by
+  # nomad_client_spot_shutdown_script above.
+
   all_migs = {
     "nomad-dev-ondemand" = {
       machine_type            = "e2-standard-2"
@@ -149,6 +149,7 @@ locals {
       labels                   = { role = "nomad-client", environment = "dev", pool = "ondemand" }
       environment              = "dev"
       scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
+      startup_script           = local.nomad_client_startup_script
     }
     "nomad-dev-spot" = {
       machine_type            = "e2-standard-2"
@@ -159,7 +160,8 @@ locals {
       service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "dev", pool = "spot" }
       environment              = "dev"
-      shutdown_script          = local.nomad_drain_shutdown_script
+      startup_script           = local.nomad_client_startup_script
+      shutdown_script          = local.nomad_client_spot_shutdown_script
     }
     "nomad-prod-ondemand" = {
       machine_type            = "e2-standard-2"
@@ -171,6 +173,7 @@ locals {
       labels                   = { role = "nomad-client", environment = "prod", pool = "ondemand" }
       environment              = "prod"
       scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
+      startup_script           = local.nomad_client_startup_script
     }
     "nomad-prod-spot" = {
       machine_type            = "e2-standard-2"
@@ -181,7 +184,8 @@ locals {
       service_account_email    = local.nomad_client_sa_member
       labels                   = { role = "nomad-client", environment = "prod", pool = "spot" }
       environment              = "prod"
-      shutdown_script          = local.nomad_drain_shutdown_script
+      startup_script           = local.nomad_client_startup_script
+      shutdown_script          = local.nomad_client_spot_shutdown_script
     }
   }
 

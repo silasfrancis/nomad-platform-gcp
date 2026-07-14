@@ -1,0 +1,16 @@
+---
+# Applies Automatically To Any Host Labeled env=prod In GCP (See
+# inventory/gcp.yml's keyed_groups). Does NOT Apply To mgmt-vm, Which Has
+# No env Label Since It Serves Both Environments.
+
+nomad_datacenter: "dc-prod"
+consul_datacenter: "dc-prod"
+vault_jwt_auth_backend_path: "jwt-nomad-prod"
+vault_kv_prefix: "kv/data/prod"
+
+bootstrap_expect: 3
+
+retry_join:
+  - "nomad-prod-server-0"
+  - "nomad-prod-server-1"
+  - "nomad-prod-server-2"

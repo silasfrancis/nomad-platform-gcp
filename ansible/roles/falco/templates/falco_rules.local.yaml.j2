@@ -1,0 +1,80 @@
+# Managed By Ansible (falco Role) — Custom Rules Supplementing Falco's
+# Default Rule Set. Covers The Categories Called Out In The Architecture
+# Doc Section 9.1: Privilege Escalation, Shell In Container, Unexpected
+# Outbound, Sensitive File Reads, Crypto Mining, Write To /etc.
+
+- rule: Unexpected Privilege Escalation In Container
+  desc: Detects setuid, ptrace, or capability-changing syscalls inside a running container
+  condition: >
+    container and
+    (evt.type in (setuid, setgid, capset) or
+     (evt.type = ptrace and evt.dir = <))
+  output: >
+    Privilege escalation attempt in container
+    (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [privilege_escalation, custom]
+
+- rule: Shell Spawned In Container
+  desc: Detects an interactive shell spawned inside a running container — common post-exploitation indicator
+  condition: >
+    container and
+    proc.name in (bash, sh, dash, zsh) and
+    proc.pname exists and
+    not proc.pname in (falco_probe_installer)
+  output: >
+    Shell spawned in container
+    (user=%user.name shell=%proc.name parent=%proc.pname container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [shell_in_container, custom]
+
+- rule: Unexpected Outbound Connection From Container
+  desc: Detects a container process connecting outbound to a port outside the platform's known service ports
+  condition: >
+    container and
+    outbound and
+    not fd.sport in (4646, 4647, 4648, 8300, 8301, 8302, 8500, 8200, 80, 443, 53)
+  output: >
+    Unexpected outbound connection from container
+    (command=%proc.cmdline connection=%fd.name container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [unexpected_outbound, custom]
+
+- rule: Sensitive File Read Inside Container
+  desc: Detects reads of sensitive host files (credentials, shadow, SSH keys, Vault tokens) from inside a container
+  condition: >
+    container and
+    open_read and
+    (fd.name in (/etc/shadow, /etc/passwd) or
+     fd.name startswith /root/.ssh or
+     fd.name startswith /home and fd.name contains .ssh or
+     fd.name contains vault-token)
+  output: >
+    Sensitive file read inside container
+    (file=%fd.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [sensitive_file_read, custom]
+
+- rule: Suspected Crypto Mining Activity
+  desc: Detects high-CPU process with outbound connection to a known mining pool port
+  condition: >
+    container and
+    outbound and
+    fd.sport in (3333, 4444, 14444, 5555, 7777, 8888)
+  output: >
+    Suspected crypto mining connection
+    (command=%proc.cmdline connection=%fd.name container=%container.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [crypto_mining, custom]
+
+- rule: Write Below /etc Inside Container
+  desc: Detects a container process writing under /etc — common persistence mechanism
+  condition: >
+    container and
+    open_write and
+    fd.name startswith /etc
+  output: >
+    Write below /etc inside container
+    (file=%fd.name command=%proc.cmdline container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [write_etc, custom]

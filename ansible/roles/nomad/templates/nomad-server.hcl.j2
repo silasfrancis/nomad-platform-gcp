@@ -1,0 +1,12 @@
+# Managed By Ansible (nomad Role, Server Mode) — Only Written When
+# nomad_mode == "server" (nomad-servers.yml).
+
+server {
+  enabled = true
+{% if bootstrap_expect is defined %}
+  bootstrap_expect = {{ bootstrap_expect }}
+  server_join {
+    retry_join = {{ retry_join | to_json }}
+  }
+{% endif %}
+}

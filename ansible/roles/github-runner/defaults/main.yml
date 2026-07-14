@@ -1,0 +1,12 @@
+---
+github_runner_version: "2.321.0"
+github_runner_arch: "linux-x64"
+github_runner_user: "gh-runner"
+github_runner_home: "/opt/actions-runner"
+
+github_runner_download_url: >-
+  https://github.com/actions/runner/releases/download/v{{ github_runner_version }}/actions-runner-{{ github_runner_arch }}-{{ github_runner_version }}.tar.gz
+
+github_owner: "silasfrancis"
+github_repo: "nomad-platform-gcp"
+github_runner_name: "mgmt-vm"

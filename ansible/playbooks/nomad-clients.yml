@@ -1,0 +1,30 @@
+---
+# Dual Purpose:
+#   1. Invoked Directly Against role_nomad_client (Dynamic Inventory) If
+#      You Ever Need To Reconfigure A Live Client Node By Hand.
+#   2. Invoked By Packer's ansible Provisioner Against The Ephemeral Build
+#      VM To Bake The Shared nomad-client-mig Image — In That Context No
+#      env-Specific Group Vars Are In Scope (The Build VM Isn't Part Of
+#      This Dynamic Inventory), So consul.hcl/nomad Config Templates Omit
+#      datacenter/retry_join, And The GCP Startup Script Supplies Them In
+#      99-instance.hcl At Real Boot. See roles/consul And roles/nomad
+#      Template Comments For Detail.
+#
+#      Packer Generates Its Own Single-Host Inventory For The Build VM,
+#      Which Won't Contain The role_nomad_client Group — Invoke Packer's
+#      ansible Provisioner With `-e target_hosts=all` So This Play Matches
+#      That Inventory Instead Of Falling Through With Zero Matched Hosts.
+
+- name: Configure Nomad Client Nodes
+  hosts: "{{ target_hosts | default('role_nomad_client') }}"
+  become: true
+  vars:
+    consul_mode: client
+    nomad_mode: client
+    docker_extra_group_users: ["nomad"]
+  roles:
+    - common
+    - consul
+    - nomad
+    - docker
+    - falco

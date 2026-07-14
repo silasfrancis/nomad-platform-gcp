@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: docker
+  description: >
+    Installs Docker CE from Docker's official apt repo and configures
+    daemon.json (log driver, storage driver). Separate from common per
+    the project's role layout — only included where Docker is actually
+    needed (nomad-clients.yml, mgmt.yml's mssql step).
+  min_ansible_version: "2.15"
+
+dependencies:
+  - common

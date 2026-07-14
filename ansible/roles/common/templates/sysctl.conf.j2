@@ -1,0 +1,9 @@
+# Managed By Ansible (common Role) — Baseline Tuning For Consul/Nomad
+# Gossip And General Throughput. Conservative Defaults, Not Load-Tested.
+
+{% for key, value in common_sysctl_settings.items() %}
+{{ key }} = {{ value }}
+{% endfor %}
+
+# Core Dumps Restricted As Defense In Depth
+fs.suid_dumpable = 0

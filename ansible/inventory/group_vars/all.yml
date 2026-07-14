@@ -1,0 +1,43 @@
+---
+# IAP Tunnel — %h Resolves To ansible_host, Which inventory/gcp.yml Sets
+# To The GCE Instance Name (Not An IP), Which Is What
+# `gcloud compute start-iap-tunnel` Expects.
+ansible_user: "CHANGEME_your_oslogin_username"
+ansible_ssh_common_args: >-
+  -o ProxyCommand="gcloud compute start-iap-tunnel %h %p
+  --listen-on-stdin --zone=us-central1-a --project={{ gcp_project_id }}"
+
+gcp_project_id: "CHANGEME-project-id"
+
+# Secret Manager Secret IDs — Must Already Exist (Created By
+# terraform/bootstrap's secret-manager Module, default_secrets). These
+# Playbooks/Roles Only Ever Write New Versions Into Secrets That Already
+# Exist; They Never Create The Secret Container Itself.
+secret_vault_root_token: "vault-root-token"
+secret_vault_recovery_keys: "vault-recovery-keys"
+secret_octopus_sql_admin_password: "octopus-sql-admin-password"
+secret_github_bot_pat: "github-bot-pat"
+
+# NEW SECRET — Not Yet In terraform/bootstrap's default_secrets Map. Add
+# It There (Manually Seeded, Like octopus-api-key/github-bot-pat) Before
+# Running The traefik Role In Internal Mode.
+# secret_cloudflare_api_token: "cloudflare-api-token"  (defaulted in the traefik role itself)
+
+# NEW SECRETS — Written By playbooks/pki-bootstrap.yml, Not Manually
+# Seeded. Add These 6 To default_secrets Before Running That Playbook
+# (Ansible Only Writes Versions, Never Creates Containers):
+#   consul-gossip-key-dev, consul-gossip-key-prod,
+#   consul-client-cert-dev, consul-client-key-dev,
+#   consul-client-cert-prod, consul-client-key-prod
+# Grant nomad-client-sa secretAccessor On Just These 6 (Via Each Secret's
+# Own `iam` Block In The secret-manager Module, Not The Broad app Tier) —
+# The MIG Startup Script Fetches Them At Boot Using The Instance's Own
+# Service Account Token.
+
+# NOTE: consul-acl-root-token / nomad-acl-root-token / octopus-api-key Are
+# Deliberately NOT Written By Ansible In This Structure — See The NOTE
+# Comments In The consul, nomad, And octopus Roles For Where Each Is
+# Actually Handled.
+
+vault_internal_dns: "vault.platform.lefrancis.org"
+octopus_internal_dns: "octopus.platform.lefrancis.org"

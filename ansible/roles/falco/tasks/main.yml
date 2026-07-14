@@ -1,0 +1,43 @@
+---
+- name: Add Falco Apt GPG Key
+  ansible.builtin.get_url:
+    url: "{{ falco_apt_key_url }}"
+    dest: /etc/apt/keyrings/falco.asc
+    mode: "0644"
+
+- name: Add Falco Apt Repository
+  ansible.builtin.apt_repository:
+    repo: "{{ falco_apt_repo }}"
+    state: present
+    filename: falcosecurity
+
+- name: Install Falco Package (Includes Modern eBPF Driver)
+  ansible.builtin.apt:
+    name: falco
+    state: present
+    update_cache: true
+
+- name: Template Falco Main Configuration
+  ansible.builtin.template:
+    src: falco.yaml.j2
+    dest: "{{ falco_config_dir }}/falco.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Falco
+
+- name: Template Falco Custom Rules
+  ansible.builtin.template:
+    src: falco_rules.local.yaml.j2
+    dest: "{{ falco_config_dir }}/falco_rules.local.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Falco
+
+- name: Enable And Start Falco Service
+  ansible.builtin.systemd:
+    name: falco
+    enabled: true
+    state: started
+    daemon_reload: true

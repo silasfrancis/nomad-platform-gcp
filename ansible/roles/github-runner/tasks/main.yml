@@ -1,0 +1,113 @@
+---
+# Registration Tokens Are ~1 Hour-Lived And Fetched Fresh Every Run — Never
+# Stored. The Long-Lived github-bot-pat Secret (Manually Seeded Into
+# Secret Manager Per Francis's Instruction) Is What's Actually Persisted,
+# And Only In Secret Manager, Never On Disk On The VM.
+
+- name: Create Github Runner Group
+  ansible.builtin.group:
+    name: "{{ github_runner_user }}"
+    system: true
+
+- name: Create Github Runner User
+  ansible.builtin.user:
+    name: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    system: true
+    shell: /bin/bash
+    home: "{{ github_runner_home }}"
+    create_home: true
+
+- name: Download Github Actions Runner Tarball
+  ansible.builtin.get_url:
+    url: "{{ github_runner_download_url }}"
+    dest: "/tmp/actions-runner-{{ github_runner_version }}.tar.gz"
+    mode: "0644"
+
+- name: Extract Runner Tarball Into Runner Home
+  ansible.builtin.unarchive:
+    src: "/tmp/actions-runner-{{ github_runner_version }}.tar.gz"
+    dest: "{{ github_runner_home }}"
+    remote_src: true
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    creates: "{{ github_runner_home }}/run.sh"
+
+- name: Install Runner OS Dependencies
+  ansible.builtin.command: "./bin/installdependencies.sh"
+  args:
+    chdir: "{{ github_runner_home }}"
+    creates: "{{ github_runner_home }}/.dependencies_installed"
+
+- name: Mark Dependencies As Installed
+  ansible.builtin.file:
+    path: "{{ github_runner_home }}/.dependencies_installed"
+    state: touch
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    mode: "0644"
+
+- name: Set Ownership Of Runner Home
+  ansible.builtin.file:
+    path: "{{ github_runner_home }}"
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_user }}"
+    recurse: true
+
+- name: Read Github Bot PAT From Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret={{ secret_github_bot_pat }} --project={{ gcp_project_id }}
+  register: github_pat_read
+  no_log: true
+  changed_when: false
+
+- name: Check If Runner Is Already Registered
+  ansible.builtin.stat:
+    path: "{{ github_runner_home }}/.runner"
+  register: runner_registered_check
+
+- name: Request A Fresh Runner Registration Token From GitHub
+  ansible.builtin.uri:
+    url: "https://api.github.com/repos/{{ github_owner }}/{{ github_repo }}/actions/runners/registration-token"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ github_pat_read.stdout }}"
+      Accept: "application/vnd.github+json"
+    status_code: 201
+    return_content: true
+  register: github_registration_token_response
+  no_log: true
+  when: not runner_registered_check.stat.exists
+
+- name: Configure The Runner (Only If Not Already Registered)
+  ansible.builtin.command: >
+    ./config.sh --url https://github.com/{{ github_owner }}/{{ github_repo }}
+    --token {{ github_registration_token_response.json.token }}
+    --name {{ github_runner_name }}
+    --labels self-hosted,mgmt-vm
+    --unattended
+  args:
+    chdir: "{{ github_runner_home }}"
+  become_user: "{{ github_runner_user }}"
+  when: not runner_registered_check.stat.exists
+  no_log: true
+  changed_when: true
+
+- name: Check If Runner Systemd Service Is Already Installed
+  ansible.builtin.command: "./svc.sh status"
+  args:
+    chdir: "{{ github_runner_home }}"
+  register: runner_svc_status
+  failed_when: false
+  changed_when: false
+
+- name: Install And Start The Runner Service (Only If Not Already Installed)
+  ansible.builtin.command: "{{ item }}"
+  args:
+    chdir: "{{ github_runner_home }}"
+  loop:
+    - "./svc.sh install"
+    - "./svc.sh start"
+  when: "'active' not in runner_svc_status.stdout"
+  changed_when: true

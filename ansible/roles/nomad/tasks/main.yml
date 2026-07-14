@@ -1,0 +1,142 @@
+---
+# NOTE: Namespaces + ACL Policies Are Handled By The Terraform
+# service-config Layer, Not By Ansible. This Role Only Turns The
+# acl.enabled Feature Flag On.
+#
+# Writes Three Files Into /etc/nomad.d/, Merged By Nomad's Directory-Based
+# Config Loading: nomad.hcl (Shared Base) Plus Either server.hcl Or
+# client.hcl Depending On nomad_mode. As With The consul Role,
+# nomad_datacenter/retry_join/bootstrap_expect Only Render When Group Vars
+# Are In Scope (Direct Runs); The GCP Startup Script Fills Them In
+# Separately When This Role Is Baked Via Packer For nomad-client-mig.
+
+- name: Create Nomad Group
+  ansible.builtin.group:
+    name: "{{ nomad_group }}"
+    system: true
+
+- name: Create Nomad User
+  ansible.builtin.user:
+    name: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ nomad_data_dir }}"
+    create_home: false
+
+- name: Create Nomad Directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0750"
+  loop:
+    - "{{ nomad_config_dir }}"
+    - "{{ nomad_data_dir }}"
+    - "{{ nomad_log_dir }}"
+
+- name: Download And Unarchive Nomad Binary
+  ansible.builtin.unarchive:
+    src: "{{ nomad_download_url }}"
+    dest: "{{ nomad_bin_dir }}"
+    remote_src: true
+    mode: "0755"
+    creates: "{{ nomad_bin_dir }}/nomad"
+
+# --- TLS: Unlike Consul, Nomad's Cert Isn't Per-Environment — Dev And
+# Prod Are Two Fully Isolated Clusters That Never Federate, So Both Share
+# One region = "global" Cert (Generated Once By
+# playbooks/pki-bootstrap.yml). Safe To Copy Directly Regardless Of Mode
+# (Direct Run Or Packer Bake) Since There's No Env-Specific Material Here.
+- name: Create Nomad TLS Directory
+  ansible.builtin.file:
+    path: "{{ nomad_tls_dir }}"
+    state: directory
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0750"
+
+- name: Copy Nomad CA Certificate
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../pki-local/nomad-ca-cert.pem"
+    dest: "{{ nomad_tls_dir }}/ca.pem"
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0644"
+
+- name: Copy Nomad Server/Client Certificate
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../pki-local/nomad-{{ nomad_mode }}-cert.pem"
+    dest: "{{ nomad_tls_dir }}/cert.pem"
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0644"
+
+- name: Copy Nomad Server/Client Private Key
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../pki-local/nomad-{{ nomad_mode }}-key.pem"
+    dest: "{{ nomad_tls_dir }}/key.pem"
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0600"
+
+- name: Template Base Nomad Configuration
+  ansible.builtin.template:
+    src: nomad.hcl.j2
+    dest: "{{ nomad_config_dir }}/nomad.hcl"
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0640"
+  register: nomad_base_config_result
+
+- name: Template Nomad Server Configuration
+  ansible.builtin.template:
+    src: nomad-server.hcl.j2
+    dest: "{{ nomad_config_dir }}/server.hcl"
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0640"
+  register: nomad_server_config_result
+  when: nomad_mode == 'server'
+
+- name: Template Nomad Client Configuration
+  ansible.builtin.template:
+    src: nomad-client.hcl.j2
+    dest: "{{ nomad_config_dir }}/client.hcl"
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0640"
+  register: nomad_client_config_result
+  when: nomad_mode == 'client'
+
+- name: Template Nomad Systemd Unit
+  ansible.builtin.template:
+    src: nomad.service.j2
+    dest: /etc/systemd/system/nomad.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Systemd Daemon
+
+- name: Enable Nomad Service
+  ansible.builtin.systemd:
+    name: nomad
+    enabled: true
+    daemon_reload: true
+
+- name: Start Nomad (Only When Running Directly Against A Real Host)
+  ansible.builtin.systemd:
+    name: nomad
+    state: started
+  when: nomad_datacenter is defined
+
+- name: Restart Nomad If Config Changed (Only When Already Started)
+  ansible.builtin.systemd:
+    name: nomad
+    state: restarted
+  when:
+    - nomad_datacenter is defined
+    - nomad_base_config_result.changed
+    - nomad_server_config_result.changed
+    - nomad_client_config_result.changed

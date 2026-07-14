@@ -1,0 +1,24 @@
+---
+# Run Against: role_mgmt Group (Dynamic Inventory). mgmt-vm Has No env
+# Label, So dev.yml/prod.yml Group Vars Never Apply Here — Correct, Since
+# Vault/Octopus/The Runner Are Environment-Independent Singletons.
+#
+# OPEN ITEM: A grafana Role Isn't Built Yet — Add It Here Once It Exists.
+# Grafana Itself Needs No Bootstrap-Level Ansible Beyond Package Install +
+# A Static datasources.yml (It Queries Both dev/prod Prometheus Via A
+# Datasource Variable Switcher At The Dashboard Level, Not At Install
+# Time), So It Should Be A Fairly Small Addition When You're Ready For It.
+
+- name: Configure The Management VM
+  hosts: role_mgmt
+  become: true
+  vars:
+    docker_extra_group_users: ["gh-runner"]
+    traefik_mode: internal
+  roles:
+    - common
+    - vault
+    - github-runner
+    - docker
+    - octopus
+    - traefik

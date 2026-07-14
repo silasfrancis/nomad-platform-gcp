@@ -1,0 +1,15 @@
+---
+# Run Against: role_nomad_server Group (Dynamic Inventory — Covers Both
+# dev And prod Server Nodes; dev.yml/prod.yml Group Vars Apply Per-Host
+# Automatically Based On Each Instance's env Label).
+
+- name: Configure Nomad Server Nodes
+  hosts: role_nomad_server
+  become: true
+  vars:
+    consul_mode: server
+    nomad_mode: server
+  roles:
+    - common
+    - consul
+    - nomad

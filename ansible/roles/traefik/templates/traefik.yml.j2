@@ -1,0 +1,57 @@
+# Managed By Ansible (traefik Role) — traefik_mode: {{ traefik_mode }}
+
+log:
+  filePath: "{{ traefik_log_dir }}/traefik.log"
+  level: INFO
+
+entryPoints:
+  web:
+    address: ":{{ traefik_http_port }}"
+{% if traefik_mode in ['dev-public', 'prod-public'] %}
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+{% endif %}
+  websecure:
+    address: ":{{ traefik_https_port }}"
+
+{% if traefik_mode in ['dev-public', 'prod-public'] %}
+# Public Modes: Consul Catalog Provider — Reads Service Tags From This
+# Environment's Local Consul Agent To Build Routing Rules Automatically.
+# No Config Change Needed When A New Nomad Job Is Deployed.
+providers:
+  consulCatalog:
+    endpoint:
+      address: "127.0.0.1:8500"
+    exposedByDefault: false
+    prefix: "traefik"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "{{ traefik_acme_email }}"
+      storage: "{{ traefik_config_dir }}/acme.json"
+      httpChallenge:
+        entryPoint: web
+{% else %}
+# Internal Mode: Static File Provider — A Small, Fixed Set Of Internal
+# Tools (Vault, Nomad, Consul, Octopus, Grafana), Not Worth Dynamic
+# Catalog Discovery.
+providers:
+  file:
+    directory: "{{ traefik_dynamic_config_dir }}"
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "{{ traefik_acme_email }}"
+      storage: "{{ traefik_config_dir }}/acme.json"
+      dnsChallenge:
+        provider: cloudflare
+{% endif %}
+
+api:
+  dashboard: false

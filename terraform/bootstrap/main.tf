@@ -164,17 +164,17 @@ module "secrets" {
   # the module's validation block will fail the plan if you do.
   secrets = {
     # "new-service-token" = {
-    #   labels = { purpose = "new-service", tier = "app" }
+    #   labels = { purpose = "new-service", tier = "admin" }
     # }
   }
 
-  root_tier_accessor_members  = [
-    module.service_account.service_accounts["management-vm-sa"].member
-  ]
-  admin_tier_accessor_members = [
-    module.service_account.service_accounts["management-vm-sa"].member
-  ]
-  app_tier_accessor_members   = [
-    module.service_account.service_accounts["nomad-client-sa"].member
-  ]
+  # This implementation was done to ensure that in the case where a newly created vm or service account
+  # will need acceess to a GCP secret, it can be plugged in here. However, service accounts within the original
+  # project scope will not need access to any GCP secret.
+  # No access will be given to any service account created in this bootstrap module, 
+  # because no vm requires access to any of these secrets (root/admin secrets) and 
+  # application/runtime secrets will be accessed via hashicorp vault
+  root_tier_accessor_members  = []
+  admin_tier_accessor_members = []
+  app_tier_accessor_members   = []
 }

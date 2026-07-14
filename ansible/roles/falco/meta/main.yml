@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: falco
+  description: >
+    Installs Falco (modern eBPF driver) with a custom rules override file
+    (falco_rules.local.yaml) covering privilege escalation, in-container
+    shells, unexpected outbound connections, sensitive file reads, crypto
+    mining, and writes below /etc. No per-instance config needed.
+  min_ansible_version: "2.15"
+
+dependencies:
+  - common
