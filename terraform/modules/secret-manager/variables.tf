@@ -39,7 +39,7 @@ variable "default_secrets" {
 
     "postgres-admin-password" = { labels = { purpose = "database", tier = "admin" } }
 
-    "github-bot-pat" = { labels = { purpose = "cicd", tier = "admin" } }
+    "github-nomad-repo-pat" = { labels = { purpose = "cicd", tier = "admin" } }
   }
 }
 

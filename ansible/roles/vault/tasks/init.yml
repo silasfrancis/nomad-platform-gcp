@@ -20,7 +20,7 @@
   ansible.builtin.set_fact:
     vault_status: "{{ vault_status_raw.stdout | from_json }}"
 
-- name: Run Vault Operator Init (Only If Not Already Initialized)
+- name: Run Vault Operator Init
   ansible.builtin.command: vault operator init -format=json
   register: vault_init_raw
   when: not vault_status.initialized
@@ -61,7 +61,7 @@
     VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
     VAULT_SKIP_VERIFY: "true"
 
-- name: Assert Vault Is Unsealed (GCP KMS Auto-Unseal Should Have Handled This)
+- name: Assert Vault Is Unsealed
   ansible.builtin.assert:
     that:
       - (vault_status_final.stdout | from_json).sealed == false
@@ -70,7 +70,7 @@
       in vault.hcl and the KMS key's IAM bindings before proceeding to
       Terraform's service-config layer.
 
-- name: Read Root Token From Secret Manager (Needed On Re-Runs Where Init Already Happened Previously)
+- name: Read Root Token From Secret Manager
   ansible.builtin.command: >
     gcloud secrets versions access latest
     --secret={{ secret_vault_root_token }} --project={{ gcp_project_id }}
@@ -95,7 +95,7 @@
     VAULT_SKIP_VERIFY: "true"
     VAULT_TOKEN: "{{ vault_effective_root_token }}"
 
-- name: Enable File Audit Device (Only If Not Already Enabled)
+- name: Enable File Audit Device
   ansible.builtin.command: vault audit enable file file_path={{ vault_log_dir }}/audit.log
   when: (vault_audit_list.stdout | from_json) == {}
   no_log: true
