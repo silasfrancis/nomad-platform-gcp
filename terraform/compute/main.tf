@@ -135,8 +135,6 @@ locals {
   nomad_client_startup_script        = file("${path.module}/startup-scripts/nomad-client-startup.sh")
   nomad_client_spot_shutdown_script  = file("${path.module}/startup-scripts/nomad-client-spot-shutdown.sh")
 
-  # nomad_drain_shutdown_script <<-EOT ... EOT — REMOVED, replaced by
-  # nomad_client_spot_shutdown_script above.
 
   all_migs = {
     "nomad-dev-ondemand" = {
