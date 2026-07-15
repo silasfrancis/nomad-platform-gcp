@@ -1,0 +1,55 @@
+# Managed By Ansible (octopus Role) — Baked From Octopus's Own Reference
+# Docker Compose Setup (octopus.com/docs/installation/octopus-server-linux-container,
+# hub.docker.com/r/octopusdeploy/octopusdeploy), Adapted To Bind-Mount
+# Every Volume Onto The sql-data Persistent Disk ({{ octopus_data_dir }})
+# Rather Than Docker's Default Named Volumes — Named Volumes Would Land On
+# The Boot Disk, Which Breaks The Durability/Backup-Independence This
+# Project Deliberately Built Around Separate Persistent Disks.
+#
+# Values Come From .env In This Same Directory (Written By tasks/main.yml).
+
+services:
+  mssql:
+    image: ${SQL_IMAGE}
+    container_name: {{ mssql_container_name }}
+    restart: unless-stopped
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      ACCEPT_EULA: ${ACCEPT_EULA}
+    ports:
+      - "127.0.0.1:1433:1433"
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-U", "sa", "-P", "${MSSQL_SA_PASSWORD}", "-Q", "select 1"]
+      interval: 10s
+      retries: 10
+    volumes:
+      - {{ octopus_data_dir }}/mssql:/var/opt/mssql
+
+  octopus-server:
+    image: octopusdeploy/octopusdeploy:${OCTOPUS_SERVER_TAG}
+    container_name: {{ octopus_container_name }}
+    restart: unless-stopped
+    privileged: ${PRIVILEGED}
+    user: ${USER}
+    environment:
+      ACCEPT_EULA: ${ACCEPT_OCTOPUS_EULA}
+      OCTOPUS_SERVER_NODE_NAME: ${OCTOPUS_SERVER_NODE_NAME}
+      DB_CONNECTION_STRING: ${DB_CONNECTION_STRING}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      MASTER_KEY: ${MASTER_KEY}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      DISABLE_DIND: ${DISABLE_DIND}
+    ports:
+      - "127.0.0.1:{{ octopus_web_port }}:8080"
+      - "{{ octopus_tentacle_port }}:10943"
+    depends_on:
+      - mssql
+    volumes:
+      - {{ octopus_data_dir }}/repository:/repository
+      - {{ octopus_data_dir }}/artifacts:/artifacts
+      - {{ octopus_data_dir }}/taskLogs:/taskLogs
+      - {{ octopus_data_dir }}/cache:/cache
+      - {{ octopus_data_dir }}/import:/import
+      - {{ octopus_data_dir }}/eventExports:/eventExports

@@ -16,7 +16,7 @@
   tags: [privilege_escalation, custom]
 
 - rule: Shell Spawned In Container
-  desc: Detects an interactive shell spawned inside a running container
+  desc: Detects an interactive shell spawned inside a running container — common post-exploitation indicator
   condition: >
     container and
     proc.name in (bash, sh, dash, zsh) and
@@ -60,7 +60,7 @@
   condition: >
     container and
     outbound and
-    fd.sport in (3333, 4444, 14444, 5555, 7777, 8888, 1800, 25, 70, 302, 303)
+    fd.sport in (3333, 4444, 14444, 5555, 7777, 8888)
   output: >
     Suspected crypto mining connection
     (command=%proc.cmdline connection=%fd.name container=%container.name image=%container.image.repository)

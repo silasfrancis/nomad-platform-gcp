@@ -1,0 +1,22 @@
+#!/bin/bash
+# Managed by Ansible (vault role, backup.yml).
+# Runs nightly via vault-backup.timer. Fetches a fresh Vault token from
+# Secret Manager each run rather than caching it on disk.
+
+set -euo pipefail
+
+TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
+SNAPSHOT_FILE="/tmp/vault-snapshot-${TIMESTAMP}.snap"
+
+export VAULT_ADDR="https://{{ vault_internal_dns }}:8200"
+export VAULT_SKIP_VERIFY="true"
+export VAULT_TOKEN="$(gcloud secrets versions access latest --secret={{ secret_vault_root_token }} --project={{ gcp_project_id }})"
+
+echo "$(date -u +%FT%TZ): taking Vault Raft snapshot"
+vault operator raft snapshot save "${SNAPSHOT_FILE}"
+
+echo "$(date -u +%FT%TZ): uploading to gs://{{ vault_backup_gcs_bucket }}/{{ vault_backup_gcs_prefix }}/"
+gsutil cp "${SNAPSHOT_FILE}" "gs://{{ vault_backup_gcs_bucket }}/{{ vault_backup_gcs_prefix }}/vault-snapshot-${TIMESTAMP}.snap"
+
+rm -f "${SNAPSHOT_FILE}"
+echo "$(date -u +%FT%TZ): done"

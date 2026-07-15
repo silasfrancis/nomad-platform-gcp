@@ -22,3 +22,8 @@ vault_gcp_kms_crypto_key: "vault-unseal-key"
 
 vault_listener_address: "0.0.0.0:8200"
 vault_ui_enabled: true
+
+# Backup
+vault_backup_gcs_bucket: "platform-artifacts"
+vault_backup_gcs_prefix: "vault-snapshots"
+vault_backup_schedule: "*-*-* 02:00:00"

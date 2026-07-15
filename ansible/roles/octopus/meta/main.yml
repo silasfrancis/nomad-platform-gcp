@@ -2,12 +2,13 @@
 galaxy_info:
   role_name: octopus
   description: >
-    Deploys SQL Server Express (Octopus's database) via Docker Compose,
-    installs and configures Octopus Deploy Server, and starts it via an
-    Ansible-managed systemd unit. Environments, projects, and deployment
-    targets are created by the Terraform service-config layer, not this
-    role. Mssql is folded in here rather than being a separate role since
-    nothing else consumes SQL Server Express.
+    Runs Octopus Deploy Server and SQL Server Express as two containers
+    in one Docker Compose file, per Octopus's own official Linux
+    installation docs (Linux has no native binary install — container
+    only). Mssql is folded in here rather than being a separate role
+    since nothing else consumes SQL Server Express. Environments,
+    projects, and deployment targets are created by the Terraform
+    service-config layer, not this role.
   min_ansible_version: "2.15"
 
 dependencies:

@@ -1,0 +1,6 @@
+[Unit]
+Description=Vault Raft Snapshot Backup
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/vault-backup.sh

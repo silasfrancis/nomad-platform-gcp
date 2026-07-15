@@ -1,4 +1,4 @@
 ---
-- name: Reload Systemd Daemon
-  ansible.builtin.systemd:
-    daemon_reload: true
+# No Handlers — Both Containers Are Managed Entirely By Docker Compose
+# (docker compose up -d In tasks/main.yml), Not Systemd. Compose Itself
+# Detects Config Changes On Re-Run.

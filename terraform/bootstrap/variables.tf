@@ -20,3 +20,7 @@ variable "project_number" {
 variable "environment" {
   type        = string
 }
+
+variable "platform_admin_email" {
+  type = string
+}

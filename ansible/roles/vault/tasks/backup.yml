@@ -1,0 +1,52 @@
+---
+# Per Architecture Doc Section 10: Daily 02:00 UTC, GCS
+# platform-artifacts/vault-snapshots/, 30-Day Retention Via GCS Lifecycle
+# Rule (Not Enforced Here — This Script Only Takes And Uploads The
+# Snapshot).
+#
+# KNOWN SIMPLIFICATION: The Backup Script Below Authenticates Using The
+# vault-root-token Secret — Same Token The One-Time Init Playbook Wrote.
+# Using Root For A Routine Nightly Job Is Broader Than It Needs To Be; A
+# Scoped Policy/Token With Only sys/storage/raft/snapshot Read Access
+# Would Be Better, But That Requires The Terraform service-config Layer
+# (Which Manages Vault Policies) To Exist First. Revisit Once That Layer
+# Is Built.
+
+- name: Ensure Backup Script Directory Exists
+  ansible.builtin.file:
+    path: /usr/local/bin
+    state: directory
+    mode: "0755"
+
+- name: Template Vault Backup Script
+  ansible.builtin.template:
+    src: vault-backup.sh.j2
+    dest: /usr/local/bin/vault-backup.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Template Vault Backup Systemd Service
+  ansible.builtin.template:
+    src: vault-backup.service.j2
+    dest: /etc/systemd/system/vault-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Systemd Daemon
+
+- name: Template Vault Backup Systemd Timer
+  ansible.builtin.template:
+    src: vault-backup.timer.j2
+    dest: /etc/systemd/system/vault-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Systemd Daemon
+
+- name: Enable And Start Vault Backup Timer
+  ansible.builtin.systemd:
+    name: vault-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

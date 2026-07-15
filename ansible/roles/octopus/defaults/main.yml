@@ -1,14 +1,35 @@
 ---
-# mgmt-vm Only. Mssql (Octopus's Database) Is Folded Into This Role As
-# Steps 1-2 Rather Than Being A Separate Role, Per The Project's Role
-# Layout — Nothing Else Consumes SQL Server Express.
+# Octopus Deploy Has No Native Linux Binary Install — Confirmed From
+# https://octopus.com/docs/installation/octopus-server-linux-container:
+# Linux Is Container-Only. The Octopus.Server CLI (create-instance,
+# configure, database, service) Is The WINDOWS Installation Method — An
+# Earlier Version Of This Role Incorrectly Assumed Linux Shared It. Both
+# Containers (mssql, octopus-server) Run From One Docker Compose File,
+# Per Octopus's Own Reference Compose Setup.
 
-mssql_compose_dir: /opt/mssql
-mssql_data_dir: /opt/mssql/data
+octopus_compose_dir: /opt/octopus
+octopus_data_dir: /opt/octopus/data
+
 mssql_image: "mcr.microsoft.com/mssql/server:2022-latest"
 mssql_container_name: "octopus-mssql"
 
-octopus_instance: "OctopusServer"
-octopus_home_dir: "/etc/octopus/OctopusServer"
-octopus_bin: "/opt/octopus/OctopusServer/Octopus.Server"
+octopus_server_tag: "latest"
+octopus_container_name: "octopus-server"
 octopus_web_port: 8080
+octopus_tentacle_port: 10943
+
+octopus_node_name: "mgmt-vm"
+octopus_admin_username: "admin"
+octopus_admin_email: "ops@lefrancis.org"
+
+# Docker-In-Docker Powers Octopus's Worker Container Support — Not Used In
+# This Project (No Worker Containers Planned), So Disabled. This Also
+# Means privileged Can Stay False; It's Only Required When DinD Is On.
+octopus_disable_dind: "Y"
+octopus_privileged: "false"
+octopus_run_as_user: "octopus"
+
+# Backup (Unchanged From Before)
+mssql_backup_gcs_bucket: "platform-artifacts"
+mssql_backup_gcs_prefix: "sql-backups"
+mssql_backup_schedule: "*-*-* 03:00:00"

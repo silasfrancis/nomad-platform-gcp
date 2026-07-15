@@ -16,6 +16,9 @@ gcp_project_id: "CHANGEME-project-id"
 secret_vault_root_token: "vault-root-token"
 secret_vault_recovery_keys: "vault-recovery-keys"
 secret_octopus_sql_admin_password: "octopus-sql-admin-password"
+secret_octopus_admin_password: "octopus-admin-password"
+secret_octopus_master_key: "octopus-master-key"
+secret_octopus_admin_api_key: "octopus-admin-api-key"
 secret_github_bot_pat: "github-bot-pat"
 
 # NEW SECRET — Not Yet In terraform/bootstrap's default_secrets Map. Add

@@ -1,9 +1,16 @@
 ---
 # Full Bootstrap — Chains mgmt.yml, nomad-servers.yml, And
-# nomad-clients.yml In Order. Deliberately Does NOT Include vault-init.yml
-# — That's A Separate One-Time Step Run By Hand After This, Per Its Own
-# Header Comment (Needs Vault Already Up And Configured First, Which This
+# nomad-clients.yml In Order (Order Between These Three No Longer Matters
+# — Each Fetches Everything It Needs Directly From Secret Manager, So
+# There's No Cross-Playbook File Handoff Anymore). Deliberately Does NOT
+# Include vault-init.yml — That's A Separate One-Time Step Run By Hand
+# After This (Needs Vault Already Up And Configured First, Which This
 # Playbook Does Provide Via mgmt.yml).
+#
+# REAL PREREQUISITE: scripts/generate-and-push-pki.sh Must Have Been Run
+# At Least Once, Ever, Before Any Of This — Every Role Fetches Its TLS
+# Material Directly From Secret Manager And Has Nothing To Fall Back To
+# If Those Secrets Don't Exist Yet.
 #
 # Run With: ansible-playbook playbooks/site.yml
 # Then, Once: ansible-playbook playbooks/vault-init.yml

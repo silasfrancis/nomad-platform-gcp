@@ -1,0 +1,28 @@
+#!/bin/bash
+# Managed by Ansible (octopus role, backup.yml).
+# Runs nightly via mssql-backup.timer. Reads the SA password fresh from
+# Secret Manager each run.
+
+set -euo pipefail
+
+TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
+BACKUP_FILE="/tmp/octopus-sql-${TIMESTAMP}.bak"
+GZ_FILE="${BACKUP_FILE}.gz"
+
+SA_PASSWORD="$(gcloud secrets versions access latest --secret={{ secret_octopus_sql_admin_password }} --project={{ gcp_project_id }})"
+
+echo "$(date -u +%FT%TZ): backing up OctopusDeploy database"
+docker exec {{ mssql_container_name }} /opt/mssql-tools/bin/sqlcmd \
+  -S localhost -U sa -P "${SA_PASSWORD}" \
+  -Q "BACKUP DATABASE [OctopusDeploy] TO DISK = N'/var/opt/mssql/octopus-sql-${TIMESTAMP}.bak'"
+
+docker cp "{{ mssql_container_name }}:/var/opt/mssql/octopus-sql-${TIMESTAMP}.bak" "${BACKUP_FILE}"
+docker exec {{ mssql_container_name }} rm -f "/var/opt/mssql/octopus-sql-${TIMESTAMP}.bak"
+
+gzip "${BACKUP_FILE}"
+
+echo "$(date -u +%FT%TZ): uploading to gs://{{ mssql_backup_gcs_bucket }}/{{ mssql_backup_gcs_prefix }}/"
+gsutil cp "${GZ_FILE}" "gs://{{ mssql_backup_gcs_bucket }}/{{ mssql_backup_gcs_prefix }}/"
+
+rm -f "${GZ_FILE}"
+echo "$(date -u +%FT%TZ): done"

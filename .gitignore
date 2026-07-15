@@ -32,3 +32,5 @@ __pycache__/
 scripts/output
 state.config
 secret*.tfvars
+pki-local/
+*.retry

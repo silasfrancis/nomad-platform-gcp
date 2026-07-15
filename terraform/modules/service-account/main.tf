@@ -1,6 +1,6 @@
 locals {
   service_accounts = {
-    "nomad-server-sa" = {
+    "nomad-server-sa-prod" = {
       display_name  = "Nomad Server SA"
       description   = "Attached to Nomad server VMs. Logging and monitoring only."
       # Project-level roles assigned here provide baseline functionality (e.g., logging and monitoring).
@@ -12,7 +12,23 @@ locals {
         "roles/monitoring.metricWriter",
       ]
     }
-    "nomad-client-sa" = {
+    "nomad-server-sa-dev" = {
+      display_name  = "Nomad Server SA"
+      description   = "Attached to Nomad server VMs. Logging and monitoring only."
+      project_roles = [
+        "roles/logging.logWriter",
+        "roles/monitoring.metricWriter",
+      ]
+    }
+    "nomad-client-sa-prod" = {
+      display_name  = "Nomad Client SA"
+      description   = "Attached to Nomad client MIG nodes."
+      project_roles = [
+        "roles/logging.logWriter",
+        "roles/monitoring.metricWriter",
+      ]
+    }
+    "nomad-client-sa-dev" = {
       display_name  = "Nomad Client SA"
       description   = "Attached to Nomad client MIG nodes."
       project_roles = [
@@ -28,7 +44,12 @@ locals {
         "roles/monitoring.metricWriter",
       ]
     }
-    "traefik-vm-sa" = {
+    "traefik-vm-sa-prod" = {
+      display_name  = "Management VM SA"
+      description   = "Attached to mgmt VM. Covers Vault, GitHub runner, Octopus, Grafana, internal Traefik."
+      project_roles = []
+    }
+    "traefik-vm-sa-dev" = {
       display_name  = "Management VM SA"
       description   = "Attached to mgmt VM. Covers Vault, GitHub runner, Octopus, Grafana, internal Traefik."
       project_roles = []

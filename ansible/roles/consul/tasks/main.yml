@@ -46,9 +46,13 @@
     mode: "0755"
     creates: "{{ consul_bin_dir }}/consul"
 
-# --- TLS: CA Is Public, Safe To Copy Regardless Of Mode (Direct Run Or
-# Packer Bake). Generated Once By playbooks/pki-bootstrap.yml Into
-# ../pki-local On The Control Node. ---
+# --- TLS: Everything Fetched Directly From Secret Manager — Generated
+# Centrally By scripts/generate-and-push-pki.sh (Run From Your Laptop, Not
+# Ansible). Uniform Pattern Regardless Of Direct Run Or Packer Bake: This
+# Host Fetches What It Needs Itself, No Local-File Distribution Involved.
+# Requires gcloud Installed (common_install_gcloud_cli: true) And This
+# Host's Service Account To Have secretAccessor On The Secrets Fetched
+# Below.
 - name: Create Consul TLS Directory
   ansible.builtin.file:
     path: "{{ consul_tls_dir }}"
@@ -57,53 +61,80 @@
     group: "{{ consul_group }}"
     mode: "0750"
 
-- name: Copy Consul CA Certificate
+- name: Fetch Consul CA Certificate From Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=consul-ca-cert --project={{ gcp_project_id }}
+  register: consul_ca_fetch
+  changed_when: false
+
+- name: Write Consul CA Certificate
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../pki-local/consul-ca-cert.pem"
+    content: "{{ consul_ca_fetch.stdout }}"
     dest: "{{ consul_tls_dir }}/ca.pem"
     owner: "{{ consul_user }}"
     group: "{{ consul_group }}"
     mode: "0644"
 
-# --- Server/Client Cert + Key: Only Copied Directly When consul_datacenter
-# Is In Scope (Direct Runs Against Real Hosts — Server Nodes Always, Or A
-# By-Hand Run Against A Live Client). When This Role Is Baked Via Packer
-# For The Shared nomad-client-mig Image, consul_datacenter Is Undefined
-# (No Env-Specific Group Vars In Scope For The Build VM) — The GCP Startup
-# Script Fetches The Per-Environment Consul Client Cert/Key From Secret
-# Manager At Real Boot Instead, Since The Shared Image Can't Contain
-# Env-Specific Material.
-- name: Copy Consul Server/Client Certificate (Direct Runs Only)
+# --- Server/Client Cert + Key + Gossip Key: Only Fetched When
+# consul_datacenter Is In Scope (Direct Runs Against Real Hosts — Server
+# Nodes Always, Or A By-Hand Run Against A Live Client). When This Role Is
+# Baked Via Packer For The Shared nomad-client-mig Image, consul_datacenter
+# Is Undefined (No Env-Specific Group Vars For The Build VM) — The GCP
+# Startup Script Fetches These Same Per-Environment Secrets Itself At Real
+# Boot Instead (Via The Instance's Own Service Account Token, Not gcloud),
+# Since The Shared Image Can't Contain Env-Specific Material.
+- name: Fetch Consul Server/Client Certificate From Secret Manager (Direct Runs Only)
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=consul-{{ consul_mode }}-cert-{{ consul_datacenter | regex_replace('^dc-', '') }}
+    --project={{ gcp_project_id }}
+  register: consul_leaf_cert_fetch
+  changed_when: false
+  when: consul_datacenter is defined
+
+- name: Fetch Consul Server/Client Private Key From Secret Manager (Direct Runs Only)
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=consul-{{ consul_mode }}-key-{{ consul_datacenter | regex_replace('^dc-', '') }}
+    --project={{ gcp_project_id }}
+  register: consul_leaf_key_fetch
+  no_log: true
+  changed_when: false
+  when: consul_datacenter is defined
+
+- name: Write Consul Server/Client Certificate (Direct Runs Only)
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../pki-local/consul-{{ consul_mode }}-cert-{{ consul_datacenter | regex_replace('^dc-', '') }}.pem"
+    content: "{{ consul_leaf_cert_fetch.stdout }}"
     dest: "{{ consul_tls_dir }}/cert.pem"
     owner: "{{ consul_user }}"
     group: "{{ consul_group }}"
     mode: "0644"
   when: consul_datacenter is defined
 
-- name: Copy Consul Server/Client Private Key (Direct Runs Only)
+- name: Write Consul Server/Client Private Key (Direct Runs Only)
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../pki-local/consul-{{ consul_mode }}-key-{{ consul_datacenter | regex_replace('^dc-', '') }}.pem"
+    content: "{{ consul_leaf_key_fetch.stdout }}"
     dest: "{{ consul_tls_dir }}/key.pem"
     owner: "{{ consul_user }}"
     group: "{{ consul_group }}"
     mode: "0600"
+  no_log: true
   when: consul_datacenter is defined
 
-- name: Read Consul Gossip Encryption Key From Secret Manager (Direct Runs Only)
+- name: Fetch Consul Gossip Encryption Key From Secret Manager (Direct Runs Only)
   ansible.builtin.command: >
     gcloud secrets versions access latest
     --secret=consul-gossip-key-{{ consul_datacenter | regex_replace('^dc-', '') }}
     --project={{ gcp_project_id }}
-  register: consul_gossip_key_read
+  register: consul_gossip_key_fetch
   no_log: true
   changed_when: false
   when: consul_datacenter is defined
 
 - name: Set Consul Gossip Key Fact (Direct Runs Only)
   ansible.builtin.set_fact:
-    consul_gossip_key: "{{ consul_gossip_key_read.stdout }}"
+    consul_gossip_key: "{{ consul_gossip_key_fetch.stdout }}"
   no_log: true
   when: consul_datacenter is defined
 

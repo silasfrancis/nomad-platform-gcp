@@ -1,0 +1,9 @@
+[Unit]
+Description=Nightly Octopus SQL Server Backup
+
+[Timer]
+OnCalendar={{ mssql_backup_schedule }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -5,11 +5,6 @@
     dest: /etc/apt/keyrings/falco.asc
     mode: "0644"
 
-- name: Create Falco APT Keyring
-  ansible.builtin.command:
-    cmd: gpg --dearmor -o {{ falco_gpg_key_ring }}
-    creates: "{{ falco_gpg_key_ring }}"
-
 - name: Add Falco Apt Repository
   ansible.builtin.apt_repository:
     repo: "{{ falco_apt_repo }}"

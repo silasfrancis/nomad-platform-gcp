@@ -44,11 +44,12 @@
     mode: "0755"
     creates: "{{ nomad_bin_dir }}/nomad"
 
-# --- TLS: Unlike Consul, Nomad's Cert Isn't Per-Environment — Dev And
-# Prod Are Two Fully Isolated Clusters That Never Federate, So Both Share
-# One region = "global" Cert (Generated Once By
-# playbooks/pki-bootstrap.yml). Safe To Copy Directly Regardless Of Mode
-# (Direct Run Or Packer Bake) Since There's No Env-Specific Material Here.
+# --- TLS: Everything Fetched Directly From Secret Manager — Generated
+# Centrally By scripts/generate-and-push-pki.sh, Not Ansible. Nomad's Own
+# Cert Isn't Per-Environment (Dev/Prod Never Federate, So Both Share One
+# region = "global" Cert) — But It's Fetched The Same Uniform Way As
+# Everything Else Now, Rather Than Being Special-Cased As "Always Safe To
+# Bake Directly."
 - name: Create Nomad TLS Directory
   ansible.builtin.file:
     path: "{{ nomad_tls_dir }}"
@@ -57,29 +58,73 @@
     group: "{{ nomad_group }}"
     mode: "0750"
 
-- name: Copy Nomad CA Certificate
+- name: Fetch Nomad CA Certificate From Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=nomad-ca-cert --project={{ gcp_project_id }}
+  register: nomad_ca_fetch
+  changed_when: false
+
+- name: Write Nomad CA Certificate
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../pki-local/nomad-ca-cert.pem"
+    content: "{{ nomad_ca_fetch.stdout }}"
     dest: "{{ nomad_tls_dir }}/ca.pem"
     owner: "{{ nomad_user }}"
     group: "{{ nomad_group }}"
     mode: "0644"
 
-- name: Copy Nomad Server/Client Certificate
+- name: Fetch Nomad Server/Client Certificate From Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=nomad-{{ nomad_mode }}-cert --project={{ gcp_project_id }}
+  register: nomad_leaf_cert_fetch
+  changed_when: false
+
+- name: Fetch Nomad Server/Client Private Key From Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=nomad-{{ nomad_mode }}-key --project={{ gcp_project_id }}
+  register: nomad_leaf_key_fetch
+  no_log: true
+  changed_when: false
+
+- name: Write Nomad Server/Client Certificate
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../pki-local/nomad-{{ nomad_mode }}-cert.pem"
+    content: "{{ nomad_leaf_cert_fetch.stdout }}"
     dest: "{{ nomad_tls_dir }}/cert.pem"
     owner: "{{ nomad_user }}"
     group: "{{ nomad_group }}"
     mode: "0644"
 
-- name: Copy Nomad Server/Client Private Key
+- name: Write Nomad Server/Client Private Key
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../pki-local/nomad-{{ nomad_mode }}-key.pem"
+    content: "{{ nomad_leaf_key_fetch.stdout }}"
     dest: "{{ nomad_tls_dir }}/key.pem"
     owner: "{{ nomad_user }}"
     group: "{{ nomad_group }}"
     mode: "0600"
+  no_log: true
+
+# --- Vault's Cert, So Nomad's vault{} Stanza Can Actually Trust It ---
+# Nomad Talks To Vault For Every Workload Identity JWT Auth Exchange —
+# Without This, The TLS Handshake Fails Outright Since Vault's Cert Is
+# Self-Signed And Not In The System's Default CA Trust Store. Fetched
+# The Same Way As Everything Else Now — Directly From Secret Manager,
+# Not Passed Between Hosts By Ansible.
+- name: Fetch Vault Certificate From Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=vault-cert --project={{ gcp_project_id }}
+  register: vault_cert_fetch_for_nomad
+  changed_when: false
+
+- name: Write Vault Certificate (For Nomad's vault{} Stanza To Trust It)
+  ansible.builtin.copy:
+    content: "{{ vault_cert_fetch_for_nomad.stdout }}"
+    dest: "{{ nomad_tls_dir }}/vault-ca.pem"
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0644"
 
 - name: Template Base Nomad Configuration
   ansible.builtin.template:
@@ -138,5 +183,5 @@
   when:
     - nomad_datacenter is defined
     - nomad_base_config_result.changed
-    - nomad_server_config_result.changed
-    - nomad_client_config_result.changed
+      or (nomad_server_config_result | default({'changed': false})).changed
+      or (nomad_client_config_result | default({'changed': false})).changed

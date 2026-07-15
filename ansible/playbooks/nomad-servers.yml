@@ -9,6 +9,7 @@
   vars:
     consul_mode: server
     nomad_mode: server
+    common_install_gcloud_cli: true
   roles:
     - common
     - consul

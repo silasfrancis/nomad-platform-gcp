@@ -15,6 +15,7 @@
   vars:
     docker_extra_group_users: ["gh-runner"]
     traefik_mode: internal
+    common_install_gcloud_cli: true
   roles:
     - common
     - vault

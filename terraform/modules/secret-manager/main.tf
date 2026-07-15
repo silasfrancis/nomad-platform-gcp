@@ -4,22 +4,26 @@ locals {
   secrets = merge(var.default_secrets, var.secrets)
 
   tier_accessor_members = {
-    root  = var.root_tier_accessor_members
-    admin = var.admin_tier_accessor_members
-    app   = var.app_tier_accessor_members
+    root    = var.root_tier_accessor_members
+    platform = var.platform_tier_accessor_members
+    cluster  = var.cluster_tier_accessor_members
   }
 
   # Inject tier-based secretAccessor members into each secret's iam map,
   # while preserving any custom roles (e.g. secretVersionAdder) a secret
   # already defines. Custom secretAccessor entries (if any) are appended
-  # to the tier default rather than overwritten.
+  # to the tier default rather than overwritten. cluster_tier_accessor_members
+  # is deliberately [] at the call site — cluster secrets vary too much in
+  # who actually needs them, so each one carries its own precise iam block
+  # instead of a bulk grant; the tier label is kept purely for grouping in
+  # the secrets_by_tier output.
   secrets_with_iam = {
     for name, secret in local.secrets : name => merge(secret, {
       iam = merge(
         {
           "roles/secretmanager.secretAccessor" = {
             members = concat(
-              lookup(local.tier_accessor_members, lookup(secret.labels, "tier", "app"), []),
+              lookup(local.tier_accessor_members, lookup(secret.labels, "tier", "cluster"), []),
               try(secret.iam["roles/secretmanager.secretAccessor"].members, [])
             )
           }

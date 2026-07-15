@@ -1,0 +1,36 @@
+---
+# Per Architecture Doc Section 10: Daily 03:00 UTC, GCS
+# platform-artifacts/sql-backups/, 30-Day Retention Via GCS Lifecycle Rule.
+
+- name: Template Mssql Backup Script
+  ansible.builtin.template:
+    src: mssql-backup.sh.j2
+    dest: /usr/local/bin/mssql-backup.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Template Mssql Backup Systemd Service
+  ansible.builtin.template:
+    src: mssql-backup.service.j2
+    dest: /etc/systemd/system/mssql-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Systemd Daemon
+
+- name: Template Mssql Backup Systemd Timer
+  ansible.builtin.template:
+    src: mssql-backup.timer.j2
+    dest: /etc/systemd/system/mssql-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Systemd Daemon
+
+- name: Enable And Start Mssql Backup Timer
+  ansible.builtin.systemd:
+    name: mssql-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

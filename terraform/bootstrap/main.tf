@@ -109,11 +109,13 @@ module "gcs_bucket" {
   storage_cmek = module.kms.kms_keys["storage-cmek"].id
   platform_artifacts_creator_members = [
     module.service_account.service_accounts["management-vm-sa"].member,
-    module.service_account.service_accounts["nomad-client-sa"].member
+    module.service_account.service_accounts["nomad-client-sa-prod"].member,
+    module.service_account.service_accounts["nomad-client-sa-dev"].member,
   ]
   platform_artifacts_viewer_members = [
     module.service_account.service_accounts["management-vm-sa"].member,
-    module.service_account.service_accounts["nomad-client-sa"].member
+    module.service_account.service_accounts["nomad-client-sa-prod"].member,
+    module.service_account.service_accounts["nomad-client-sa-dev"].member,
   ]
   cicd_artifacts_creator_members = [
     module.service_account.service_accounts["management-vm-sa"].member
@@ -138,7 +140,8 @@ module "artifact_registry" {
   ]
   artifact_registry_reader_members = [
     module.service_account.service_accounts["management-vm-sa"].member,
-    module.service_account.service_accounts["nomad-client-sa"].member
+    module.service_account.service_accounts["nomad-client-sa-prod"].member,
+    module.service_account.service_accounts["nomad-client-sa-dev"].member,
   ]
   additional_registry_iam = {}
   immutable_tags = true
@@ -148,10 +151,34 @@ module "artifact_registry" {
 
 # Secret Manager
 #
-# Root and admin tier accessors both resolve to management-vm-sa for now —
-# a deliberate cost tradeoff, since the mgmt VM already hosts Vault, Octopus,
+# Root and platform tier accessors both resolve to management-vm-sa — a
+# deliberate cost tradeoff, since the mgmt VM already hosts Vault, Octopus,
 # the GitHub runner, and Grafana. Root tokens are used once during initial
 # setup regardless, so the shared SA doesn't add meaningful risk here.
+#
+# Cluster-tier PKI secrets are defined entirely in var.secrets below, not
+# default_secrets — each carries its own precise iam block, since consumer
+# sets vary per secret (all five cluster SAs, server-only, client-only, or
+# a single environment) in a way a flat tier grant can't safely express.
+
+locals {
+  nomad_server_dev_member  = module.service_account.service_accounts["nomad-server-sa-dev"].member
+  nomad_server_prod_member = module.service_account.service_accounts["nomad-server-sa-prod"].member
+  nomad_client_dev_member  = module.service_account.service_accounts["nomad-client-sa-dev"].member
+  nomad_client_prod_member = module.service_account.service_accounts["nomad-client-sa-prod"].member
+  packer_builder_member    = module.service_account.service_accounts["packer-builder-sa"].member
+  management_vm_member     = module.service_account.service_accounts["management-vm-sa"].member
+
+  # Every Nomad-Cluster-Adjacent SA — Used By The Three Secrets Genuinely
+  # Uniform Across All Five (Consul CA, Nomad CA, Vault's Cert).
+  all_cluster_members = [
+    local.nomad_server_dev_member,
+    local.nomad_server_prod_member,
+    local.nomad_client_dev_member,
+    local.nomad_client_prod_member,
+    local.packer_builder_member,
+  ]
+}
 
 module "secrets" {
   source       = "../modules/secret-manager"
@@ -160,21 +187,150 @@ module "secrets" {
 
   labels = local.labels
 
-  # Only net-new secrets go here. Do NOT repeat keys from default_secrets —
-  # the module's validation block will fail the plan if you do.
-  secrets = {
-    # "new-service-token" = {
-    #   labels = { purpose = "new-service", tier = "admin" }
-    # }
-  }
+  root_tier_accessor_members     = [local.management_vm_member]
+  platform_tier_accessor_members = [local.management_vm_member]
+  # Deliberately Empty — See variables.tf's Description. Every Cluster
+  # Secret Below Carries Its Own Precise iam Block Instead.
+  cluster_tier_accessor_members = []
 
-  # This implementation was done to ensure that in the case where a newly created vm or service account
-  # will need acceess to a GCP secret, it can be plugged in here. However, service accounts within the original
-  # project scope will not need access to any GCP secret.
-  # No access will be given to any service account created in this bootstrap module, 
-  # because no vm requires access to any of these secrets (root/admin secrets) and 
-  # application/runtime secrets will be accessed via hashicorp vault
-  root_tier_accessor_members  = []
-  admin_tier_accessor_members = []
-  app_tier_accessor_members   = []
+  secrets = {
+    # --- Uniform Across All Five Cluster SAs ---
+    "consul-ca-cert" = {
+      labels = { purpose = "consul", tier = "cluster" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = { members = local.all_cluster_members }
+      }
+    }
+    "nomad-ca-cert" = {
+      labels = { purpose = "nomad", tier = "cluster" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = { members = local.all_cluster_members }
+      }
+    }
+    "vault-cert" = {
+      labels = { purpose = "vault", tier = "cluster" }
+      iam = {
+        # Also Needed By management-vm-sa (Configures Vault's Own
+        # Listener), Not Just The Cluster Nodes Trusting It.
+        "roles/secretmanager.secretAccessor" = {
+          members = concat(local.all_cluster_members, [local.management_vm_member])
+        }
+      }
+    }
+
+    # --- CA Private Keys — Human-Only, No VM Ever Needs These ---
+    "consul-ca-key" = {
+      labels = { purpose = "consul", tier = "root" }
+      iam = {
+        # TODO: Confirm var.platform_admin_email Is Declared In Bootstrap's
+        # Root Variables — Referenced Elsewhere For The IAP/OS Login
+        # Grants In compute/main.tf.
+        "roles/secretmanager.secretAccessor" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+      }
+    }
+    "nomad-ca-key" = {
+      labels = { purpose = "nomad", tier = "root" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+      }
+    }
+
+    # --- Nomad Server/Client Leaf Certs — Scoped To The Role That Uses Them ---
+    "nomad-server-cert" = {
+      labels = { purpose = "nomad", tier = "cluster" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_dev_member, local.nomad_server_prod_member]
+        }
+      }
+    }
+    "nomad-server-key" = {
+      labels = { purpose = "nomad", tier = "cluster" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_dev_member, local.nomad_server_prod_member]
+        }
+      }
+    }
+    "nomad-client-cert" = {
+      labels = { purpose = "nomad", tier = "cluster" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_client_dev_member, local.nomad_client_prod_member, local.packer_builder_member]
+        }
+      }
+    }
+    "nomad-client-key" = {
+      labels = { purpose = "nomad", tier = "cluster" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_client_dev_member, local.nomad_client_prod_member, local.packer_builder_member]
+        }
+      }
+    }
+
+    # --- Consul Server/Client Certs + Gossip Keys — Scoped To Role AND Environment ---
+    "consul-server-cert-dev" = {
+      labels = { purpose = "consul", tier = "cluster", environment = "dev" }
+      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_server_dev_member] } }
+    }
+    "consul-server-key-dev" = {
+      labels = { purpose = "consul", tier = "cluster", environment = "dev" }
+      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_server_dev_member] } }
+    }
+    "consul-server-cert-prod" = {
+      labels = { purpose = "consul", tier = "cluster", environment = "prod" }
+      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_server_prod_member] } }
+    }
+    "consul-server-key-prod" = {
+      labels = { purpose = "consul", tier = "cluster", environment = "prod" }
+      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_server_prod_member] } }
+    }
+
+    "consul-client-cert-dev" = {
+      labels = { purpose = "consul", tier = "cluster", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_client_dev_member, local.packer_builder_member]
+        }
+      }
+    }
+    "consul-client-key-dev" = {
+      labels = { purpose = "consul", tier = "cluster", environment = "dev" }
+      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_client_dev_member] } }
+    }
+    "consul-client-cert-prod" = {
+      labels = { purpose = "consul", tier = "cluster", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_client_prod_member, local.packer_builder_member]
+        }
+      }
+    }
+    "consul-client-key-prod" = {
+      labels = { purpose = "consul", tier = "cluster", environment = "prod" }
+      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_client_prod_member] } }
+    }
+
+    "consul-gossip-key-dev" = {
+      labels = { purpose = "consul", tier = "cluster", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_dev_member, local.nomad_client_dev_member]
+        }
+      }
+    }
+    "consul-gossip-key-prod" = {
+      labels = { purpose = "consul", tier = "cluster", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_prod_member, local.nomad_client_prod_member]
+        }
+      }
+    }
+  }
 }

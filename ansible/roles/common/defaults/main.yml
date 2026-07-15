@@ -21,6 +21,13 @@ common_timezone: "UTC"
 common_disable_ssh_password_auth: true
 common_disable_ssh_root_login: true
 
+# mgmt-vm Needs This For Its Backup Scripts (Vault Snapshot, Octopus SQL
+# Dump) Plus Vault/Octopus's Own Secret Manager Reads. nomad-server And
+# nomad-client ALSO Need This Now — Every Node Fetches Its Own TLS
+# Material Directly From Secret Manager (See consul/nomad Roles), Rather
+# Than Anything Being Distributed By Ansible Between Hosts.
+common_install_gcloud_cli: false
+
 common_sysctl_settings:
   vm.max_map_count: 262144
   fs.file-max: 1000000

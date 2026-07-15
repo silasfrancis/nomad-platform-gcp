@@ -1,5 +1,5 @@
 variable "project_id" {
-  type        = string
+  type = string
 }
 
 variable "storage_cmek" {
@@ -16,7 +16,15 @@ variable "labels" {
 # Secret definitions
 
 variable "default_secrets" {
-  description = "Baseline platform secrets, always created regardless of tfvars. Do not pass these keys again via var.secrets — use var.secrets only for net-new secrets."
+  description = <<-EOT
+    Baseline platform secrets with a single uniform consumer (management-vm-sa),
+    always created regardless of tfvars. Kept deliberately small — anything
+    needing per-secret IAM precision (e.g. PKI material scoped to specific
+    nomad SAs, or human-only CA private keys) can't live here, since variable
+    defaults can't reference module.service_account outputs. Those live in
+    var.secrets instead, defined at the calling main.tf where those
+    references resolve. Do not repeat these keys via var.secrets.
+  EOT
   type = map(object({
     labels = optional(map(string), {})
     iam = optional(map(object({
@@ -24,27 +32,27 @@ variable "default_secrets" {
     })), {})
   }))
   default = {
-    "vault-root-token"      = { labels = { purpose = "vault", tier = "root" } }
-    "vault-recovery-keys"   = { labels = { purpose = "vault", tier = "root" } }
-    "vault-admin-token"     = { labels = { purpose = "vault", tier = "admin" } }
+    "vault-root-token"     = { labels = { purpose = "vault", tier = "root" } }
+    "vault-recovery-keys"  = { labels = { purpose = "vault", tier = "root" } }
+    "nomad-acl-root-token" = { labels = { purpose = "nomad", tier = "root" } }
+    "consul-acl-root-token" = { labels = { purpose = "consul", tier = "root" } }
 
-    "nomad-acl-root-token"  = { labels = { purpose = "nomad", tier = "root" } }
-    "nomad-acl-admin-token" = { labels = { purpose = "nomad", tier = "admin" } }
+    "vault-admin-token"      = { labels = { purpose = "vault", tier = "platform" } }
+    "nomad-acl-admin-token"  = { labels = { purpose = "nomad", tier = "platform" } }
+    "consul-acl-admin-token" = { labels = { purpose = "consul", tier = "platform" } }
+    "vault-key"              = { labels = { purpose = "vault", tier = "platform" } }
 
-    "consul-acl-root-token"  = { labels = { purpose = "consul", tier = "root" } }
-    "consul-acl-admin-token" = { labels = { purpose = "consul", tier = "admin" } }
+    "octopus-admin-api-key"        = { labels = { purpose = "octopus", tier = "platform" } }
+    "octopus-master-key"           = { labels = { purpose = "octopus", tier = "platform" } }
+    "octopus-mssql-admin-password" = { labels = { purpose = "octopus", tier = "platform" } }
 
-    "octopus-api-key"            = { labels = { purpose = "octopus", tier = "admin" } }
-    "octopus-sql-admin-password" = { labels = { purpose = "octopus", tier = "admin" } }
-
-    "postgres-admin-password" = { labels = { purpose = "database", tier = "admin" } }
-
-    "github-nomad-repo-pat" = { labels = { purpose = "cicd", tier = "admin" } }
+    "github-nomad-repo-pat" = { labels = { purpose = "cicd", tier = "platform" } }
+    "cloudflare-api-token"  = { labels = { purpose = "traefik", tier = "platform" } }
   }
 }
 
 variable "secrets" {
-  description = "Net-new secrets to add on top of default_secrets. Do NOT reuse a key already present in default_secrets — it will be replaced wholesale (shallow merge), not merged field-by-field."
+  description = "Net-new secrets to add on top of default_secrets — this is also where every secret needing precise, non-tier-uniform IAM (PKI material, CA private keys) is defined, since only the calling main.tf has module.service_account references available. Do NOT reuse a key already present in default_secrets — it will be replaced wholesale (shallow merge), not merged field-by-field."
   type = map(object({
     labels = optional(map(string), {})
     iam = optional(map(object({
@@ -69,14 +77,14 @@ variable "root_tier_accessor_members" {
   default     = []
 }
 
-variable "admin_tier_accessor_members" {
-  description = "Members granted secretAccessor on admin-tier secrets (used by platform-config Terraform providers, CI/CD, Ansible ongoing config — anything NOT a Nomad-scheduled job)."
+variable "platform_tier_accessor_members" {
+  description = "Members granted secretAccessor on platform-tier secrets (ongoing infra-service credentials consumed by management-vm-sa — Octopus, the GitHub runner, Traefik's Cloudflare token, etc — anything NOT part of the Consul/Nomad cluster's own trust material)."
   type        = list(string)
   default     = []
 }
 
-variable "app_tier_accessor_members" {
-  description = "Members granted secretAccessor on app-tier secrets (consumed exclusively by services running as Nomad jobs under nomad-client-sa)."
+variable "cluster_tier_accessor_members" {
+  description = "Reserved for a future secret genuinely uniform across every cluster SA. Currently left empty at the call site — PKI material's consumer sets vary too much per secret (server-only, client-only, per-environment, or all five) to safely bulk-grant, so each cluster secret carries its own explicit iam block in var.secrets instead."
   type        = list(string)
   default     = []
 }
