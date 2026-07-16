@@ -66,6 +66,10 @@ locals {
       boot_disk_size_gb        = 20
       tags                     = ["nomad-server", "consul-server"]
       labels                   = { role = "nomad-server", environment = "dev" }
+      additional_disks = [
+        { name = "nomad-data", size_gb = 20 },
+        { name = "consul-data",   size_gb = 20 },
+      ]
     }
   }
 
@@ -79,6 +83,10 @@ locals {
       boot_disk_size_gb        = 20
       tags                     = ["nomad-server", "consul-server"]
       labels                   = { role = "nomad-server", environment = "prod" }
+      additional_disks = [
+        { name = "nomad-data", size_gb = 20 },
+        { name = "consul-data",   size_gb = 20 },
+      ]
     }
   }
 
