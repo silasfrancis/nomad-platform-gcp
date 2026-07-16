@@ -194,7 +194,7 @@ module "secrets" {
   cluster_tier_accessor_members = []
 
   secrets = {
-    # --- Uniform Across All Five Cluster SAs ---
+    # Uniform Across All Five Cluster SAs
     "consul-ca-cert" = {
       labels = { purpose = "consul", tier = "cluster" }
       iam = {
@@ -218,13 +218,10 @@ module "secrets" {
       }
     }
 
-    # --- CA Private Keys — Human-Only, No VM Ever Needs These ---
+    # CA Private Keys — Human-Only, No VM Ever Needs These
     "consul-ca-key" = {
       labels = { purpose = "consul", tier = "root" }
       iam = {
-        # TODO: Confirm var.platform_admin_email Is Declared In Bootstrap's
-        # Root Variables — Referenced Elsewhere For The IAP/OS Login
-        # Grants In compute/main.tf.
         "roles/secretmanager.secretAccessor" = {
           members = ["user:${var.platform_admin_email}"]
         }
@@ -239,7 +236,7 @@ module "secrets" {
       }
     }
 
-    # --- Nomad Server/Client Leaf Certs — Scoped To The Role That Uses Them ---
+    # Nomad Server/Client Leaf Certs
     "nomad-server-cert" = {
       labels = { purpose = "nomad", tier = "cluster" }
       iam = {
@@ -273,7 +270,7 @@ module "secrets" {
       }
     }
 
-    # --- Consul Server/Client Certs + Gossip Keys — Scoped To Role AND Environment ---
+    # Consul Server/Client Certs + Gossip Keys
     "consul-server-cert-dev" = {
       labels = { purpose = "consul", tier = "cluster", environment = "dev" }
       iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_server_dev_member] } }

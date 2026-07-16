@@ -24,9 +24,9 @@
 #      Live mgmt-vm.
 #
 #      packer-builder-sa Needs secretAccessor On consul-ca-cert,
-#      nomad-ca-cert, nomad-client-cert, nomad-client-key, And vault-cert
-#      Since The Bake Itself Fetches These Directly (Running As That SA
-#      On The Temp Build VM).
+#      nomad-ca-cert, And vault-cert (All Three Public/Global, Safe To
+#      Bake) — NOT The Client Cert/Key, Which Are Per-Environment And
+#      Fetched By The GCP Startup Script At Real Boot Instead.
 
 - name: Configure Nomad Client Nodes
   hosts: "{{ target_hosts | default('role_nomad_client') }}"

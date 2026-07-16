@@ -1,6 +1,6 @@
 locals {
-  # Merge baseline + net-new. var.secrets validation (in variables.tf) prevents
-  # key collisions, so this merge is safe — no silent overwrite of defaults.
+  # Merge baseline + newly added secrets. 
+  # var.secrets validation (in variables.tf) prevents key collisions.
   secrets = merge(var.default_secrets, var.secrets)
 
   tier_accessor_members = {

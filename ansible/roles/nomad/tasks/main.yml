@@ -102,11 +102,23 @@
     creates: "{{ nomad_bin_dir }}/nomad"
 
 # --- TLS: Everything Fetched Directly From Secret Manager — Generated
-# Centrally By scripts/generate-and-push-pki.sh, Not Ansible. Nomad's Own
-# Cert Isn't Per-Environment (Dev/Prod Never Federate, So Both Share One
-# region = "global" Cert) — But It's Fetched The Same Uniform Way As
-# Everything Else Now, Rather Than Being Special-Cased As "Always Safe To
-# Bake Directly."
+# Centrally By scripts/generate-and-push-pki.sh, Not Ansible.
+#
+# Nomad's Cert Is Now Per-Environment, Same As Consul's — Even Though
+# Nomad's SAN Convention (region = "global") Would Validate Fine With One
+# Shared Cert, Splitting Into Independent Key Pairs Per Env Limits Blast
+# Radius (A Leaked Dev Key Shouldn't Also Be Prod's Trust Material).
+#
+# Server Mode: Always Fetched Directly — nomad-servers.yml Runs Per-Env
+# Via Real group_vars, Exactly Like Consul's Server Cert.
+#
+# Client Mode: Only Fetched Directly When nomad_datacenter Is In Scope
+# (A By-Hand Run Against A Live Client). When This Role Is Baked Via
+# Packer For The Shared nomad-client-mig Image, The Client Cert CANNOT Be
+# Baked — It's Per-Environment Material And The Image Is Shared Across
+# Both Envs, With No Way To Know At Bake Time Which One A Given Instance
+# Will Serve. The GCP Startup Script Fetches It At Real Boot Instead,
+# Exactly Like Consul's Client Cert Already Works.
 - name: Create Nomad TLS Directory
   ansible.builtin.file:
     path: "{{ nomad_tls_dir }}"
@@ -130,20 +142,43 @@
     group: "{{ nomad_group }}"
     mode: "0644"
 
-- name: Fetch Nomad Server/Client Certificate From Secret Manager
+- name: Fetch Nomad Server Certificate From Secret Manager (Server Mode)
   ansible.builtin.command: >
     gcloud secrets versions access latest
-    --secret=nomad-{{ nomad_mode }}-cert --project={{ gcp_project_id }}
+    --secret=nomad-server-cert-{{ nomad_datacenter | regex_replace('^dc-', '') }}
+    --project={{ gcp_project_id }}
   register: nomad_leaf_cert_fetch
   changed_when: false
+  when: nomad_mode == 'server'
 
-- name: Fetch Nomad Server/Client Private Key From Secret Manager
+- name: Fetch Nomad Server Private Key From Secret Manager (Server Mode)
   ansible.builtin.command: >
     gcloud secrets versions access latest
-    --secret=nomad-{{ nomad_mode }}-key --project={{ gcp_project_id }}
+    --secret=nomad-server-key-{{ nomad_datacenter | regex_replace('^dc-', '') }}
+    --project={{ gcp_project_id }}
   register: nomad_leaf_key_fetch
   no_log: true
   changed_when: false
+  when: nomad_mode == 'server'
+
+- name: Fetch Nomad Client Certificate From Secret Manager (Client, Direct Runs Only)
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=nomad-client-cert-{{ nomad_datacenter | regex_replace('^dc-', '') }}
+    --project={{ gcp_project_id }}
+  register: nomad_leaf_cert_fetch
+  changed_when: false
+  when: nomad_mode == 'client' and nomad_datacenter is defined
+
+- name: Fetch Nomad Client Private Key From Secret Manager (Client, Direct Runs Only)
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=nomad-client-key-{{ nomad_datacenter | regex_replace('^dc-', '') }}
+    --project={{ gcp_project_id }}
+  register: nomad_leaf_key_fetch
+  no_log: true
+  changed_when: false
+  when: nomad_mode == 'client' and nomad_datacenter is defined
 
 - name: Write Nomad Server/Client Certificate
   ansible.builtin.copy:
@@ -152,6 +187,7 @@
     owner: "{{ nomad_user }}"
     group: "{{ nomad_group }}"
     mode: "0644"
+  when: nomad_mode == 'server' or nomad_datacenter is defined
 
 - name: Write Nomad Server/Client Private Key
   ansible.builtin.copy:
@@ -161,6 +197,7 @@
     group: "{{ nomad_group }}"
     mode: "0600"
   no_log: true
+  when: nomad_mode == 'server' or nomad_datacenter is defined
 
 # --- Vault's Cert, So Nomad's vault{} Stanza Can Actually Trust It ---
 # Nomad Talks To Vault For Every Workload Identity JWT Auth Exchange —
