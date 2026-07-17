@@ -26,6 +26,42 @@
 set -euo pipefail
 
 PROJECT_ID="${1:?Usage: $0 <gcp-project-id>}"
+
+# --- Pre-Flight: Every Secret Container Below Must Already Exist In
+# terraform/bootstrap's default_secrets Map (Created There So They Share
+# The Same storage_cmek KMS Key And Replication/Labeling As Everything
+# Else) — This Script Only ADDS VERSIONS, It Never Creates Containers.
+# Failing Fast Here With A Clear List Beats A Raw gcloud NOT_FOUND Error
+# Halfway Through A Run.
+REQUIRED_SECRETS=(
+  consul-ca-cert consul-ca-key
+  nomad-ca-cert nomad-ca-key
+  consul-server-cert-dev consul-server-key-dev
+  consul-server-cert-prod consul-server-key-prod
+  consul-client-cert-dev consul-client-key-dev
+  consul-client-cert-prod consul-client-key-prod
+  consul-gossip-key-dev consul-gossip-key-prod
+  nomad-server-cert nomad-server-key
+  nomad-client-cert nomad-client-key
+  vault-cert vault-key
+)
+
+echo "Checking all required secret containers exist in project ${PROJECT_ID}..."
+MISSING=()
+for s in "${REQUIRED_SECRETS[@]}"; do
+  if ! gcloud secrets describe "${s}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+    MISSING+=("${s}")
+  fi
+done
+
+if [ "${#MISSING[@]}" -gt 0 ]; then
+  echo "ERROR: The following secret containers don't exist yet:"
+  printf '  - %s\n' "${MISSING[@]}"
+  echo "Add these to terraform/bootstrap's default_secrets map and apply before running this script."
+  exit 1
+fi
+echo "All secret containers present. Proceeding."
+
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "${WORKDIR}"' EXIT
 
@@ -103,7 +139,15 @@ done
 
 # --- Nomad Server/Client Certs, Shared Across Both Environments ---
 # region = "global" — Dev And Prod Are Two Fully Isolated Clusters That
-# Never Federate, So One Cert Pair Covers Both.
+# Never Federate, So One Cert Pair Covers Both. Reverted From A Per-Env
+# Split: The Firewall's deny-dev-to-prod Rule Already Blocks All Traffic
+# Between The Two Private Subnets As The Primary Control, So A Shared Cert
+# Here Costs Little While Avoiding A New Runtime Secret-Manager Dependency
+# On Every Client Boot (Splitting Would Have Meant The Client Cert Could
+# No Longer Be Baked). Consul's Split Stays As-Is — That One Is A
+# Technical Requirement (Its Hostname Verification Checks
+# server.dc-dev.consul Against server.dc-prod.consul As Different
+# Identities), Not A Discretionary Hardening Choice Like This Was.
 generate_leaf nomad-server "server.global.nomad" \
   "DNS:server.global.nomad,DNS:localhost,IP:127.0.0.1" \
   "${WORKDIR}/nomad-ca-cert.pem" "${WORKDIR}/nomad-ca-key.pem"

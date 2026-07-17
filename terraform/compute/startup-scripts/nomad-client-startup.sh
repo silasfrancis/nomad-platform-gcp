@@ -4,13 +4,16 @@
 # Baked Ahead Of Time By Packer (common, consul, nomad, docker, falco Roles):
 # binaries, systemd units (enabled, NOT started), baked consul.hcl/nomad.hcl
 # (env-independent parts only), Consul/Nomad CA certs, and the shared
-# Nomad server/client cert (not per-environment, see roles/nomad). This
-# Script Supplies Everything That's Genuinely Per-Instance Or
-# Per-Environment: non-secret values Terraform passes via instance
-# metadata (datacenter, retry_join, node meta), AND the per-environment
-# Consul client TLS cert/key + gossip key, which — unlike the Nomad cert —
-# can't be baked into the shared image and are fetched from Secret
-# Manager at boot using the instance's own service account token.
+# Nomad server/client cert (not per-environment — dev/prod never federate,
+# so one region = "global" cert pair covers both, and the firewall's
+# deny-dev-to-prod rule is the primary control against cross-env misuse
+# anyway; see roles/nomad). This Script Supplies Everything That's
+# Genuinely Per-Instance Or Per-Environment: non-secret values Terraform
+# passes via instance metadata (datacenter, retry_join, node meta), AND
+# the per-environment Consul client TLS cert/key + gossip key, which —
+# unlike the Nomad cert — can't be baked into the shared image and are
+# fetched from Secret Manager at boot using the instance's own service
+# account token.
 #
 # Runs On Every Boot (google-startup-scripts.service) — Idempotent By
 # Design: It Always Rewrites 99-instance.hcl And Restarts Both Services,
