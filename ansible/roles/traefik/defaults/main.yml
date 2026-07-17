@@ -2,7 +2,7 @@
 # Native Binary Install Per Traefik's Own Docs (Not Docker) — See
 # https://doc.traefik.io/traefik/getting-started/install-traefik/
 
-traefik_version: "3.3.1"
+traefik_version: "3.7.6"
 traefik_download_url: >-
   https://github.com/traefik/traefik/releases/download/v{{ traefik_version }}/traefik_v{{ traefik_version }}_linux_amd64.tar.gz
 

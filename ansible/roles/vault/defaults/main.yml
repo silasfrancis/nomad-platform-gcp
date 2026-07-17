@@ -1,5 +1,5 @@
 ---
-vault_version: "1.18.1"
+vault_version: "2.0.3"
 
 vault_user: vault
 vault_group: vault

@@ -1,5 +1,5 @@
 ---
-consul_version: "1.19.2"
+consul_version: "2.0.2"
 
 # "server" Or "client" — Set Per-Playbook (nomad-servers.yml Sets server,
 # nomad-clients.yml Sets client). Determines The server = true/false Line

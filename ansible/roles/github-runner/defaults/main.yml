@@ -1,5 +1,5 @@
 ---
-github_runner_version: "2.321.0"
+github_runner_version: "2.335.1"
 github_runner_arch: "linux-x64"
 github_runner_user: "gh-runner"
 github_runner_home: "/opt/actions-runner"
