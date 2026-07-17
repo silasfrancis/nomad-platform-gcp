@@ -165,9 +165,7 @@
 # --- Vault's Cert, So Nomad's vault{} Stanza Can Actually Trust It ---
 # Nomad Talks To Vault For Every Workload Identity JWT Auth Exchange —
 # Without This, The TLS Handshake Fails Outright Since Vault's Cert Is
-# Self-Signed And Not In The System's Default CA Trust Store. Fetched
-# The Same Way As Everything Else Now — Directly From Secret Manager,
-# Not Passed Between Hosts By Ansible.
+# Self-Signed And Not In The System's Default CA Trust Store. 
 - name: Fetch Vault Certificate From Secret Manager
   ansible.builtin.command: >
     gcloud secrets versions access latest
@@ -240,5 +238,5 @@
   when:
     - nomad_datacenter is defined
     - nomad_base_config_result.changed
-      or (nomad_server_config_result | default({'changed': false})).changed
-      or (nomad_client_config_result | default({'changed': false})).changed
+    - nomad_server_config_result.changed
+    - nomad_client_config_result.changed

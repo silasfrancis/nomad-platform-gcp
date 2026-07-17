@@ -1,9 +1,7 @@
 ---
 # Octopus Deploy Has No Native Linux Binary Install — Confirmed From
 # https://octopus.com/docs/installation/octopus-server-linux-container:
-# Linux Is Container-Only. The Octopus.Server CLI (create-instance,
-# configure, database, service) Is The WINDOWS Installation Method — An
-# Earlier Version Of This Role Incorrectly Assumed Linux Shared It. Both
+# Linux Is Container-Only. 
 # Containers (mssql, octopus-server) Run From One Docker Compose File,
 # Per Octopus's Own Reference Compose Setup.
 

@@ -103,8 +103,8 @@
     creates: "{{ consul_bin_dir }}/consul"
 
 # --- TLS: Everything Fetched Directly From Secret Manager — Generated
-# Centrally By scripts/generate-and-push-pki.sh (Run From Your Laptop, Not
-# Ansible). Uniform Pattern Regardless Of Direct Run Or Packer Bake: This
+# Centrally By scripts/generate-and-push-pki.sh
+# Uniform Pattern Regardless Of Direct Run Or Packer Bake: This
 # Host Fetches What It Needs Itself, No Local-File Distribution Involved.
 # Requires gcloud Installed (common_install_gcloud_cli: true) And This
 # Host's Service Account To Have secretAccessor On The Secrets Fetched

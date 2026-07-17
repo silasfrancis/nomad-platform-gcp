@@ -158,11 +158,6 @@
   changed_when: false
   failed_when: false
 
-# NOTE: Octopus's Expected API Key Format/Validation Isn't Fully Confirmed
-# Here — This Generates A Plausible API-Prefixed Random Key. Verify
-# Against Current Octopus Docs Before A Real Run; If Octopus Rejects It,
-# Fall Back To Leaving ADMIN_API_KEY Unset And Generating A Key Via The
-# UI/REST API Post-Boot Instead.
 - name: Generate New Octopus Admin API Key (Only If None Exists Yet)
   ansible.builtin.shell: echo "API-$(openssl rand -hex 16 | tr '[:lower:]' '[:upper:]')"
   register: octopus_admin_api_key_generated
