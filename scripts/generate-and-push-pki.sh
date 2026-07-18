@@ -36,14 +36,14 @@ PROJECT_ID="${1:?Usage: $0 <gcp-project-id>}"
 REQUIRED_SECRETS=(
   consul-ca-cert consul-ca-key
   nomad-ca-cert nomad-ca-key
-  consul-server-cert-dev consul-server-key-dev
-  consul-server-cert-prod consul-server-key-prod
-  consul-client-cert-dev consul-client-key-dev
-  consul-client-cert-prod consul-client-key-prod
+  consul-server-cert-dev consul-server-tls-key-dev
+  consul-server-cert-prod consul-server-tls-key-prod
+  consul-client-cert-dev consul-client-tls-key-dev
+  consul-client-cert-prod consul-client-tls-key-prod
   consul-gossip-key-dev consul-gossip-key-prod
-  nomad-server-cert nomad-server-key
-  nomad-client-cert nomad-client-key
-  vault-cert vault-key
+  nomad-server-cert nomad-server-tls-key
+  nomad-client-cert nomad-client-tls-key
+  vault-cert vault-tls-key
 )
 
 echo "Checking all required secret containers exist in project ${PROJECT_ID}..."

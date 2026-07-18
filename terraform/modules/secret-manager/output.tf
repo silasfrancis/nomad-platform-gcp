@@ -11,9 +11,9 @@ output "secret_names" {
 output "secrets_by_tier" {
   description = "Secret names grouped by tier label, useful for scripting (e.g. verifying which secrets a given SA should have access to)."
   value = {
-    for tier in ["root", "platform", "cluster"] : tier => [
+    for tier in ["root", "operator", "mgmt", "scoped"] : tier => [
       for name, secret in local.secrets : name
-      if lookup(secret.labels, "tier", "cluster") == tier
+      if lookup(secret.labels, "tier", "scoped") == tier
     ]
   }
 }
