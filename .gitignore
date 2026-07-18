@@ -34,3 +34,6 @@ state.config
 secret*.tfvars
 pki-local/
 *.retry
+*.pkrvars.hcl
+!*.pkrvars.hcl.example
+packer_cache/
