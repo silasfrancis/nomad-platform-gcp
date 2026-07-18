@@ -5,7 +5,7 @@ packer {
       source  = "github.com/hashicorp/googlecompute"
     }
     ansible = {
-      version = ">= 2.0.0"
+      version = ">= 1.1.1"
       source  = "github.com/hashicorp/ansible"
     }
   }
@@ -18,8 +18,7 @@ locals {
   # (Always-Latest, No Terraform Change Needed Per Rebuild). Given This
   # Project's Trunk-Based, Single-Source-Of-Truth Philosophy Elsewhere,
   # Pinning The Specific Name In compute/main.tf's tfvars Is The
-  # Recommended Default — Treat family/nomad-client As An Option, Not The
-  # Assumed Choice.
+  # Recommended Default.
   image_name = "nomad-client-image-${formatdate("YYYYMMDD-hhmmss", timestamp())}"
 }
 
