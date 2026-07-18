@@ -193,10 +193,9 @@ module "secrets" {
   labels = local.labels
 
   root_tier_accessor_members     = []
-  operator_tier_accessor_members = []
+  operator_tier_accessor_members = ["user:${var.platform_admin_email}"]
   mgmt_tier_accessor_members     = [local.management_vm_member]
-  # Deliberately Empty — See variables.tf's Description. Every Scoped
-  # Secret Below Carries Its Own Precise iam Block Instead.
+  # Deliberately Empty Every Scoped Secret Below Carries Its Own Precise iam Block Instead.
   scoped_tier_accessor_members = []
 
   secrets = {
