@@ -241,7 +241,7 @@ module "secrets" {
       }
     }
 
-    # Nomad Server/Client Leaf Certs
+    # Nomad Server/Client Leaf Certs + Gossip Keys
     "nomad-server-cert" = {
       labels = { purpose = "nomad", tier = "scoped" }
       iam = {
@@ -271,6 +271,23 @@ module "secrets" {
       iam = {
         "roles/secretmanager.secretAccessor" = {
           members = [local.nomad_client_dev_member, local.nomad_client_prod_member, local.packer_builder_member]
+        }
+      }
+    }
+
+    "nomad-gossip-key-dev" = {
+      labels = { purpose = "consul", tier = "scoped", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_dev_member, local.nomad_client_dev_member]
+        }
+      }
+    }
+    "nomad-gossip-key-prod" = {
+      labels = { purpose = "consul", tier = "scoped", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_prod_member, local.nomad_client_prod_member]
         }
       }
     }
@@ -346,6 +363,7 @@ module "secrets" {
       labels = { purpose = "traefik", tier = "scoped", environment = "dev" }
       iam    = { "roles/secretmanager.secretAccessor" = { members = [local.traefik_vm_dev_member] } }
     }
+
     "consul-traefik-token-prod" = {
       labels = { purpose = "traefik", tier = "scoped", environment = "prod" }
       iam    = { "roles/secretmanager.secretAccessor" = { members = [local.traefik_vm_prod_member] } }

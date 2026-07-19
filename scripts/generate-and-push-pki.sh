@@ -41,6 +41,7 @@ REQUIRED_SECRETS=(
   consul-client-cert-dev consul-client-tls-key-dev
   consul-client-cert-prod consul-client-tls-key-prod
   consul-gossip-key-dev consul-gossip-key-prod
+  nomad-gossip-key-dev nomad-gossip-key-prod
   nomad-server-cert nomad-server-tls-key
   nomad-client-cert nomad-client-tls-key
   vault-cert vault-tls-key

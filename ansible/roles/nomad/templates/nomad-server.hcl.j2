@@ -9,4 +9,5 @@ server {
     retry_join = {{ retry_join | to_json }}
   }
 {% endif %}
+  encrypt = "{{ nomad_server_gossip_key }}"
 }

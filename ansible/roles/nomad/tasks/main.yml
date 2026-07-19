@@ -181,6 +181,22 @@
     group: "{{ nomad_group }}"
     mode: "0644"
 
+- name: Fetch Nomad Encryption Key From Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret=nomad-gossip-key-{{ nomad_datacenter | regex_replace('^dc-', '') }}
+    --project={{ gcp_project_id }}
+  register: nomad_gossip_key_fetch
+  no_log: true
+  changed_when: false
+  when: nomad_mode == "server"
+
+- name: Set Nomad Gossip Key Fact
+  ansible.builtin.set_fact:
+    nomad_gossip_key: "{{ nomad_gossip_key_fetch.stdout }}"
+  no_log: true
+  when: nomad_mode == "server"
+
 - name: Template Base Nomad Configuration
   ansible.builtin.template:
     src: nomad.hcl.j2
