@@ -12,3 +12,13 @@
   roles:
     - role: vault
       tasks_from: init.yml
+
+
+# - name: One-Time Vault Operator Init
+#   hosts: role_mgmt
+#   become: true
+#   tasks:
+#     - name: Run Vault init tasks
+#       ansible.builtin.import_role:
+#         name: vault
+#         tasks_from: init.yml
