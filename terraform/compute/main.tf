@@ -56,6 +56,8 @@ locals {
   # gets its own zone off local.zones so a single-zone outage doesn't take
   # out every server at once.
 
+  nomad_server_startup_script        = file("${path.module}/startup-scripts/nomad-server-startup.sh")
+
   dev_server_instances = {
     for i in range(var.nomad_dev_server_count) : "nomad-dev-server-${i}" => {
       machine_type            = "e2-small"
@@ -66,6 +68,7 @@ locals {
       boot_disk_size_gb        = 20
       tags                     = ["nomad-server", "consul-server"]
       labels                   = { role = "nomad-server", environment = "dev" }
+      startup_script           = local.nomad_server_startup_script
       additional_disks = [
         { name = "nomad-data", size_gb = 20 },
         { name = "consul-data",   size_gb = 20 },
@@ -83,6 +86,7 @@ locals {
       boot_disk_size_gb        = 20
       tags                     = ["nomad-server", "consul-server"]
       labels                   = { role = "nomad-server", environment = "prod" }
+      startup_script           = local.nomad_server_startup_script
       additional_disks = [
         { name = "nomad-data", size_gb = 20 },
         { name = "consul-data",   size_gb = 20 },

@@ -10,10 +10,10 @@
 # anyway; see roles/nomad). This Script Supplies Everything That's
 # Genuinely Per-Instance Or Per-Environment: non-secret values Terraform
 # passes via instance metadata (datacenter, retry_join, node meta), AND
-# the per-environment Consul client TLS cert/key + gossip key, which —
-# unlike the Nomad cert — can't be baked into the shared image and are
-# fetched from Secret Manager at boot using the instance's own service
-# account token.
+# the per-environment Consul client TLS cert/key + gossip key + agent
+# token, which — unlike the Nomad cert — can't be baked into the shared
+# image and are fetched from Secret Manager at boot using the instance's
+# own service account token.
 #
 # Runs On Every Boot (google-startup-scripts.service) — Idempotent By
 # Design: It Always Rewrites 99-instance.hcl And Restarts Both Services,
@@ -75,6 +75,14 @@ chmod 0644 /etc/consul.d/tls/cert.pem
 chmod 0600 /etc/consul.d/tls/key.pem
 
 CONSUL_GOSSIP_KEY="$(fetch_secret "consul-gossip-key-${ENVIRONMENT}")"
+
+# consul-client-token-{env} — Created By terraform/platform-config's
+# consul-acl.tf (Once Flag 4's agent-policy Restructuring Is Resolved And
+# Built). Fetched Here, Applied After Consul Starts Below — Same Pattern
+# As nomad-server-startup.sh. Falls Back To Empty If Not Created Yet
+# (e.g. platform-config Hasn't Run Against A Fresh Cluster) Rather Than
+# Failing The Whole Boot.
+CONSUL_CLIENT_TOKEN="$(fetch_secret "consul-client-token-${ENVIRONMENT}" || echo "")"
 
 # Convert Comma-Separated retry_join Into A JSON Array For HCL/Consul-Style
 # List Syntax.
@@ -145,6 +153,11 @@ for i in $(seq 1 30); do
   fi
   sleep 2
 done
+
+if [ -n "${CONSUL_CLIENT_TOKEN}" ]; then
+  consul acl set-agent-token agent "${CONSUL_CLIENT_TOKEN}" || \
+    echo "[nomad-client-startup] Failed to set agent token — platform-config may not have created it yet."
+fi
 
 systemctl restart nomad
 
