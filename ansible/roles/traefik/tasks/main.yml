@@ -31,6 +31,7 @@
     - "{{ traefik_config_dir }}"
     - "{{ traefik_dynamic_config_dir }}"
     - "{{ traefik_log_dir }}"
+    - "{{ traefik_tls_dir }}"
 
 - name: Download And Extract Traefik Binary
   ansible.builtin.unarchive:
@@ -53,6 +54,32 @@
     path: "{{ traefik_bin_dir }}/traefik"
     capability: cap_net_bind_service+ep
     state: present
+
+- name: Read Consul Catalog token 
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret={{ secret_consul_token }} --project={{ gcp_project_id }}
+  register: consul_traefik_token
+  no_log: true
+  changed_when: false
+  when: traefik_mode in ['dev-public', 'prod-public']
+
+- name: Fetch Envrionment CA cert
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret={{ secret_ca_cert }} --project={{ gcp_project_id }}
+  register: ca_cert
+  changed_when: false
+  when: traefik_mode in ['dev-public', 'prod-public']
+
+- name: Write CA Certificate
+  ansible.builtin.copy:
+    content: "{{ ca_cert.stdout }}"
+    dest: "{{ traefik_tls_dir }}/ca.pem"
+    owner: "{{ traefik_user }}"
+    group: "{{ traefik_group }}"
+    mode: "0640"
+  when: traefik_mode in ['dev-public', 'prod-public']
 
 - name: Template Static Traefik Configuration
   ansible.builtin.template:

@@ -34,6 +34,7 @@
   loop:
     - "{{ nomad_config_dir }}"
     - "{{ nomad_log_dir }}"
+    - "{{ nomad_tls_dir }}"
 
 # --- nomad-data Persistent Disk (Server Mode Only) ---
 # Nomad Servers Run Their Own Raft Log Here — Job Specs, Evaluations,
@@ -100,102 +101,6 @@
     remote_src: true
     mode: "0755"
     creates: "{{ nomad_bin_dir }}/nomad"
-
-# --- TLS: Everything Fetched Directly From Secret Manager — Generated
-# Centrally By scripts/generate-and-push-pki.sh, Not Ansible. Nomad's Own
-# Cert Isn't Per-Environment (Dev/Prod Never Federate, So Both Share One
-# region = "global" Cert, And The Firewall's deny-dev-to-prod Rule Already
-# Blocks Cross-Env Traffic As The Primary Control) — Safe To Fetch/Bake
-# Unconditionally Regardless Of Direct Run Or Packer Bake.
-- name: Create Nomad TLS Directory
-  ansible.builtin.file:
-    path: "{{ nomad_tls_dir }}"
-    state: directory
-    owner: "{{ nomad_user }}"
-    group: "{{ nomad_group }}"
-    mode: "0750"
-
-- name: Fetch Nomad CA Certificate From Secret Manager
-  ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret=nomad-ca-cert --project={{ gcp_project_id }}
-  register: nomad_ca_fetch
-  changed_when: false
-
-- name: Write Nomad CA Certificate
-  ansible.builtin.copy:
-    content: "{{ nomad_ca_fetch.stdout }}"
-    dest: "{{ nomad_tls_dir }}/ca.pem"
-    owner: "{{ nomad_user }}"
-    group: "{{ nomad_group }}"
-    mode: "0644"
-
-- name: Fetch Nomad Server/Client Certificate From Secret Manager
-  ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret=nomad-{{ nomad_mode }}-cert --project={{ gcp_project_id }}
-  register: nomad_leaf_cert_fetch
-  changed_when: false
-
-- name: Fetch Nomad Server/Client Private Key From Secret Manager
-  ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret=nomad-{{ nomad_mode }}-key --project={{ gcp_project_id }}
-  register: nomad_leaf_key_fetch
-  no_log: true
-  changed_when: false
-
-- name: Write Nomad Server/Client Certificate
-  ansible.builtin.copy:
-    content: "{{ nomad_leaf_cert_fetch.stdout }}"
-    dest: "{{ nomad_tls_dir }}/cert.pem"
-    owner: "{{ nomad_user }}"
-    group: "{{ nomad_group }}"
-    mode: "0644"
-
-- name: Write Nomad Server/Client Private Key
-  ansible.builtin.copy:
-    content: "{{ nomad_leaf_key_fetch.stdout }}"
-    dest: "{{ nomad_tls_dir }}/key.pem"
-    owner: "{{ nomad_user }}"
-    group: "{{ nomad_group }}"
-    mode: "0600"
-  no_log: true
-
-# --- Vault's Cert, So Nomad's vault{} Stanza Can Actually Trust It ---
-# Nomad Talks To Vault For Every Workload Identity JWT Auth Exchange —
-# Without This, The TLS Handshake Fails Outright Since Vault's Cert Is
-# Self-Signed And Not In The System's Default CA Trust Store. 
-- name: Fetch Vault Certificate From Secret Manager
-  ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret=vault-cert --project={{ gcp_project_id }}
-  register: vault_cert_fetch_for_nomad
-  changed_when: false
-
-- name: Write Vault Certificate (For Nomad's vault{} Stanza To Trust It)
-  ansible.builtin.copy:
-    content: "{{ vault_cert_fetch_for_nomad.stdout }}"
-    dest: "{{ nomad_tls_dir }}/vault-ca.pem"
-    owner: "{{ nomad_user }}"
-    group: "{{ nomad_group }}"
-    mode: "0644"
-
-- name: Fetch Nomad Encryption Key From Secret Manager
-  ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret=nomad-gossip-key-{{ nomad_datacenter | regex_replace('^dc-', '') }}
-    --project={{ gcp_project_id }}
-  register: nomad_gossip_key_fetch
-  no_log: true
-  changed_when: false
-  when: nomad_mode == "server"
-
-- name: Set Nomad Gossip Key Fact
-  ansible.builtin.set_fact:
-    nomad_gossip_key: "{{ nomad_gossip_key_fetch.stdout }}"
-  no_log: true
-  when: nomad_mode == "server"
 
 - name: Template Base Nomad Configuration
   ansible.builtin.template:

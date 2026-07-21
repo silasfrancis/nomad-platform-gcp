@@ -25,6 +25,9 @@ providers:
   consulCatalog:
     endpoint:
       address: "127.0.0.1:8500"
+      token: "{{ consul_traefik_token.stdout }}"
+      tls: 
+        ca: "{{ traefik_tls_dir }}/ca.pem"
     exposedByDefault: false
     prefix: "traefik"
 

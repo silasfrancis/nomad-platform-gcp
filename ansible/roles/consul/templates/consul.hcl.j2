@@ -4,7 +4,7 @@
 # Group Vars Are Defined — True For Direct Runs Against Real Inventory
 # Hosts (dev.yml/prod.yml Supply Them), False When Packer Bakes This Role
 # Into The Shared nomad-client-mig Image Without Env-Specific Group Vars
-# In Scope. In The Latter Case The GCP Startup Script Supplies Them In
+# In Scope. In The Latter Case The GCP Startup Script Supplies Them and gossip encyption keys In
 # 99-instance.hcl At Real Boot.
 
 data_dir  = "{{ consul_data_dir }}"
@@ -25,14 +25,9 @@ retry_join = {{ retry_join | to_json }}
 {% if consul_mode == 'server' %}
 bootstrap_expect = {{ bootstrap_expect }}
 {% endif %}
-
-encrypt = "{{ consul_gossip_key }}"
 {% endif %}
 
-# TLS — CA Is Always Baked (Public, Safe). cert_file/key_file Are Only
-# Present When Placed By A Direct Ansible Run; The MIG Startup Script
-# Places Them At The Same Fixed Paths When This Role Was Baked Via Packer,
-# So Consul Doesn't Need To Know Which Mechanism Put Them There.
+
 tls {
   defaults {
     ca_file   = "{{ consul_tls_dir }}/ca.pem"

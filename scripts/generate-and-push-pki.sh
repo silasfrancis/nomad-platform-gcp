@@ -62,8 +62,6 @@ REQUIRED_SECRETS=(
   consul-gossip-key-prod
   vault-cert
   vault-tls-key
-  consul-traefik-token-dev
-  consul-traefik-token-prod
 )
 
 echo "Checking all required secret containers exist in project ${PROJECT_ID}..."
@@ -196,12 +194,6 @@ for env in dev prod; do
 
   openssl rand -base64 32 > "${WORKDIR}/nomad-gossip-key-${env}.txt"
   push_secret "nomad-gossip-key-${env}" "${WORKDIR}/nomad-gossip-key-${env}.txt"
-done
-
-# --- Consul Traefik Tokens, Per Environment ---
-for env in dev prod; do
-  openssl rand -hex 16 > "${WORKDIR}/consul-traefik-token-${env}.txt"
-  push_secret "consul-traefik-token-${env}" "${WORKDIR}/consul-traefik-token-${env}.txt"
 done
 
 echo "Done. Everything pushed to Secret Manager; nothing kept locally."
