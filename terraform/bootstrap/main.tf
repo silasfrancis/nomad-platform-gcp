@@ -169,19 +169,22 @@ locals {
   nomad_server_prod_member = module.service_account.service_accounts["nomad-server-sa-prod"].member
   nomad_client_dev_member  = module.service_account.service_accounts["nomad-client-sa-dev"].member
   nomad_client_prod_member = module.service_account.service_accounts["nomad-client-sa-prod"].member
-  packer_builder_member    = module.service_account.service_accounts["packer-builder-sa"].member
   management_vm_member     = module.service_account.service_accounts["management-vm-sa"].member
-  traefik_vm_dev_member  = module.service_account.service_accounts["traefik-vm-sa-dev"].member
-  traefik_vm_prod_member = module.service_account.service_accounts["traefik-vm-sa-prod"].member
+  traefik_vm_dev_member    = module.service_account.service_accounts["traefik-vm-sa-dev"].member
+  traefik_vm_prod_member   = module.service_account.service_accounts["traefik-vm-sa-prod"].member
 
-  # Every Nomad-Cluster-Adjacent SA — Used By The Three Secrets Genuinely
-  # Uniform Across All Five (Consul CA, Nomad CA, Vault's Cert).
-  all_scoped_members = [
+  dev_members = [
     local.nomad_server_dev_member,
-    local.nomad_server_prod_member,
     local.nomad_client_dev_member,
+  ]
+
+  prod_members = [
+    local.nomad_server_prod_member,
     local.nomad_client_prod_member,
-    local.packer_builder_member,
+  ]
+
+  management_members = [
+    local.management_vm_member,
   ]
 }
 
@@ -199,87 +202,143 @@ module "secrets" {
   scoped_tier_accessor_members = []
 
   secrets = {
-    # Uniform Across All Five Cluster SAs
-    "consul-ca-cert" = {
-      labels = { purpose = "consul", tier = "scoped" }
+    "ca-cert-dev" = {
+      labels = { purpose = "dev", tier = "scoped", environment = "dev" }
       iam = {
-        "roles/secretmanager.secretAccessor" = { members = local.all_scoped_members }
-      }
-    }
-    "nomad-ca-cert" = {
-      labels = { purpose = "nomad", tier = "scoped" }
-      iam = {
-        "roles/secretmanager.secretAccessor" = { members = local.all_scoped_members }
-      }
-    }
-    "vault-cert" = {
-      labels = { purpose = "vault", tier = "scoped" }
-      iam = {
-        # Also Needed By management-vm-sa (Configures Vault's Own
-        # Listener), Not Just The Cluster Nodes Trusting It.
         "roles/secretmanager.secretAccessor" = {
-          members = concat(local.all_scoped_members, [local.management_vm_member])
+          members = local.dev_members
+        }
+      }
+    }
+    "ca-cert-prod" = {
+      labels = { purpose = "prod", tier = "scoped", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = local.prod_members
+        }
+      }
+    }
+    "management-ca-cert" = {
+      labels = {
+        purpose = "management"
+        tier    = "scoped"
+      }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = concat(
+            local.management_members,
+            local.dev_members,
+            local.prod_members
+          )
         }
       }
     }
 
     # CA Private Keys — Human-Only, No VM Ever Needs These
-    "consul-ca-key" = {
-      labels = { purpose = "consul", tier = "root" }
+    "ca-key-dev" = {
+      labels = { purpose = "dev", tier = "root", environment = "dev" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = ["user:${var.platform_admin_email}"]
+          members = [
+            "user:${var.platform_admin_email}"
+          ]
         }
       }
     }
-    "nomad-ca-key" = {
-      labels = { purpose = "nomad", tier = "root" }
+    "ca-key-prod" = {
+      labels = { purpose = "prod", tier = "root", environment = "prod" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = ["user:${var.platform_admin_email}"]
+          members = [
+            "user:${var.platform_admin_email}"
+          ]
+        }
+      }
+    }
+    "management-ca-key" = {
+      labels = {
+        purpose = "management"
+        tier    = "root"
+      }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [
+            "user:${var.platform_admin_email}"
+          ]
         }
       }
     }
 
     # Nomad Server/Client Leaf Certs + Gossip Keys
-    "nomad-server-cert" = {
+    "nomad-server-cert-dev" = {
       labels = { purpose = "nomad", tier = "scoped" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.nomad_server_dev_member, local.nomad_server_prod_member]
+          members = [local.nomad_server_dev_member]
         }
       }
     }
-    "nomad-server-tls-key" = {
+    "nomad-server-cert-prod" = {
       labels = { purpose = "nomad", tier = "scoped" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.nomad_server_dev_member, local.nomad_server_prod_member]
+          members = [local.nomad_server_prod_member]
         }
       }
     }
-    "nomad-client-cert" = {
+    "nomad-server-tls-key-dev" = {
       labels = { purpose = "nomad", tier = "scoped" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.nomad_client_dev_member, local.nomad_client_prod_member, local.packer_builder_member]
+          members = [local.nomad_server_dev_member]
         }
       }
     }
-    "nomad-client-tls-key" = {
+    "nomad-server-tls-key-prod" = {
       labels = { purpose = "nomad", tier = "scoped" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.nomad_client_dev_member, local.nomad_client_prod_member, local.packer_builder_member]
+          members = [local.nomad_server_prod_member]
         }
       }
     }
-
+    "nomad-client-cert-dev" = {
+      labels = { purpose = "nomad", tier = "scoped" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_client_dev_member]
+        }
+      }
+    }
+    "nomad-client-tls-key-dev" = {
+      labels = { purpose = "nomad", tier = "scoped" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_client_dev_member]
+        }
+      }
+    }
+    "nomad-client-cert-prod" = {
+      labels = { purpose = "nomad", tier = "scoped" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_client_prod_member]
+        }
+      }
+    }
+    "nomad-client-tls-key-prod" = {
+      labels = { purpose = "nomad", tier = "scoped" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_client_prod_member]
+        }
+      }
+    }
     "nomad-gossip-key-dev" = {
       labels = { purpose = "consul", tier = "scoped", environment = "dev" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.nomad_server_dev_member, local.nomad_client_dev_member]
+          members = local.dev_members
         }
       }
     }
@@ -287,7 +346,7 @@ module "secrets" {
       labels = { purpose = "consul", tier = "scoped", environment = "prod" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.nomad_server_prod_member, local.nomad_client_prod_member]
+          members = local.prod_members
         }
       }
     }
@@ -295,51 +354,73 @@ module "secrets" {
     # Consul Server/Client Certs + Gossip Keys
     "consul-server-cert-dev" = {
       labels = { purpose = "consul", tier = "scoped", environment = "dev" }
-      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_server_dev_member] } }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_dev_member]
+        }
+      }
     }
     "consul-server-tls-key-dev" = {
       labels = { purpose = "consul", tier = "scoped", environment = "dev" }
-      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_server_dev_member] } }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_dev_member]
+        }
+      }
     }
     "consul-server-cert-prod" = {
       labels = { purpose = "consul", tier = "scoped", environment = "prod" }
-      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_server_prod_member] } }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_prod_member]
+        }
+      }
     }
     "consul-server-tls-key-prod" = {
       labels = { purpose = "consul", tier = "scoped", environment = "prod" }
-      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_server_prod_member] } }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_prod_member]
+        }
+      }
     }
-
     "consul-client-cert-dev" = {
       labels = { purpose = "consul", tier = "scoped", environment = "dev" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.nomad_client_dev_member, local.packer_builder_member]
+          members = [local.nomad_client_dev_member]
         }
       }
     }
     "consul-client-tls-key-dev" = {
       labels = { purpose = "consul", tier = "scoped", environment = "dev" }
-      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_client_dev_member] } }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_client_dev_member]
+        }
+      }
     }
     "consul-client-cert-prod" = {
       labels = { purpose = "consul", tier = "scoped", environment = "prod" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.nomad_client_prod_member, local.packer_builder_member]
+          members = [local.nomad_client_prod_member]
         }
       }
     }
     "consul-client-tls-key-prod" = {
       labels = { purpose = "consul", tier = "scoped", environment = "prod" }
-      iam = { "roles/secretmanager.secretAccessor" = { members = [local.nomad_client_prod_member] } }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_client_prod_member]
+        }
+      }
     }
-
     "consul-gossip-key-dev" = {
       labels = { purpose = "consul", tier = "scoped", environment = "dev" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.nomad_server_dev_member, local.nomad_client_dev_member]
+          members = local.dev_members
         }
       }
     }
@@ -347,26 +428,49 @@ module "secrets" {
       labels = { purpose = "consul", tier = "scoped", environment = "prod" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.nomad_server_prod_member, local.nomad_client_prod_member]
+          members = local.prod_members
         }
       }
     }
 
+    # Vault Certificates & Management
+    "vault-cert" = {
+      labels = { purpose = "vault", tier = "scoped" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = concat(
+            local.management_members,
+            local.dev_members,
+            local.prod_members
+          )
+        }
+      }
+    }
     "vault-tls-key" = {
       labels = { purpose = "vault", tier = "mgmt" }
       iam = {
-        "roles/secretmanager.secretAccessor" = { members = [local.management_vm_member] }
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.management_vm_member]
+        }
       }
     }
 
+    # Traefik Tokens
     "consul-traefik-token-dev" = {
       labels = { purpose = "traefik", tier = "scoped", environment = "dev" }
-      iam    = { "roles/secretmanager.secretAccessor" = { members = [local.traefik_vm_dev_member] } }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.traefik_vm_dev_member]
+        }
+      }
     }
-
     "consul-traefik-token-prod" = {
       labels = { purpose = "traefik", tier = "scoped", environment = "prod" }
-      iam    = { "roles/secretmanager.secretAccessor" = { members = [local.traefik_vm_prod_member] } }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.traefik_vm_prod_member]
+        }
+      }
     }
   }
 }

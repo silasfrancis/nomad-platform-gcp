@@ -76,13 +76,18 @@ chmod 0600 /etc/consul.d/tls/key.pem
 
 CONSUL_GOSSIP_KEY="$(fetch_secret "consul-gossip-key-${ENVIRONMENT}")"
 
-# consul-client-token-{env} — Created By terraform/platform-config's
-# consul-acl.tf (Once Flag 4's agent-policy Restructuring Is Resolved And
-# Built). Fetched Here, Applied After Consul Starts Below — Same Pattern
-# As nomad-server-startup.sh. Falls Back To Empty If Not Created Yet
-# (e.g. platform-config Hasn't Run Against A Fresh Cluster) Rather Than
-# Failing The Whole Boot.
-CONSUL_CLIENT_TOKEN="$(fetch_secret "consul-client-token-${ENVIRONMENT}" || echo "")"
+# consul-client-agent-token-{env} — Consul's OWN Agent Token
+# (acl.tokens.agent), Narrow Node-Identity Scope (Self-Registration,
+# Anti-Entropy Only). Distinct From Nomad's Own Consul Token Below.
+CONSUL_AGENT_TOKEN="$(fetch_secret "consul-client-agent-token-${ENVIRONMENT}" || echo "")"
+
+# nomad-client-consul-token-{env} — NOMAD'S OWN Token For Its consul{}
+# Block (Not The Same As Consul's Agent Token Above) — Scoped To The
+# "Consul ACL Policy For Nomad" (Client Variant: node_prefix write +
+# service_prefix write, Narrower Than The Server Variant Which Also Needs
+# acl/mesh write For Connect Config Entries). Used By NOMAD Itself To
+# Register Services On Behalf Of Jobs And For Auto-Join Discovery.
+NOMAD_CONSUL_TOKEN="$(fetch_secret "nomad-client-consul-token-${ENVIRONMENT}" || echo "")"
 
 # Convert Comma-Separated retry_join Into A JSON Array For HCL/Consul-Style
 # List Syntax.
@@ -99,6 +104,14 @@ echo "[nomad-client-startup] env=${ENVIRONMENT} dc=${DATACENTER} pool=${NODE_POO
 # encrypt Is Written Here, Not Baked, Since The Baked consul.hcl Omits It
 # Entirely When consul_datacenter Was Undefined At Packer Bake Time (See
 # roles/consul/templates/consul.hcl.j2).
+#
+# Agent Token Goes In The Config File (acl.tokens.agent), Not A Separate
+# `consul acl set-agent-token` CLI Call — Per Consul's Own Bootstrap Docs:
+# "We recommend using the agent configuration file. That way if your
+# agent restarts, it reloads the token from the agent configuration
+# file." Since This File Is Rewritten Fresh On Every Boot Anyway, This Is
+# Simpler Than A Separate Post-Start Step And Means Consul Starts Already
+# Fully Configured, Not Started-Then-Patched.
 cat > /etc/consul.d/99-instance.hcl <<EOF
 datacenter = "${DATACENTER}"
 node_name  = "${NODE_NAME}"
@@ -109,6 +122,12 @@ advertise_addr = "${PRIVATE_IP}"
 retry_join = ${RETRY_JOIN_HCL}
 
 encrypt = "${CONSUL_GOSSIP_KEY}"
+
+acl {
+  tokens {
+    agent = "${CONSUL_AGENT_TOKEN}"
+  }
+}
 EOF
 chown consul:consul /etc/consul.d/99-instance.hcl
 chmod 0640 /etc/consul.d/99-instance.hcl
@@ -136,6 +155,10 @@ client {
   }
 }
 
+consul {
+  token = "${NOMAD_CONSUL_TOKEN}"
+}
+
 vault {
   jwt_auth_backend_path = "jwt-nomad-${ENVIRONMENT}"
 }
@@ -143,7 +166,8 @@ EOF
 chown nomad:nomad /etc/nomad.d/99-instance.hcl
 chmod 0640 /etc/nomad.d/99-instance.hcl
 
-# --- Start Consul, Wait, Then Start Nomad ---
+# --- Start Consul, Then Nomad — Both Already Fully Configured, No
+# Post-Start Token Application Step Needed ---
 systemctl restart consul
 
 for i in $(seq 1 30); do
@@ -153,11 +177,6 @@ for i in $(seq 1 30); do
   fi
   sleep 2
 done
-
-if [ -n "${CONSUL_CLIENT_TOKEN}" ]; then
-  consul acl set-agent-token agent "${CONSUL_CLIENT_TOKEN}" || \
-    echo "[nomad-client-startup] Failed to set agent token — platform-config may not have created it yet."
-fi
 
 systemctl restart nomad
 

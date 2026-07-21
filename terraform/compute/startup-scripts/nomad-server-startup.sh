@@ -66,11 +66,17 @@ chmod 0600 /etc/consul.d/tls/key.pem
 
 CONSUL_GOSSIP_KEY="$(fetch_secret "consul-gossip-key-${ENVIRONMENT}")"
 
-# consul-server-token-{env} — Created By platform-config's consul-acl.tf
-# Once Flag 4 (agent-policy Restructuring) Is Resolved And Built. Fetched
-# Here, But Only Applied After Consul Starts (See Below) Since
-# `set-agent-token` Needs A Running Agent To Talk To.
-CONSUL_SERVER_TOKEN="$(fetch_secret "consul-server-token-${ENVIRONMENT}" || echo "")"
+# consul-server-agent-token-{env} — Consul's OWN Agent Token
+# (acl.tokens.agent), Narrow Node-Identity Scope (Self-Registration,
+# Anti-Entropy Only).
+CONSUL_AGENT_TOKEN="$(fetch_secret "consul-server-agent-token-${ENVIRONMENT}" || echo "")"
+
+# nomad-server-consul-token-{env} — NOMAD'S OWN Token For Its consul{}
+# Block, Distinct From Consul's Agent Token Above. Scoped To The Server
+# Variant Of The "Consul ACL Policy For Nomad" — Broader Than The Client
+# Variant, Since Servers Also Need acl/mesh write For Consul Connect
+# Config Entries.
+NOMAD_CONSUL_TOKEN="$(fetch_secret "nomad-server-consul-token-${ENVIRONMENT}" || echo "")"
 
 # Nomad: CA + Server Leaf Cert/Key Are Shared, Not Per-Environment (Dev/
 # Prod Never Federate — See scripts/generate-and-push-pki.sh). Fetched
@@ -113,6 +119,12 @@ retry_join = ${RETRY_JOIN_HCL}
 bootstrap_expect = ${BOOTSTRAP_EXPECT}
 
 encrypt = "${CONSUL_GOSSIP_KEY}"
+
+acl {
+  tokens {
+    agent = "${CONSUL_AGENT_TOKEN}"
+  }
+}
 EOF
 chown consul:consul /etc/consul.d/99-instance.hcl
 chmod 0640 /etc/consul.d/99-instance.hcl
@@ -138,6 +150,10 @@ server {
   encrypt = "${NOMAD_GOSSIP_KEY}"
 }
 
+consul {
+  token = "${NOMAD_CONSUL_TOKEN}"
+}
+
 vault {
   jwt_auth_backend_path = "jwt-nomad-${ENVIRONMENT}"
 }
@@ -145,7 +161,8 @@ EOF
 chown nomad:nomad /etc/nomad.d/99-instance.hcl
 chmod 0640 /etc/nomad.d/99-instance.hcl
 
-# --- Start Consul, Wait, Apply Agent Token, Then Start Nomad ---
+# --- Start Consul, Then Nomad — Both Already Fully Configured Via
+# Config File, No Post-Start Token Application Step Needed ---
 systemctl restart consul
 
 for i in $(seq 1 30); do
@@ -155,11 +172,6 @@ for i in $(seq 1 30); do
   fi
   sleep 2
 done
-
-if [ -n "${CONSUL_SERVER_TOKEN}" ]; then
-  consul acl set-agent-token agent "${CONSUL_SERVER_TOKEN}" || \
-    echo "[nomad-server-startup] Failed to set agent token — platform-config may not have created it yet."
-fi
 
 systemctl restart nomad
 
