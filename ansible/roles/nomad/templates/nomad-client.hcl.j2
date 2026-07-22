@@ -12,7 +12,9 @@
 client {
   enabled = true
 {% if retry_join is defined %}
-  servers = {{ retry_join | to_json }}
+  server_join {
+    retry_join = {{ retry_join | to_json }}
+  }
 {% endif %}
 }
 

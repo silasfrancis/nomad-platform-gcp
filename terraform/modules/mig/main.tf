@@ -1,4 +1,4 @@
-# Nomad Client MIGs
+# Worker MIGs (Nomad & Consul Clients)
 #
 # One instance template + one regional (multi-zone) MIG + one autoscaler
 # PER ENTRY in var.migs. Everything is generated from that one map via
@@ -57,7 +57,6 @@ resource "google_compute_instance_template" "this" {
     datacenter     = each.value.environment == "dev" ? "dc-dev" : "dc-prod"
     node_pool_type = each.value.spot ? "spot" : "on-demand"
     node_class     = each.value.spot ? "preemptible" : "critical"
-    retry_join     = join(",", var.retry_join_targets[each.value.environment])
   },
     each.value.startup_script != "" ? { startup-script = each.value.startup_script } : {},
     each.value.spot && each.value.shutdown_script != "" ? { shutdown-script = each.value.shutdown_script } : {},

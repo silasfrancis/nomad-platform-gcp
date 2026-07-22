@@ -82,9 +82,14 @@ resource "google_compute_instance" "this" {
     scopes = each.value.service_account_scopes
   }
 
-  metadata = merge(
+  metadata = merge({
+    env            = each.value.environment
+    datacenter     = each.value.environment == "dev" ? "dc-dev" : "dc-prod"
+    node_pool_type = each.value.spot ? "spot" : "on-demand"
+    node_class     = each.value.spot ? "preemptible" : "critical"
+  },
     each.value.startup_script != "" ? { startup-script = each.value.startup_script } : {},
-    each.value.shutdown_script != "" ? { shutdown-script = each.value.shutdown_script } : {}
+    each.value.spot && each.value.shutdown_script != "" ? { shutdown-script = each.value.shutdown_script } : {},
   )
 
   allow_stopping_for_update = true

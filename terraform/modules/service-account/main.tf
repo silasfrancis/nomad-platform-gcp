@@ -2,38 +2,46 @@ locals {
   service_accounts = {
     "nomad-server-sa-prod" = {
       display_name  = "Nomad Server SA"
-      description   = "Attached to Nomad server VMs. Logging and monitoring only."
-      # Project-level roles assigned here provide baseline functionality (e.g., logging and monitoring).
-      # Sensitive permissions (e.g., storage or KMS access) are deliberately excluded from these 
-      # project-level assignments and will be applied at the specific resource level to 
-      # strictly enforce the principle of least privilege.
+      description   = "Attached to control-plane VMs running Nomad Server and Consul Server."
+      # Project-level roles assigned here provide baseline functionality
+      # (e.g. logging, monitoring, and Compute Engine instance discovery for
+      # Nomad/Consul auto-join).
+      #
+      # Sensitive permissions (such as Secret Manager, Cloud Storage, KMS, and
+      # other workload-specific access) are intentionally excluded from these
+      # project-level roles and granted only on the specific resources that
+      # require them, following the principle of least privilege.
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
+        "roles/compute.viewer"
       ]
     }
     "nomad-server-sa-dev" = {
       display_name  = "Nomad Server SA"
-      description   = "Attached to Nomad server VMs. Logging and monitoring only."
+      description   = "Attached to control-plane VMs running Nomad Server and Consul Server."
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
+        "roles/compute.viewer"
       ]
     }
     "nomad-client-sa-prod" = {
       display_name  = "Nomad Client SA"
-      description   = "Attached to Nomad client MIG nodes."
+      description   = "Attached to worker VMs running Nomad Client and Consul Client."
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
+        "roles/compute.viewer"
       ]
     }
     "nomad-client-sa-dev" = {
       display_name  = "Nomad Client SA"
-      description   = "Attached to Nomad client MIG nodes."
+      description   = "Attached to worker VMs running Nomad Client and Consul Client."
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
+        "roles/compute.viewer"
       ]
     }
     "management-vm-sa" = {

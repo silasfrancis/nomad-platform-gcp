@@ -23,3 +23,7 @@
     - docker
     - octopus
     - traefik
+    - role: vault
+      tasks_from: backup.yml
+    - role: octopus
+      tasks_from: backup.yml

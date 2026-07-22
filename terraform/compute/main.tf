@@ -66,8 +66,8 @@ locals {
       external_ip              = false
       service_account_email    = local.nomad_server_sa_member_dev
       boot_disk_size_gb        = 20
-      tags                     = ["nomad-server", "consul-server"]
-      labels                   = { role = "nomad-server", environment = "dev" }
+      tags                     = ["nomad-server-dev", "consul-server-dev"]
+      labels                   = { role = "control-plane", environment = "dev" }
       startup_script           = local.nomad_server_startup_script
       additional_disks = [
         { name = "nomad-data", size_gb = 20 },
@@ -84,8 +84,8 @@ locals {
       external_ip              = false
       service_account_email    = local.nomad_server_sa_member_prod
       boot_disk_size_gb        = 20
-      tags                     = ["nomad-server", "consul-server"]
-      labels                   = { role = "nomad-server", environment = "prod" }
+      tags                     = ["nomad-server-prod", "consul-server-prod"]
+      labels                   = { role = "control-plane", environment = "prod" }
       startup_script           = local.nomad_server_startup_script
       additional_disks = [
         { name = "nomad-data", size_gb = 20 },
@@ -159,7 +159,8 @@ locals {
       max_replicas             = 5
       spot                     = false
       service_account_email    = local.nomad_client_sa_member_dev
-      labels                   = { role = "nomad-client", environment = "dev", pool = "ondemand" }
+      tags                     = ["nomad-client-dev", "consul-client-dev"]
+      labels                   = { role = "worker", environment = "dev", pool = "ondemand" }
       environment              = "dev"
       scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
       startup_script           = local.nomad_client_startup_script
@@ -171,7 +172,8 @@ locals {
       max_replicas             = 5
       spot                     = true
       service_account_email    = local.nomad_client_sa_member_dev
-      labels                   = { role = "nomad-client", environment = "dev", pool = "spot" }
+      tags                     = ["nomad-client-dev", "consul-client-dev"]
+      labels                   = { role = "worker", environment = "dev", pool = "spot" }
       environment              = "dev"
       startup_script           = local.nomad_client_startup_script
       shutdown_script          = local.nomad_client_spot_shutdown_script
@@ -183,7 +185,8 @@ locals {
       max_replicas             = 10
       spot                     = false
       service_account_email    = local.nomad_client_sa_member_prod
-      labels                   = { role = "nomad-client", environment = "prod", pool = "ondemand" }
+      tags                     = ["nomad-client-prod", "consul-client-prod"]
+      labels                   = { role = "worker", environment = "prod", pool = "ondemand" }
       environment              = "prod"
       scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
       startup_script           = local.nomad_client_startup_script
@@ -195,7 +198,8 @@ locals {
       max_replicas             = 10
       spot                     = true
       service_account_email    = local.nomad_client_sa_member_prod
-      labels                   = { role = "nomad-client", environment = "prod", pool = "spot" }
+      tags                     = ["nomad-client-prod", "consul-client-prod"]
+      labels                   = { role = "worker", environment = "prod", pool = "spot" }
       environment              = "prod"
       startup_script           = local.nomad_client_startup_script
       shutdown_script          = local.nomad_client_spot_shutdown_script
