@@ -18,6 +18,12 @@ locals {
 
 
   zones = slice(data.google_compute_zones.available.names, 0, 3)
+  #Instance scripts for Nomad Servers and Client MIGs
+  instance_scripts_dir = "${path.module}/instance-scripts"
+  nomad_server_startup_script = file("${local.instance_scripts_dir}/nomad-server-startup.sh")
+  nomad_client_startup_script = file("${local.instance_scripts_dir}/nomad-client-startup.sh")
+  nomad_client_spot_shutdown_script  = file("${local.instance_scripts_dir}/nomad-client-spot-shutdown.sh")
+
 
   # Shared, Unconditional — Not Gated By active_environments
   #
@@ -55,8 +61,6 @@ locals {
   # nomad-prod-server is fixed at 3 for a real Raft quorum. Each instance
   # gets its own zone off local.zones so a single-zone outage doesn't take
   # out every server at once.
-
-  nomad_server_startup_script        = file("${path.module}/startup-scripts/nomad-server-startup.sh")
 
   dev_server_instances = {
     for i in range(var.nomad_dev_server_count) : "nomad-dev-server-${i}" => {
@@ -132,24 +136,6 @@ locals {
   # unconditional — active_environments = [] still creates mgmt-vm and
   # nothing else.
   instances = merge(local.shared_instances, local.active_env_instances)
-
-  # --- Startup/Shutdown Scripts For The Nomad Client MIGs ---
-  # Both Live In compute/startup-scripts/, Not The Root scripts/ Folder —
-  # That's Reserved For Standalone Operational CLI Helpers (Vault Init,
-  # ACL Bootstrap), Not Instance-Lifecycle Scripts Consumed By Terraform.
-  #
-  # nomad_client_startup_script Runs On Every Client Boot (On-Demand AND
-  # Spot) — Writes 99-instance.hcl, Fetches The Per-Env Consul TLS
-  # Material From Secret Manager, Starts Consul Then Nomad.
-  #
-  # nomad_client_spot_shutdown_script Runs Only On *-spot Entries, During
-  # GCP's ~30s ACPI Soft-Off Window Before A Preempted Instance Is Killed.
-  # Supersedes The Old Inline nomad_drain_shutdown_script Heredoc — Same
-  # Core Drain Command, Now Version-Controlled As An Actual .sh File With
-  # Real Linting/Shellcheck Support Instead Of A String Embedded In HCL.
-  nomad_client_startup_script        = file("${path.module}/startup-scripts/nomad-client-startup.sh")
-  nomad_client_spot_shutdown_script  = file("${path.module}/startup-scripts/nomad-client-spot-shutdown.sh")
-
 
   all_migs = {
     "nomad-dev-ondemand" = {
