@@ -35,18 +35,6 @@ locals {
       deny  = []
     }
 
-    "traefik-public" = {
-      direction     = "INGRESS"
-      priority      = 1000
-      source_ranges = ["0.0.0.0/0"]
-      destination_ranges = [
-        local.cidr["subnet-dev-public"],
-        local.cidr["subnet-prod-public"],
-      ]
-      allow = [{ protocol = "tcp", ports = ["80", "443"] }]
-      deny  = []
-    }
-
     "deny-dev-to-prod" = {
       direction           = "INGRESS"
       priority            = 900
@@ -115,6 +103,26 @@ locals {
       deny                = []
     }
 
+    "consul-connect-sidecars" = {
+      # Consul Connect Sidecar Data Plane
+      # Sidecar-to-sidecar mTLS traffic between client nodes in the same
+      # environment.
+      direction = "INGRESS"
+      priority  = 1000
+      source_ranges = [
+        local.cidr["subnet-dev-private"],
+        local.cidr["subnet-prod-private"],
+      ]
+      destination_ranges = [
+        local.cidr["subnet-dev-private"],
+        local.cidr["subnet-prod-private"],
+      ]
+      allow = [
+        { protocol = "tcp", ports = ["21000-21255"] },
+      ]
+      deny = []
+    }
+
     "grafana-query" = {
       # Grafana runs on mgmt (systemd) and queries Prometheus + Loki, both
       # of which run per-environment as Nomad jobs on dev/prod client nodes
@@ -135,11 +143,19 @@ locals {
 
     # Traefik (public) proxies only frontend:8080 into its own environment's
     # private subnet (architecture doc section 4.3 — no other backend service
-    # is routed through Traefik). Split per-environment rather than one rule
-    # spanning both public CIDRs, because deny-dev-to-prod/deny-prod-to-dev
-    # only match *-private source CIDRs — a combined public->private rule
-    # here would reopen a dev-public -> prod-private path those deny rules
-    # don't cover.
+    # is routed through Traefik).
+    "traefik-public" = {
+      direction     = "INGRESS"
+      priority      = 1000
+      source_ranges = ["0.0.0.0/0"]
+      destination_ranges = [
+        local.cidr["subnet-dev-public"],
+        local.cidr["subnet-prod-public"],
+      ]
+      allow = [{ protocol = "tcp", ports = ["80", "443"] }]
+      deny  = []
+    }
+
     "traefik-backend-dev" = {
       direction           = "INGRESS"
       priority            = 1000

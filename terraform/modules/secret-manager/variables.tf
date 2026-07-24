@@ -53,6 +53,13 @@ variable "default_secrets" {
     # Never A VM. Human-Only. ---
     "vault-admin-token" = { labels = { purpose = "vault", tier = "operator" } }
 
+    # For authenticating via Vault, Consul, Nomad Terraform providers
+    "vault-operator-token" = { labels = { purpose = "vault", tier = "operator" } }
+    "consul-operator-token-dev" = { labels = { purpose = "consul", tier = "operator", environment = "dev" } }
+    "consul-operator-token-prod" = { labels = { purpose = "consul", tier = "operator", environment = "prod" } }
+    "nomad-operator-token-dev" = { labels = { purpose = "nomad", tier = "operator", environment = "dev" } }
+    "nomad-operator-token-prod" = { labels = { purpose = "nomad", tier = "operator", environment = "prod" } }
+
     "nomad-acl-admin-token-dev"   = { labels = { purpose = "nomad", tier = "operator", environment = "dev" } }
     "nomad-acl-admin-token-prod"  = { labels = { purpose = "nomad", tier = "operator", environment = "prod" } }
     "consul-acl-admin-token-dev"  = { labels = { purpose = "consul", tier = "operator", environment = "dev" } }

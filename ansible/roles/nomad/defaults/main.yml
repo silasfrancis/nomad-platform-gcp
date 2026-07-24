@@ -26,3 +26,5 @@ nomad_telemetry_prometheus_enabled: true
 # Or prod.yml.
 nomad_vault_address: "https://vault.platform.lefrancis.org:8200"
 nomad_vault_enabled: true
+
+secret_nomad_operator_token: "nomad-operator-token-{{ environment }}"

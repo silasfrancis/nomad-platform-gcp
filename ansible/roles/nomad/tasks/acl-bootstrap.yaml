@@ -1,0 +1,114 @@
+---
+# Run Against: role_nomad_server Group, ONCE PER ENVIRONMENT — Use
+# `--limit dev` Or `--limit prod` Explicitly (Run This Playbook Twice,
+# Once Per Env). Same Pattern As consul-acl-bootstrap.yml And
+# playbooks/vault-init.yml.
+#
+# NOTE: This Only Produces The ROOT and Terraform provider token. 
+# Ongoing Policies (Admin Token, nomad-sentinel/octopus-deploy/github-runner Tokens)
+# Are Created By terraform/platform-config. Run This Playbook BEFORE platform-config.
+
+- name: Determine Secret Name For This Environment
+  ansible.builtin.set_fact:
+    nomad_root_token_secret: "nomad-acl-root-token-{{ environment_name }}"
+
+- name: Check If Already Bootstrapped
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret={{ nomad_root_token_secret }} --project={{ gcp_project_id }}
+  register: nomad_bootstrap_existing
+  run_once: true
+  changed_when: false
+  failed_when: false
+
+- name: Report Already-Bootstrapped And Skip
+  ansible.builtin.debug:
+    msg: "{{ nomad_root_token_secret }} already exists — skipping, nothing to do."
+  run_once: true
+  when: nomad_bootstrap_existing.rc == 0
+
+- name: Wait Until Nomad Has Elected A Leader
+  ansible.builtin.command: nomad status
+  register: nomad_status
+  retries: 30
+  delay: 5
+  until: nomad_status.rc == 0
+  run_once: true
+  changed_when: false
+  when: nomad_bootstrap_existing.rc != 0
+
+- name: Run Nomad ACL Bootstrap (First Server In Scope Only)
+  ansible.builtin.command: nomad acl bootstrap -json
+  register: nomad_bootstrap_raw
+  run_once: true
+  no_log: true
+  when: nomad_bootstrap_existing.rc != 0
+  changed_when: true
+
+- name: Write Nomad Root Token To Secret Manager
+  ansible.builtin.shell: >
+    echo -n "{{ (nomad_bootstrap_raw.stdout | from_json).SecretID }}" |
+    gcloud secrets versions add {{ nomad_root_token_secret }}
+    --data-file=- --project={{ gcp_project_id }}
+  run_once: true
+  no_log: true
+  when: nomad_bootstrap_existing.rc != 0
+  changed_when: true
+
+- name: Report Bootstrap Outcome
+  ansible.builtin.debug:
+    msg: "Nomad ({{ environment_name }}) bootstrapped. Root token written to {{ nomad_root_token_secret }}."
+  run_once: true
+  when: nomad_bootstrap_existing.rc != 0
+
+# Terraform Operator Token — Scoped Down From Bootstrap (Management) Token
+- name: Write terraform-operator Nomad ACL policy
+  ansible.builtin.copy:
+    dest: /tmp/terraform-operator-policy.hcl
+    content: |
+      namespace "*" {
+        policy = "write"
+      }
+      acl {
+        policy = "write"
+      }
+    mode: "0600"
+
+- name: Apply terraform-operator Nomad ACL policy
+  ansible.builtin.command: >
+    nomad acl policy apply
+    -description="Terraform operator policy - platform-config"
+    terraform-operator /tmp/terraform-operator-policy.hcl
+  environment:
+    NOMAD_TOKEN: "{{ nomad_bootstrap_token }}"
+  no_log: true
+
+- name: Create terraform-operator Nomad ACL token
+  ansible.builtin.command: >
+    nomad acl token create
+    -name="terraform-operator"
+    -policy=terraform-operator
+    -type=client
+    -json
+  environment:
+    NOMAD_TOKEN: "{{ nomad_bootstrap_token }}"
+  register: nomad_operator_token_raw
+  no_log: true
+
+- name: Extract terraform-operator Nomad token value
+  ansible.builtin.set_fact:
+    nomad_operator_token: "{{ (nomad_operator_token_raw.stdout | from_json).SecretID }}"
+  no_log: true
+
+- name: Push terraform-operator Nomad token to Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions add {{ secret_nomad_operator_token }}
+    --data-file=- --project={{ gcp_project }}
+  args:
+    stdin: "{{ nomad_operator_token }}"
+  no_log: true
+
+- name: Remove local policy file
+  ansible.builtin.file:
+    path: /tmp/terraform-operator-policy.hcl
+    state: absent

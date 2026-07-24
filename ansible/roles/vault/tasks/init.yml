@@ -111,3 +111,57 @@
       {{ 'Vault was already initialized — no action taken.'
          if vault_status.initialized
          else 'Vault initialized for the first time. Root token and recovery keys written to Secret Manager, audit logging enabled.' }}
+
+# Terraform Operator Token — Scoped Down From Root
+# Root token is used exactly once, right here, to mint a scoped
+# operator token for platform-config's Terraform runs. Root itself
+# stays in the root tier and is never referenced again after this.
+- name: Write terraform-operator Vault policy
+  ansible.builtin.copy:
+    dest: /tmp/terraform-operator-policy.hcl
+    content: |
+      path "sys/mounts/*" {
+        capabilities = ["create", "read", "update", "delete", "list"]
+      }
+      path "sys/policies/acl/*" {
+        capabilities = ["create", "read", "update", "delete", "list"]
+      }
+      path "auth/*" {
+        capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+      }
+    mode: "0600"
+
+- name: Apply terraform-operator Vault policy
+  ansible.builtin.command: >
+    vault policy write terraform-operator /tmp/terraform-operator-policy.hcl
+  environment:
+    VAULT_ADDR: "{{ vault_addr }}"
+    VAULT_TOKEN: "{{ vault_root_token }}"
+  no_log: true
+
+- name: Create terraform-operator Vault token
+  ansible.builtin.command: >
+    vault token create -policy=terraform-operator -period=720h -format=json
+  environment:
+    VAULT_ADDR: "{{ vault_addr }}"
+    VAULT_TOKEN: "{{ vault_root_token }}"
+  register: vault_operator_token_raw
+  no_log: true
+
+- name: Extract terraform-operator token value
+  ansible.builtin.set_fact:
+    vault_operator_token: "{{ (vault_operator_token_raw.stdout | from_json).auth.client_token }}"
+  no_log: true
+
+- name: Push terraform-operator Vault token to Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions add {{ secret_vault_operator_token }}
+    --data-file=- --project={{ gcp_project }}
+  args:
+    stdin: "{{ vault_operator_token }}"
+  no_log: true
+
+- name: Remove local policy file
+  ansible.builtin.file:
+    path: /tmp/terraform-operator-policy.hcl
+    state: absent

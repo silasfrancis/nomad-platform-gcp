@@ -1,0 +1,117 @@
+# Run Against: role_nomad_server Group, ONCE PER ENVIRONMENT — Use
+# `--limit dev` Or `--limit prod` Explicitly (Run This Playbook Twice,
+# Once Per Env). Bootstraps The First Server In Whatever Scope --limit
+# Gives It. Idempotent Via Secret Manager's Own Pre-Check, Same Pattern
+# As playbooks/vault-init.yml.
+#
+# NOTE: This Only Produces The ROOT Token and Terraform Operator Token. Ongoing Policies (Admin Token,
+# Traefik's Read-Only Token, Client/Server Agent Tokens) Are Created By
+# terraform/platform-config, Which Reads This Root Token Back From Secret
+# Manager To Authenticate The Consul Provider. Run This Playbook BEFORE
+# platform-config.
+
+- name: Determine Secret Name For This Environment
+  ansible.builtin.set_fact:
+    consul_root_token_secret: "consul-acl-root-token-{{ environment_name }}"
+
+- name: Check If Already Bootstrapped
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret={{ consul_root_token_secret }} --project={{ gcp_project_id }}
+  register: consul_bootstrap_existing
+  run_once: true
+  changed_when: false
+  failed_when: false
+
+- name: Report Already-Bootstrapped And Skip
+  ansible.builtin.debug:
+    msg: "{{ consul_root_token_secret }} already exists — skipping, nothing to do."
+  run_once: true
+  when: consul_bootstrap_existing.rc == 0
+
+- name: Wait Until Consul Has An Elected Leader
+  ansible.builtin.command: consul members
+  register: consul_leader_check
+  retries: 30
+  delay: 5
+  until: consul_leader_check.rc == 0
+  run_once: true
+  changed_when: false
+  when: consul_bootstrap_existing.rc != 0
+
+- name: Run Consul ACL Bootstrap (First Server In Scope Only)
+  ansible.builtin.command: consul acl bootstrap -format=json
+  register: consul_bootstrap_raw
+  run_once: true
+  no_log: true
+  when: consul_bootstrap_existing.rc != 0
+  changed_when: true
+
+- name: Write Consul Root Token To Secret Manager
+  ansible.builtin.shell: >
+    echo -n "{{ (consul_bootstrap_raw.stdout | from_json).SecretID }}" |
+    gcloud secrets versions add {{ consul_root_token_secret }}
+    --data-file=- --project={{ gcp_project_id }}
+  run_once: true
+  no_log: true
+  when: consul_bootstrap_existing.rc != 0
+  changed_when: true
+
+- name: Report Bootstrap Outcome
+  ansible.builtin.debug:
+    msg: "Consul ({{ environment_name }}) bootstrapped. Root token written to {{ consul_root_token_secret }}."
+  run_once: true
+  when: consul_bootstrap_existing.rc != 0
+
+# Terraform Operator Token — Scoped Down From Bootstrap (Management) Token
+- name: Write terraform-operator Consul ACL policy
+  ansible.builtin.copy:
+    dest: /tmp/terraform-operator-policy.hcl
+    content: |
+      acl = "write"
+      key_prefix "" {
+        policy = "write"
+      }
+      service_prefix "" {
+        policy = "write"
+      }
+      session_prefix "" {
+        policy = "write"
+      }
+    mode: "0600"
+
+- name: Apply terraform-operator Consul ACL policy
+  ansible.builtin.command: >
+    consul acl policy create
+    -name=terraform-operator
+    -rules=@/tmp/terraform-operator-policy.hcl
+    -token={{ consul_bootstrap_token }}
+  no_log: true
+
+- name: Create terraform-operator Consul ACL token
+  ansible.builtin.command: >
+    consul acl token create
+    -policy-name=terraform-operator
+    -description="Terraform operator token - platform-config"
+    -format=json
+    -token={{ consul_bootstrap_token }}
+  register: consul_operator_token_raw
+  no_log: true
+
+- name: Extract terraform-operator Consul token value
+  ansible.builtin.set_fact:
+    consul_operator_token: "{{ (consul_operator_token_raw.stdout | from_json).SecretID }}"
+  no_log: true
+
+- name: Push terraform-operator Consul token to Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions add {{ secret_consul_operator_token }}
+    --data-file=- --project={{ gcp_project }}
+  args:
+    stdin: "{{ consul_operator_token }}"
+  no_log: true
+
+- name: Remove local policy file
+  ansible.builtin.file:
+    path: /tmp/terraform-operator-policy.hcl
+    state: absent
