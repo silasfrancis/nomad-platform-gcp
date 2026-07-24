@@ -19,7 +19,7 @@
 # Somewhere In The Cluster.
 
 - name: Bootstrap Consul ACLs (Run Once Per Environment Via --limit)
-  hosts: role_nomad_server
+  hosts: role_control_plane
   become: true
 
   tasks:

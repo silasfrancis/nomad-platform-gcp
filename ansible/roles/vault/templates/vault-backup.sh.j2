@@ -10,7 +10,7 @@ SNAPSHOT_FILE="/tmp/vault-snapshot-${TIMESTAMP}.snap"
 
 export VAULT_ADDR="https://{{ vault_internal_dns }}:8200"
 export VAULT_SKIP_VERIFY="true"
-export VAULT_TOKEN="$(gcloud secrets versions access latest --secret={{ secret_vault_root_token }} --project={{ gcp_project_id }})"
+export VAULT_TOKEN="$(gcloud secrets versions access latest --secret={{ secret_vault_backup_token }} --project={{ gcp_project_id }})"
 
 echo "$(date -u +%FT%TZ): taking Vault Raft snapshot"
 vault operator raft snapshot save "${SNAPSHOT_FILE}"

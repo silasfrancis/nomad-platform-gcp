@@ -29,7 +29,7 @@
 #      On The Temp Build VM).
 
 - name: Configure Nomad Client Nodes
-  hosts: "{{ target_hosts | default('role_nomad_client') }}"
+  hosts: "{{ target_hosts | default('role_worker') }}"
   become: true
   vars:
     consul_mode: client

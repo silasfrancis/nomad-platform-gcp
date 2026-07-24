@@ -49,6 +49,10 @@ connect {
   enabled = {{ consul_connect_enabled | lower }}
 }
 
+ports {
+  grpc_tls = 8503
+}
+
 acl {
   enabled                  = {{ consul_acl_enabled | lower }}
   default_policy           = "{{ consul_acl_default_policy }}"

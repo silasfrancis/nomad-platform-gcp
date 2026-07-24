@@ -161,3 +161,7 @@
     - nomad_base_config_result.changed
     - nomad_server_config_result.changed
     - nomad_client_config_result.changed
+
+- name: Install CNI plugins (client nodes only)
+  ansible.builtin.include_tasks: cni-plugins.yaml
+  when: nomad_node_role == "client"

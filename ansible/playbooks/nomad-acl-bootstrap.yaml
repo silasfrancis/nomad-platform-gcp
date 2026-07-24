@@ -9,7 +9,7 @@
 # terraform/platform-config. Run This Playbook BEFORE platform-config.
 
 - name: Bootstrap Nomad ACLs (Run Once Per Environment Via --limit)
-  hosts: role_nomad_server
+  hosts: role_control_plane
   become: true
 
   tasks:

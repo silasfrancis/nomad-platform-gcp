@@ -1,5 +1,7 @@
 ---
 nomad_version: "2.0.4"
+cni_plugins_version: "1.9.1"
+consul_cni_version: "1.9.8"
 
 # "server" Or "client" — Set Per-Playbook.
 nomad_mode: "client"

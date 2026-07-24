@@ -20,6 +20,7 @@ vault_gcp_kms_region: "us-central1"
 vault_gcp_kms_key_ring: "vault-unseal"
 vault_gcp_kms_crypto_key: "vault-unseal-key"
 secret_management_ca_cert: ""
+secret_vault_backup_token: ""
 
 vault_listener_address: "0.0.0.0:8200"
 vault_ui_enabled: true

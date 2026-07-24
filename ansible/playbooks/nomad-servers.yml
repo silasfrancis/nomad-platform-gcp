@@ -4,7 +4,7 @@
 # Automatically Based On Each Instance's env Label).
 
 - name: Configure Nomad Server Nodes
-  hosts: role_nomad_server
+  hosts: role_control_plane
   become: true
   vars:
     consul_mode: server

@@ -11,7 +11,6 @@
 # GCP's standard defaults (on_host_maintenance = MIGRATE, automatic
 # restart) rather than configured explicitly.
 
-
 locals {
   disks_flat = merge([
     for inst_key, inst in var.instances : {
@@ -21,6 +20,11 @@ locals {
       })
     }
   ]...)
+
+  # Filter instances that need a static external IP reserved
+  static_ips = {
+    for k, v in var.instances : k => v if v.external_ip && v.static_external_ip
+  }
 }
 
 resource "google_compute_disk" "additional" {
@@ -35,6 +39,16 @@ resource "google_compute_disk" "additional" {
   disk_encryption_key {
     kms_key_self_link = var.disk_cmek_key
   }
+}
+
+# Reserve Static IPs dynamically for instances that need them
+resource "google_compute_address" "static" {
+  for_each = local.static_ips
+
+  project      = var.project_id
+  name         = "${each.key}-static-ip"
+  address_type = "EXTERNAL"
+  region       = replace(each.value.zone, "/-[a-z]$/", "")
 }
 
 resource "google_compute_instance" "this" {
@@ -57,8 +71,6 @@ resource "google_compute_instance" "this" {
     kms_key_self_link = var.disk_cmek_key
   }
 
-  # One attached_disk block per entry in this instance's additional_disks —
-  # filtered out of the flattened map by instance_key.
   dynamic "attached_disk" {
     for_each = {
       for k, v in local.disks_flat : k => v if v.instance_key == each.key
@@ -73,7 +85,10 @@ resource "google_compute_instance" "this" {
 
     dynamic "access_config" {
       for_each = each.value.external_ip ? [1] : []
-      content {}
+      content {
+        # If static_external_ip is true, bind the reserved address. Otherwise, leave empty for ephemeral.
+        nat_ip = each.value.static_external_ip ? google_compute_address.static[each.key].address : null
+      }
     }
   }
 

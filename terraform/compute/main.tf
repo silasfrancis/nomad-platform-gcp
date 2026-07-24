@@ -103,6 +103,7 @@ locals {
       machine_type            = "e2-micro"
       zone                     = local.zones[0]
       subnetwork               = local.network.subnets["subnet-dev-public"].self_link
+      static_external_ip       = true
       external_ip              = true
       service_account_email    = local.traefik_vm_sa_member_dev
       boot_disk_size_gb        = 20
@@ -113,6 +114,7 @@ locals {
       machine_type            = "e2-small"
       zone                     = local.zones[0]
       subnetwork               = local.network.subnets["subnet-prod-public"].self_link
+      static_external_ip       = true
       external_ip              = true
       service_account_email    = local.traefik_vm_sa_member_prod
       boot_disk_size_gb        = 20

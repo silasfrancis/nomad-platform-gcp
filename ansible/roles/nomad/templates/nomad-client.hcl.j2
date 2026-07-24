@@ -11,6 +11,10 @@
 
 client {
   enabled = true
+
+  cni_path       = "/opt/cni/bin"
+  cni_config_dir = "/etc/cni/net.d"
+  
 {% if retry_join is defined %}
   server_join {
     retry_join = {{ retry_join | to_json }}
