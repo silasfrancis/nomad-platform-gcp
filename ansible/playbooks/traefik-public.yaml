@@ -3,7 +3,7 @@
 # compute/main.tf To Label These Two VMs role=traefik (Not role=mgmt Or
 # Anything Else) — traefik-dev Gets env=dev, traefik-prod Gets env=prod,
 # So traefik_mode Below Resolves Correctly Per-Host From The env Group
-# Ansible Is Already In (dev.yml/prod.yml).
+# Ansible Is Already In (dev.yaml/prod.yaml).
 
 - name: Configure Public Traefik Nodes
   hosts: role_traefik

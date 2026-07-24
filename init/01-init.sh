@@ -3,11 +3,11 @@
 #
 # PostgreSQL initialisation script — runs automatically inside the platform-db
 # container on first startup when the data volume is empty. Mounted into
-# /docker-entrypoint-initdb.d/ via docker-compose.yml.
+# /docker-entrypoint-initdb.d/ via docker-compose.yaml.
 #
 # Creates one user and one database per platform service so each service
 # only has credentials for its own database. Passwords are never hardcoded
-# here — they are injected at runtime from .env via docker-compose.yml.
+# here — they are injected at runtime from .env via docker-compose.yaml.
 #
 # NOTE: this script only runs once. If you change it, destroy the volume
 # first: docker compose down -v

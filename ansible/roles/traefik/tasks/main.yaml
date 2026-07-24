@@ -55,7 +55,7 @@
     capability: cap_net_bind_service+ep
     state: present
 
-- name: Read Consul Catalog token 
+- name: Read Consul Catalog token
   ansible.builtin.command: >
     gcloud secrets versions access latest
     --secret={{ secret_consul_token }} --project={{ gcp_project_id }}
@@ -83,8 +83,8 @@
 
 - name: Template Static Traefik Configuration
   ansible.builtin.template:
-    src: traefik.yml.j2
-    dest: "{{ traefik_config_dir }}/traefik.yml"
+    src: traefik.yaml.j2
+    dest: "{{ traefik_config_dir }}/traefik.yaml"
     owner: "{{ traefik_user }}"
     group: "{{ traefik_group }}"
     mode: "0640"
@@ -93,8 +93,8 @@
 # --- Internal Mode Only: Static Routes To Fixed Internal Tools ---
 - name: Template Internal Dynamic Routes
   ansible.builtin.template:
-    src: internal-routes.yml.j2
-    dest: "{{ traefik_dynamic_config_dir }}/internal-routes.yml"
+    src: internal-routes.yaml.j2
+    dest: "{{ traefik_dynamic_config_dir }}/internal-routes.yaml"
     owner: "{{ traefik_user }}"
     group: "{{ traefik_group }}"
     mode: "0640"

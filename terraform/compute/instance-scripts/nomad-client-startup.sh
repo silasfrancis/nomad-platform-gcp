@@ -10,7 +10,7 @@
 #
 # gcloud CLI Is Used Directly For Every Secret Manager Read — Already
 # Present In The Baked Image Via The common Role's
-# common_install_gcloud_cli Toggle (Set True In nomad-clients.yml, The
+# common_install_gcloud_cli Toggle (Set True In nomad-clients.yaml, The
 # Same Playbook Packer's Provisioner Runs), So There's No Need For The
 # Raw curl+REST+OAuth-Token Approach An Earlier Version Of This Script
 # Used.

@@ -81,12 +81,12 @@ build {
   # Runs ansible-playbook locally Connecting Out To The Ephemeral Build VM Over The Same
   # IAP-Tunneled SSH Packer Itself Used To Provision It.
   #
-  # target_hosts=all Overrides nomad-clients.yml's Default hosts:
+  # target_hosts=all Overrides nomad-clients.yaml's Default hosts:
   # role_nomad_client — Packer's Own Generated Inventory Contains Only
   # The One Build VM, Not That Group, So Without This Override The Play
   # Would Match Zero Hosts And Silently Do Nothing.
   provisioner "ansible" {
-    playbook_file = "${local.ansible_dir}/playbooks/nomad-clients.yml"
+    playbook_file = "${local.ansible_dir}/playbooks/nomad-clients.yaml"
     user          = var.ssh_username
     use_proxy     = false
 
@@ -97,7 +97,7 @@ build {
 
     extra_arguments = [
       "-e", "target_hosts=all",
-      "-e", "@${local.ansible_dir}/inventory/group_vars/all.yml",
+      "-e", "@${local.ansible_dir}/inventory/group_vars/all.yaml",
     ]
   }
 }

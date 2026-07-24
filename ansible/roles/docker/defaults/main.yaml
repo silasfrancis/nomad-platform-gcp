@@ -13,8 +13,8 @@ docker_storage_driver: "overlay2"
 # Which system user(s) need docker group membership — set per-playbook,
 # not shared, since each playbook targets a different host with a
 # different user that actually exists there.
-# nomad-clients.yml passes ["nomad"] (Nomad's Docker driver needs it).
-# mgmt.yml passes ["gh-runner"] (the self-hosted runner builds and pushes
+# nomad-clients.yaml passes ["nomad"] (Nomad's Docker driver needs it).
+# mgmt.yaml passes ["gh-runner"] (the self-hosted runner builds and pushes
 # images via docker buildx, so it needs direct socket access — Octopus's
 # own mssql step doesn't need this, since Ansible drives docker compose
 # as root at bootstrap time, not gh-runner).

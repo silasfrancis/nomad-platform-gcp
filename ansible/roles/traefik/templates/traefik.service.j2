@@ -10,7 +10,7 @@ Group={{ traefik_group }}
 {% if traefik_mode == 'internal' %}
 EnvironmentFile={{ traefik_config_dir }}/traefik.env
 {% endif %}
-ExecStart={{ traefik_bin_dir }}/traefik --configFile={{ traefik_config_dir }}/traefik.yml
+ExecStart={{ traefik_bin_dir }}/traefik --configFile={{ traefik_config_dir }}/traefik.yaml
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536

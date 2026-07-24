@@ -1,11 +1,11 @@
 # Managed By Ansible (nomad Role, Client Mode) — Only Written When
-# nomad_mode == "client" (nomad-clients.yml, Or Baked Via Packer For
+# nomad_mode == "client" (nomad-clients.yaml, Or Baked Via Packer For
 # nomad-client-mig).
 #
 # node_pool_type/env/node_class client.meta Values Are NOT Set Here Even
 # When Group Vars Are In Scope — They're Genuinely Per-MIG-Instance-
 # Template (On-Demand Vs Spot Within The SAME Environment), Which Even
-# dev.yml/prod.yml Can't Express. The GCP Startup Script Always Sets These
+# dev.yaml/prod.yaml Can't Express. The GCP Startup Script Always Sets These
 # In 99-instance.hcl, Regardless Of Whether This Role Ran Via Direct
 # Ansible Or Via Packer.
 

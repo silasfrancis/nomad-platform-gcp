@@ -1,6 +1,6 @@
 ---
-# Called ONLY From playbooks/vault-init.yml — Never Included By
-# tasks/main.yml Or Any Routine site.yml/mgmt.yml Pass. `vault operator
+# Called ONLY From playbooks/vault-init.yaml — Never Included By
+# tasks/main.yaml Or Any Routine site.yaml/mgmt.yaml Pass. `vault operator
 # init` Must Run Exactly Once, Ever, Per Cluster; This File Guards That
 # With Vault's Own initialized Status Rather Than An External Marker.
 

@@ -2,7 +2,7 @@
 # NOTE: Environments, Projects, And Deployment Targets Are Created By The
 # Terraform service-config Layer (Via Octopus's REST API/Provider), Not
 # By This Role — This Role Only Gets Both Containers Running And
-# Reachable. Requires The docker Role To Have Already Run (mgmt.yml's
+# Reachable. Requires The docker Role To Have Already Run (mgmt.yaml's
 # Role Ordering Handles This).
 
 # --- Sql-Data Disk (Backs Both mssql's Data And Octopus's Own Volumes) ---
@@ -197,8 +197,8 @@
 
 - name: Template Octopus/Mssql Docker Compose File
   ansible.builtin.template:
-    src: docker-compose.yml.j2
-    dest: "{{ octopus_compose_dir }}/docker-compose.yml"
+    src: docker-compose.yaml.j2
+    dest: "{{ octopus_compose_dir }}/docker-compose.yaml"
     mode: "0640"
 
 - name: Start Mssql + Octopus Containers Via Docker Compose
@@ -227,4 +227,4 @@
   delay: 10
 
 - name: Include Mssql Backup Tasks
-  ansible.builtin.include_tasks: backup.yml
+  ansible.builtin.include_tasks: backup.yaml

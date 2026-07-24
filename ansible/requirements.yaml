@@ -1,5 +1,5 @@
 ---
-# Install With: ansible-galaxy collection install -r requirements.yml
+# Install With: ansible-galaxy collection install -r requirements.yaml
 # Also Requires On The Control Node (Your Laptop):
 #   pip install requests google-auth --break-system-packages
 

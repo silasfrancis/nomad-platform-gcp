@@ -5,9 +5,9 @@ galaxy_info:
     Installs Vault, mounts the vault-data disk, and starts the service
     with GCP KMS auto-unseal configured. TLS cert/key are fetched
     directly from Secret Manager (generated centrally by
-    scripts/generate-and-push-pki.sh, not by this role). tasks/init.yml
+    scripts/generate-and-push-pki.sh, not by this role). tasks/init.yaml
     (operator init + Secret Manager writes + audit enable) is separate
-    and only ever invoked by playbooks/vault-init.yml.
+    and only ever invoked by playbooks/vault-init.yaml.
   min_ansible_version: "2.15"
 
 dependencies:

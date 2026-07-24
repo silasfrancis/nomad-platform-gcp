@@ -1,8 +1,8 @@
 ---
 # Install + Configure + Start Only. `vault operator init` Lives In
-# tasks/init.yml, Called Only By playbooks/vault-init.yml — Never From
+# tasks/init.yaml, Called Only By playbooks/vault-init.yaml — Never From
 # This File — Since It's A Genuine One-Time Operation That Must Not Run
-# As Part Of A Routine site.yml/mgmt.yml Pass.
+# As Part Of A Routine site.yaml/mgmt.yaml Pass.
 
 - name: Create Vault Group
   ansible.builtin.group:
@@ -135,4 +135,4 @@
     daemon_reload: true
 
 - name: Include Vault Backup Tasks
-  ansible.builtin.include_tasks: backup.yml
+  ansible.builtin.include_tasks: backup.yaml

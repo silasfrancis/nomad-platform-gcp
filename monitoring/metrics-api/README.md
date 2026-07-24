@@ -48,7 +48,7 @@ export PORT=8080
 python main.py
 ```
 
-Or via the project's `docker-compose.yml` — see the top-level README.
+Or via the project's `docker-compose.yaml` — see the top-level README.
 
 ## Running tests
 

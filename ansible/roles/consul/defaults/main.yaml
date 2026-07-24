@@ -1,8 +1,8 @@
 ---
 consul_version: "2.0.2"
 
-# "server" Or "client" — Set Per-Playbook (nomad-servers.yml Sets server,
-# nomad-clients.yml Sets client). Determines The server = true/false Line
+# "server" Or "client" — Set Per-Playbook (nomad-servers.yaml Sets server,
+# nomad-clients.yaml Sets client). Determines The server = true/false Line
 # And Whether bootstrap_expect Is Written.
 consul_mode: "client"
 

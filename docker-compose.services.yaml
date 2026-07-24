@@ -2,7 +2,7 @@
 #
 # Contains only the Online Boutique microservices themselves. Infra
 # dependencies (Redis, PostgreSQL) and platform tooling (metrics-api,
-# ai-agent) live in docker-compose.yml — see that file's header for why
+# ai-agent) live in docker-compose.yaml — see that file's header for why
 # they're split out, and the top-level README for the full rationale.
 #
 # NO HEALTHCHECKS ARE DEFINED IN THIS FILE, deliberately and consistently
@@ -28,12 +28,11 @@
 # Run together with the platform/infra file (this file alone will fail —
 # cartservice depends on redis-cart, metrics-api/ai-agent ports overlap
 # with nothing here but the network must be shared):
-#   docker compose -f docker-compose.yml -f docker-compose.services.yml up --build
+#   docker compose -f docker-compose.yaml -f docker-compose.services.yaml up --build
 #
 # ============================================================================
 
 services:
-
   # --------------------------------------------------------------------------
   # REDIS (cartservice's backing store)
   # K8s: Deployment "redis-cart" + Service "redis-cart" (ClusterIP)
@@ -193,7 +192,7 @@ services:
   # has no Vault, so the password is passed as a plain env var sourced from
   # .env — this is the local stand-in for what Vault injects in Nomad.
   # Built from mcr.microsoft.com/dotnet/runtime-deps:...-chiseled.
-  # redis-cart is defined in docker-compose.yml (platform/infra file) —
+  # redis-cart is defined in docker-compose.yaml (platform/infra file) —
   # this works correctly across the two -f files because Compose merges
   # them into a single project before resolving depends_on and networks.
   # --------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 ---
 # Base Packages, OS Hardening, Sysctl Tuning, System Users. Runs On Every
 # Host Regardless Of Role. Docker Is Its Own Role (roles/docker) — Only
-# Included By nomad-clients.yml And mgmt.yml's Octopus/Mssql Step, Not
+# Included By nomad-clients.yaml And mgmt.yaml's Octopus/Mssql Step, Not
 # Universally.
 
 - name: Update Apt Cache
@@ -52,7 +52,7 @@
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^#?\s*PasswordAuthentication'
-    line: 'PasswordAuthentication no'
+    line: "PasswordAuthentication no"
   notify: Restart SSH
   when: common_disable_ssh_password_auth | bool
 
@@ -60,7 +60,7 @@
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^#?\s*PermitRootLogin'
-    line: 'PermitRootLogin no'
+    line: "PermitRootLogin no"
   notify: Restart SSH
   when: common_disable_ssh_root_login | bool
 
@@ -108,7 +108,6 @@
     state: present
     update_cache: true
   when: common_install_gcloud_cli | bool
-
 # --- System Users (Homes Created By The Roles That Actually Use Them —
 # consul And nomad Roles Create Their Own consul/nomad System Users
 # Alongside Package Install, Not Here, So Uid/Gid Setup Stays Next To The

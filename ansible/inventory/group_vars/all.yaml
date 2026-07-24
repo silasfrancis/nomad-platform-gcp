@@ -1,5 +1,5 @@
 ---
-# IAP Tunnel — %h Resolves To ansible_host, Which inventory/gcp.yml Sets
+# IAP Tunnel — %h Resolves To ansible_host, Which inventory/gcp.yaml Sets
 # To The GCE Instance Name (Not An IP), Which Is What
 # `gcloud compute start-iap-tunnel` Expects.
 ansible_user: "CHANGEME_your_oslogin_username"
@@ -26,7 +26,7 @@ secret_github_bot_pat: "github-bot-pat"
 # Running The traefik Role In Internal Mode.
 # secret_cloudflare_api_token: "cloudflare-api-token"  (defaulted in the traefik role itself)
 
-# NEW SECRETS — Written By playbooks/pki-bootstrap.yml, Not Manually
+# NEW SECRETS — Written By playbooks/pki-bootstrap.yaml, Not Manually
 # Seeded. Add These 6 To default_secrets Before Running That Playbook
 # (Ansible Only Writes Versions, Never Creates Containers):
 #   consul-gossip-key-dev, consul-gossip-key-prod,

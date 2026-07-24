@@ -2,7 +2,7 @@
 # `--limit dev` Or `--limit prod` Explicitly (Run This Playbook Twice,
 # Once Per Env). Bootstraps The First Server In Whatever Scope --limit
 # Gives It. Idempotent Via Secret Manager's Own Pre-Check, Same Pattern
-# As playbooks/vault-init.yml.
+# As playbooks/vault-init.yaml.
 #
 # NOTE: This Only Produces The ROOT Token and Terraform Operator Token. Ongoing Policies (Admin Token,
 # Traefik's Read-Only Token, Client/Server Agent Tokens) Are Created By

@@ -1,10 +1,10 @@
 ---
 # Run Against: role_nomad_server Group, ONCE PER ENVIRONMENT — Use
 # `--limit dev` Or `--limit prod` Explicitly (Run This Playbook Twice,
-# Once Per Env). Same Pattern As consul-acl-bootstrap.yml And
-# playbooks/vault-init.yml.
+# Once Per Env). Same Pattern As consul-acl-bootstrap.yaml And
+# playbooks/vault-init.yaml.
 #
-# NOTE: This Only Produces The ROOT and Terraform provider token. 
+# NOTE: This Only Produces The ROOT and Terraform provider token.
 # Ongoing Policies (Admin Token, nomad-sentinel/octopus-deploy/github-runner Tokens)
 # Are Created By terraform/platform-config. Run This Playbook BEFORE platform-config.
 

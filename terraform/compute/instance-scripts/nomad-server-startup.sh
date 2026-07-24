@@ -2,7 +2,7 @@
 # GCE Startup Script — nomad-server Static Instances Only (Both dev And
 # prod, Terraform Passes The Right Metadata Per-Instance).
 #
-# Ansible's Job (mgmt.yml/nomad-servers.yml): Install Binaries, Create
+# Ansible's Job (mgmt.yaml/nomad-servers.yaml): Install Binaries, Create
 # Users/Directories, Template The Systemd Units, Enable (NOT Start) The
 # Services. Per The Latest PKI Redesign, NOTHING Secret-Related Is Baked
 # Or Written By Ansible Either — Every CA Cert, Leaf Cert/Key, Gossip

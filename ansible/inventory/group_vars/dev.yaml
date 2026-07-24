@@ -1,6 +1,6 @@
 ---
 # Applies Automatically To Any Host Labeled env=dev In GCP (See
-# inventory/gcp.yml's keyed_groups). Does NOT Apply To mgmt-vm, Which Has
+# inventory/gcp.yaml's keyed_groups). Does NOT Apply To mgmt-vm, Which Has
 # No env Label Since It Serves Both Environments.
 
 nomad_datacenter: "dc-dev"

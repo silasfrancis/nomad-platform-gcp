@@ -4,8 +4,8 @@
 # On — It Never Runs `consul acl bootstrap` Or Manages Tokens.
 #
 # consul_datacenter / consul_retry_join / consul_bootstrap_expect Come From
-# inventory/group_vars/dev.yml Or prod.yml When This Role Runs Directly
-# Against A Real Host (nomad-servers.yml, nomad-clients.yml Run Via
+# inventory/group_vars/dev.yaml Or prod.yaml When This Role Runs Directly
+# Against A Real Host (nomad-servers.yaml, nomad-clients.yaml Run Via
 # Dynamic Inventory). When This SAME Role Is Instead Invoked By Packer To
 # Bake The Shared nomad-client-mig Image, No Env-Specific Group Vars Are
 # In Scope — consul.hcl.j2 Simply Omits Those Lines In That Case, And The
@@ -102,7 +102,6 @@
     remote_src: true
     mode: "0755"
     creates: "{{ consul_bin_dir }}/consul"
-
 
 - name: Template Consul Configuration
   ansible.builtin.template:

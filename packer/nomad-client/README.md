@@ -2,7 +2,7 @@
 
 Only one image is baked via Packer in this project — `nomad-server` and
 `mgmt-vm` stay on bare Debian, fully configured by a direct Ansible run
-(see `ansible/playbooks/mgmt.yml` / `nomad-servers.yml`). Only the
+(see `ansible/playbooks/mgmt.yaml` / `nomad-servers.yaml`). Only the
 Nomad client MIG needs a pre-baked image, since new instances appear
 unattended during autoscale/Spot replacement with no laptop in the loop.
 
@@ -60,7 +60,7 @@ packer build -var-file="nomad-client.pkrvars.hcl" nomad-client.pkr.hcl
 ```
 
 This runs the `common`, `consul`, `nomad`, `docker`, `falco` roles against
-the ephemeral build VM (via `ansible/playbooks/nomad-clients.yml`,
+the ephemeral build VM (via `ansible/playbooks/nomad-clients.yaml`,
 overridden to target `all` since Packer's own generated inventory doesn't
 contain the `role_nomad_client` group the playbook normally targets).
 
