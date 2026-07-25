@@ -472,5 +472,88 @@ module "secrets" {
         }
       }
     }
+    # Consul and Nomad agents consul tokens
+    "consul-server-agent-token-dev"   = { 
+        labels = { purpose = "consul", tier = "scoped", environment = "dev" } 
+        iam = {
+            "roles/secretmanager.secretAccessor" = {
+            members = [local.nomad_server_dev_member]
+            }
+        }
+    }
+    "consul-server-agent-token-prod"  = { 
+        labels = { purpose = "consul", tier = "scoped", environment = "prod" } 
+        iam = {
+            "roles/secretmanager.secretAccessor" = {
+            members = [local.nomad_server_prod_member]
+            }
+        }
+    }
+    "consul-client-agent-token-dev"   = { 
+        labels = { purpose = "consul", tier = "scoped", environment = "dev" } 
+        iam = {
+            "roles/secretmanager.secretAccessor" = {
+            members = [local.nomad_client_dev_member]
+            }
+        }
+    }
+    "consul-client-agent-token-prod"  = { 
+        labels = { purpose = "consul", tier = "scoped", environment = "prod" } 
+        iam = {
+            "roles/secretmanager.secretAccessor" = {
+            members = [local.nomad_client_prod_member]
+            }
+        }
+    }
+    "nomad-server-consul-token-dev"   = { 
+        labels = { purpose = "nomad", tier = "scoped", environment = "dev" } 
+        iam = {
+            "roles/secretmanager.secretAccessor" = {
+            members = [local.nomad_server_dev_member]
+            }
+        }
+    }
+    "nomad-server-consul-token-prod"  = { 
+        labels = { purpose = "nomad", tier = "scoped", environment = "prod" } 
+        iam = {
+            "roles/secretmanager.secretAccessor" = {
+            members = [local.nomad_server_prod_member]
+            }
+        }
+    }
+    "nomad-client-consul-token-dev"   = { 
+        labels = { purpose = "nomad", tier = "scoped", environment = "dev" } 
+        iam = {
+            "roles/secretmanager.secretAccessor" = {
+            members = [local.nomad_client_dev_member]
+            }
+        }
+    }
+    "nomad-client-consul-token-prod"  = { 
+        labels = { purpose = "nomad", tier = "scoped", environment = "prod" } 
+        iam = {
+            "roles/secretmanager.secretAccessor" = {
+            members = [local.nomad_client_prod_member]
+            }
+        }
+    }
+
+    # Octopus deploy deployment tokens
+    "octopus-deploy-token-dev" = {
+      labels = { purpose = "octopus", tier = "operator", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+      }
+    }
+    "octopus-deploy-token-prod" = {
+      labels = { purpose = "octopus", tier = "operator", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+      }
+    }
   }
 }
