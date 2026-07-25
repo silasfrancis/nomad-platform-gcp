@@ -218,8 +218,8 @@ resource "google_project_iam_member" "operator_os_login" {
 
 # Static VMs
 
-module "static_vm" {
-  source        = "../modules/static-vm"
+module "instances" {
+  source        = "../modules/instances"
   project_id    = var.project_id
   disk_cmek_key = local.bootstrap.disk_cmek_key_id
   instances     = local.instances

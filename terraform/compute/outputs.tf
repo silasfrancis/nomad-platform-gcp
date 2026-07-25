@@ -1,5 +1,5 @@
 output "instances" {
-  value = module.static_vm.instances
+  value = module.instances.instances
 }
 
 output "mig_instance_groups" {

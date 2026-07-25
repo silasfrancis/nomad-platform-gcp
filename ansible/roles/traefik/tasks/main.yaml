@@ -81,6 +81,33 @@
     mode: "0640"
   when: traefik_mode in ['dev-public', 'prod-public']
 
+# Public Modes Only: Resolve This Environment's Own Server FQDN
+- name: Derive target environment from traefik_mode
+  ansible.builtin.set_fact:
+    traefik_target_env: "{{ traefik_mode.split('-')[0] }}" # dev-public -> dev, prod-public -> prod
+  when: traefik_mode in ['dev-public', 'prod-public']
+
+- name: Fetch this environment's Nomad/Consul server FQDN
+  ansible.builtin.include_tasks: fetch-server-fqdn.yaml
+  vars:
+    target_env: "{{ traefik_target_env }}"
+  when: traefik_mode in ['dev-public', 'prod-public']
+
+# Internal Mode Only: Resolve BOTH Dev And Prod Server FQDNs —
+# internal-routes.yaml.j2 Routes To Both Environments At Once unlike
+# public mode, where only a single environment's FQDN is ever needed.
+- name: Fetch dev server FQDN
+  ansible.builtin.include_tasks: fetch-server-fqdn.yml
+  vars:
+    target_env: dev
+  when: traefik_mode == 'internal'
+
+- name: Fetch prod server FQDN
+  ansible.builtin.include_tasks: fetch-server-fqdn.yml
+  vars:
+    target_env: prod
+  when: traefik_mode == 'internal'
+
 - name: Template Static Traefik Configuration
   ansible.builtin.template:
     src: traefik.yaml.j2

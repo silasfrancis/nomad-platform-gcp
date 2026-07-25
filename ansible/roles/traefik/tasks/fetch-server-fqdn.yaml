@@ -1,0 +1,33 @@
+# Look Up A Nomad/Consul Server's Real Zone And Build Its Full GCE
+# Internal FQDN
+#
+# nomad-{env}-server-N instances are spread round-robin across zones
+# (compute/main.tf's local.zones[i % length(local.zones)]), so the bare
+# short name only reliably resolves when the caller happens to sit in
+# the same zone. The full INSTANCE.ZONE.c.PROJECT.internal form removes
+# that assumption — works regardless of which zone this Traefik VM or
+# the target server actually landed in.
+#
+# Nomad and Consul server run on the same instance (compute/main.tf
+# tags nomad-server-{env} + consul-server-{env} on one VM) — one lookup
+# covers both.
+#
+# Called with `target_env` set by the includer. Writes results into
+# server_fqdn_{{ target_env }} so two calls (dev + prod, internal mode)
+# don't clobber each other.
+
+- name: "Look up nomad-{{ target_env }}-server-0's zone"
+  ansible.builtin.command: >
+    gcloud compute instances list
+    --filter="name=nomad-{{ target_env }}-server-0"
+    --format="value(zone.basename())"
+    --project={{ gcp_project_id }}
+  delegate_to: localhost
+  become: false
+  register: _fqdn_zone_lookup
+  changed_when: false
+
+- name: "Save nomad-{{ target_env }}-server-0's full internal FQDN"
+  ansible.builtin.set_fact:
+    "server_fqdn_{{ target_env }}": >-
+      nomad-{{ target_env }}-server-0.{{ _fqdn_zone_lookup.stdout }}.c.{{ gcp_project_id }}.internal

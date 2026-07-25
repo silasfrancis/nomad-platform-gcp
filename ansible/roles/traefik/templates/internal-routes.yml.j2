@@ -44,23 +44,25 @@ http:
     vault:
       loadBalancer:
         servers:
-          # Vault's Own Listener Is Already TLS (Self-Signed) — insecureSkipVerify
-          # Is Set Below Since Traefik Doesn't Trust That Cert By Default.
           - url: "https://127.0.0.1:8200"
         serversTransport: vault-transport
-    nomad:
+    nomad-dev:
       loadBalancer:
         servers:
-          - url: "http://{{ traefik_internal_nomad_target | default('nomad-dev-server-0') }}:4646"
-    consul:
+          - url: "http://{{ server_fqdn_dev }}:4646"
+    nomad-prod:
       loadBalancer:
         servers:
-          - url: "http://{{ traefik_internal_consul_target | default('nomad-dev-server-0') }}:8500"
+          - url: "http://{{ server_fqdn_prod }}:4646"
+    consul-dev:
+      loadBalancer:
+        servers:
+          - url: "http://{{ server_fqdn_dev }}:8500"
+    consul-prod:
+      loadBalancer:
+        servers:
+          - url: "http://{{ server_fqdn_prod }}:8500"
     octopus:
       loadBalancer:
         servers:
           - url: "http://127.0.0.1:{{ octopus_web_port }}"
-
-  serversTransports:
-    vault-transport:
-      insecureSkipVerify: true
