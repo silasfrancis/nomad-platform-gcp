@@ -22,6 +22,10 @@ advertise_addr = "{{ ansible_default_ipv4.address }}"
 
 retry_join = {{ retry_join | to_json }}
 
+{% if consul_fetch_secrets_via_ansible %}
+encrypt = "{{ consul_gossip_key }}"
+{% endif %}
+
 {% if consul_mode == 'server' %}
 bootstrap_expect = {{ bootstrap_expect }}
 {% endif %}
@@ -50,13 +54,23 @@ connect {
 }
 
 ports {
-  grpc_tls = 8503
+  server   = {{ consul_ports.server }}
+  serf_lan = {{ consul_ports.serf_lan }}
+  serf_wan = {{ consul_ports.serf_wan }}
+  http     = {{ consul_ports.http }}
+  dns      = {{ consul_ports.dns }}
+  grpc_tls = {{ consul_ports.grpc_tls }}
 }
 
 acl {
   enabled                  = {{ consul_acl_enabled | lower }}
   default_policy           = "{{ consul_acl_default_policy }}"
   enable_token_persistence = true
+{% if consul_fetch_secrets_via_ansible %}
+  tokens {
+    agent = "{{ consul_agent_token }}"
+  }
+{% endif %}
 }
 
 telemetry {

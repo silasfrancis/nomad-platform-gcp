@@ -1,21 +1,45 @@
 ---
 consul_version: "2.0.2"
 
-# "server" Or "client" — Set Per-Playbook (nomad-servers.yaml Sets server,
-# nomad-clients.yaml Sets client). Determines The server = true/false Line
-# And Whether bootstrap_expect Is Written.
 consul_mode: "client"
+
+# Set explicitly per include_role call ("dev" or "prod") only when
+# running two parallel agents on one host (mgmt-vm). Left empty for
+# normal single-instance hosts (nomad-server, nomad-client-mig), where
+# nothing here changes.
+consul_instance_name: ""
+
+# true ONLY for mgmt-vm. Real Nomad server/client hosts get their TLS
+# materials, gossip key, and agent token from their own GCE startup
+# script at every boot (see nomad-client-mig's startup script) —
+# that already runs before Ansible ever connects, so this role never
+# needs to fetch anything for them. mgmt-vm is a static, non-reimaged
+# VM with no such startup script, so Ansible fetches directly here,
+# same pattern already used by the traefik role.
+consul_fetch_secrets_via_ansible: false
 
 consul_user: consul
 consul_group: consul
 
 consul_bin_dir: /usr/local/bin
-consul_config_dir: /etc/consul.d
-consul_tls_dir: /etc/consul.d/tls
-consul_data_dir: /opt/consul/data
-consul_log_dir: /var/log/consul
+consul_config_dir: "/etc/consul{{ '-' + consul_instance_name if consul_instance_name else '' }}.d"
+consul_tls_dir: "{{ consul_config_dir }}/tls"
+consul_data_dir: "/opt/consul{{ '-' + consul_instance_name if consul_instance_name else '' }}/data"
+consul_log_dir: "/var/log/consul{{ '-' + consul_instance_name if consul_instance_name else '' }}"
 
 consul_download_url: "https://releases.hashicorp.com/consul/{{ consul_version }}/consul_{{ consul_version }}_linux_amd64.zip"
+
+# Ports — only diverge from Consul's own defaults when running a
+# second agent on the same host (mgmt-vm's prod agent). Pass an
+# override map per include_role call for that case; single-instance
+# hosts never need to touch this.
+consul_ports:
+  server:   8300
+  serf_lan: 8301
+  serf_wan: 8302
+  http:     8500
+  dns:      8600
+  grpc_tls: 8503
 
 consul_connect_enabled: true
 consul_acl_enabled: true

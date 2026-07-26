@@ -27,3 +27,35 @@
       tasks_from: backup.yaml
     - role: octopus
       tasks_from: backup.yaml
+  tasks:
+  - name: Configure Consul dev agent
+    ansible.builtin.include_role:
+      name: consul
+    vars:
+      consul_instance_name: dev
+      consul_mode: client
+      consul_datacenter: dc-dev
+      consul_fetch_secrets_via_ansible: true
+      consul_ports:
+        server: 8300
+        serf_lan: 8301
+        serf_wan: 8302
+        http: 8500
+        dns: 8600
+        grpc_tls: 8503
+
+  - name: Configure Consul prod agent
+    ansible.builtin.include_role:
+      name: consul
+    vars:
+      consul_instance_name: prod
+      consul_mode: client
+      consul_datacenter: dc-prod
+      consul_fetch_secrets_via_ansible: true
+      consul_ports:
+        server: 8310
+        serf_lan: 8311
+        serf_wan: 8312
+        http: 8501
+        dns: 8601
+        grpc_tls: 8513

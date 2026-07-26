@@ -72,11 +72,6 @@ default = {
     "octopus-master-key"           = { labels = { purpose = "octopus", tier = "mgmt" } }
     "octopus-mssql-admin-password" = { labels = { purpose = "octopus", tier = "mgmt" } }
 
-    # Written by vault/ (AppRole), read by Ansible's octopus role to
-    # configure Octopus's own Vault integration.
-    "octopus-vault-approle-role-id"   = { labels = { purpose = "octopus", tier = "mgmt" } }
-    "octopus-vault-approle-secret-id" = { labels = { purpose = "octopus", tier = "mgmt" } }
-
     "github-nomad-repo-pat" = { labels = { purpose = "cicd", tier = "mgmt" } }
     "cloudflare-api-token"  = { labels = { purpose = "traefik", tier = "mgmt" } }
   }

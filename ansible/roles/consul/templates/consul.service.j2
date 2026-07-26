@@ -1,5 +1,5 @@
 [Unit]
-Description=Consul Agent
+Description=Consul Agent{{ ' (' + consul_instance_name + ')' if consul_instance_name else '' }}
 Documentation=https://developer.hashicorp.com/consul
 After=network-online.target
 Wants=network-online.target

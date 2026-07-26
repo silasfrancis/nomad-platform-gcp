@@ -1,11 +1,9 @@
-# Consumer Catalog — Single Source Of Truth
+# Consumer Catalog
 # Every service needing a Vault policy + Nomad Workload Identity role is
 # defined once here. policies.tf and auth-nomad.tf both read from this
 # map via for_each instead of hardcoding a near-identical block per
-# service. The 10 remaining Online Boutique services with no Vault
-# secret dependency (per the architecture doc's service table) are
-# intentionally absent — no Vault policy needed for a service that never
-# calls Vault.
+# service. Services with no Vault secret dependency are intentionally absent
+# no Vault policy needed for a service that never calls Vault.
 locals {
   vault_consumers = {
     "cartservice" = {
@@ -18,9 +16,9 @@ locals {
       kv_paths  = []
       db_role   = "metrics-api" # database/creds/{env}-metrics-api
     }
-    "ai-agent" = {
+    "nomad-sentinel" = { # platform monitoring ai-agent
       namespace = "monitoring"
-      kv_paths  = ["ai-agent/config"]
+      kv_paths  = ["nomad-sentinel/config"]
       db_role   = "monitoring" # database/creds/{env}-monitoring — nomad-sentinel's agent_anomalies DB
     }
   }

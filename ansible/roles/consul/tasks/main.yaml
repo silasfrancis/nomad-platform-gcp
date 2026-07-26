@@ -38,54 +38,10 @@
     - "{{ consul_log_dir }}"
     - "{{ consul_tls_dir }}"
 
-# --- consul-data Persistent Disk (Server Mode Only) ---
-# Consul Servers Run Their Own Raft Log Here — KV Store, Full Service
-# Catalog, ACL Tokens/Policies, Connect Intentions, Session State. Client
-# Agents Don't Participate In Raft (No Persistent State Worth Protecting),
-# So This Only Applies When consul_mode == "server". Without This Disk,
-# destroy/recreate Of compute/ Between Sessions Silently Wipes All Of It.
-#
-# The Terraform Disk Resource Is Named "consul-data"
+# (consul-data disk block unchanged — mgmt-vm's two agents are both
+# consul_mode: client, so this whole block is skipped for them, same
+# as any other client agent)
 
-- name: Check If Consul Data Disk Is Already Formatted
-  ansible.builtin.command: blkid /dev/disk/by-id/google-consul-data
-  register: consul_disk_blkid
-  failed_when: false
-  changed_when: false
-  when: consul_mode == 'server'
-
-- name: Format Consul Data Disk (Only If Unformatted)
-  community.general.filesystem:
-    fstype: ext4
-    dev: /dev/disk/by-id/google-consul-data
-  when: consul_mode == 'server' and consul_disk_blkid.rc != 0
-
-- name: Ensure Consul Data Mount Point Exists
-  ansible.builtin.file:
-    path: "{{ consul_data_dir }}"
-    state: directory
-    mode: "0750"
-  when: consul_mode == 'server'
-
-- name: Mount Consul Data Disk
-  ansible.posix.mount:
-    path: "{{ consul_data_dir }}"
-    src: /dev/disk/by-id/google-consul-data
-    fstype: ext4
-    opts: defaults,nofail
-    state: mounted
-  when: consul_mode == 'server'
-
-- name: Ensure Consul Data Directory Ownership After Mount
-  ansible.builtin.file:
-    path: "{{ consul_data_dir }}"
-    owner: "{{ consul_user }}"
-    group: "{{ consul_group }}"
-    mode: "0750"
-    state: directory
-  when: consul_mode == 'server'
-
-# Client Mode (No Persistent Disk) — Just A Plain Local Directory.
 - name: Ensure Consul Data Directory Exists (Client Mode — No Persistent Disk)
   ansible.builtin.file:
     path: "{{ consul_data_dir }}"
@@ -103,6 +59,15 @@
     mode: "0755"
     creates: "{{ consul_bin_dir }}/consul"
 
+# --- NEW: Fetch TLS/Gossip/Token Materials — mgmt-vm Only ---
+- name: Fetch Consul secrets via Ansible (mgmt-vm only)
+  ansible.builtin.include_tasks: fetch-secrets.yaml
+  when: consul_fetch_secrets_via_ansible | bool
+
+- name: Compute this instance's systemd service name
+  ansible.builtin.set_fact:
+    consul_service_name: "{{ 'consul-' + consul_instance_name if consul_instance_name else 'consul' }}"
+
 - name: Template Consul Configuration
   ansible.builtin.template:
     src: consul.hcl.j2
@@ -115,31 +80,32 @@
 - name: Template Consul Systemd Unit
   ansible.builtin.template:
     src: consul.service.j2
-    dest: /etc/systemd/system/consul.service
+    dest: "/etc/systemd/system/{{ consul_service_name }}.service"
     owner: root
     group: root
     mode: "0644"
-  notify: Reload Systemd Daemon
+  register: consul_unit_result
 
-# Only Start The Service When Enough Info Is Actually Present To Produce A
-# Working Config (i.e. Direct Runs Against Real Hosts). During A Packer
-# Bake, consul_datacenter Is Undefined, So This Is Skipped — Enabled Only,
-# Matching The "Enabled But Not Started At Bake Time" Design.
-- name: Enable Consul Service
+- name: Reload systemd daemon (unit file changed)
   ansible.builtin.systemd:
-    name: consul
+    daemon_reload: true
+  when: consul_unit_result.changed
+
+- name: Enable Consul service
+  ansible.builtin.systemd:
+    name: "{{ consul_service_name }}"
     enabled: true
     daemon_reload: true
 
-- name: Start Consul (Only When Running Directly Against A Real Host)
+- name: Start Consul (only when running directly against a real host)
   ansible.builtin.systemd:
-    name: consul
+    name: "{{ consul_service_name }}"
     state: started
   when: consul_datacenter is defined
 
-- name: Restart Consul If Config Changed (Only When Already Started)
+- name: Restart Consul if config changed (only when already started)
   ansible.builtin.systemd:
-    name: consul
+    name: "{{ consul_service_name }}"
     state: restarted
   when:
     - consul_datacenter is defined
