@@ -106,6 +106,16 @@ this may become dead weight once that's confirmed.
    Per the architecture doc, Nomad is reached via a Script Console/
    RunScript step calling the Nomad CLI/API directly — confirm this
    before deciding whether a target resource is needed at all.
+6. **`vault-admin`'s DB credential — `rotate-root` considered, not implemented.**
+   Vault's database secrets engine supports `rotate-root`: a one-time,
+   manually-triggered call that has Vault silently replace its own
+   Postgres credential with a value only Vault ever knows afterward —
+   closing the gap where `random_password.vault_admin_db`'s value
+   sitting in Terraform state could otherwise be used to bypass Vault
+   entirely. Deliberately not wired in — it's an imperative action
+   Terraform can't model as a resource (no before/after state to diff),
+   and everything works correctly without it. Noted here as a real,
+   considered hardening step for later, not an oversight.
 
 ## Service intentions call graph
 
