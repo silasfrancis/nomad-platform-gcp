@@ -2,17 +2,6 @@ variable "gcp_project" {
   type = string
 }
 
-variable "postgres_host" {
-  type        = string
-  description = "Private IP or Consul DNS name of the PostgreSQL Nomad job (e.g. postgresql.service.consul)"
-}
-
-variable "postgres_vault_root_password" {
-  type        = string
-  sensitive   = true
-  description = "Password for the vault-root PostgreSQL superuser Vault uses to create/revoke dynamic roles. Sourced via TF_VAR_postgres_vault_root_password, never committed."
-}
-
 variable "nomad_address_dev" {
   type        = string
   description = "dev Nomad server address, reachable from wherever Vault runs (mgmt subnet) — used only to build the JWKS URL, not for API calls"

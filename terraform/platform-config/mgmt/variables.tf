@@ -17,15 +17,6 @@ variable "octopus_api_key" {
   sensitive = true
 }
 
-variable "postgres_host" {
-  type = string
-}
-
-variable "postgres_vault_root_password" {
-  type      = string
-  sensitive = true
-}
-
 variable "nomad_address_dev" {
   type = string
 }
