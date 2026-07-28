@@ -1,30 +1,14 @@
+# NOTE: "description" is a confirmed field on this resource. An
+# environment-level "tags" field was requested but its exact argument
+# name isn't confirmed against the current provider schema — verify
+# against the provider docs before relying on one; omitted here rather
+# than guessed.
 resource "octopusdeploy_environment" "dev" {
-  name = "Development"
+  name        = "Development"
+  description = "Automatic deployment target for every release created from a merge to main."
 }
 
 resource "octopusdeploy_environment" "prod" {
-  name = "Production"
-}
-
-# NOTE: verify this resource's exact phase-block schema against the
-# current provider docs before applying — lifecycle/phase argument names
-# have shifted across octopusdeploy provider versions and this is
-# written from general knowledge of the shape, not a freshly-checked
-# schema.
-resource "octopusdeploy_lifecycle" "main" {
-  name = "main"
-
-  phase {
-    name                          = "Development"
-    automatic_deployment_targets  = [octopusdeploy_environment.dev.id]
-  }
-
-  phase {
-    name                         = "Production"
-    optional_deployment_targets = [octopusdeploy_environment.prod.id]
-    # Manual approval gate on prod (architecture doc section 6.4) —
-    # confirm whether this belongs here as a lifecycle phase setting or
-    # as a project-level deployment-process "manual intervention" step;
-    # the provider may model this differently than a lifecycle-phase flag.
-  }
+  name        = "Production"
+  description = "Customer-facing environment. Releases only reach this environment after manual approval."
 }

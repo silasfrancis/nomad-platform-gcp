@@ -1,12 +1,35 @@
-# Namespaces — default Already Exists Built-In, No Resource Needed.
+# Platform Namespaces
+#
+# Grouped by operational concern rather than by team or service — each
+# namespace is a blast-radius boundary for who can stop, restart, or
+# read logs for what's inside it, independent of any data-level access
+# controls Vault/Consul already provide.
+#
+# Quotas are a Nomad Enterprise-only feature (nomad_quota_specification
+# has no effect on Nomad OSS) — omitted here rather than added as
+# dead configuration. Revisit if/when running Nomad Enterprise.
+
+resource "nomad_namespace" "boutique" {
+  name        = "boutique"
+  description = "Customer-facing application workloads and their supporting Redis instance."
+}
+
 resource "nomad_namespace" "monitoring" {
-  name = "monitoring"
+  name        = "monitoring"
+  description = "Observability stack: the AI monitoring agent, the metrics API, Prometheus, and related monitoring services."
+}
+
+resource "nomad_namespace" "database" {
+  name        = "database"
+  description = "Stateful database workloads, such as PostgreSQL, kept isolated from application and tooling namespaces."
 }
 
 resource "nomad_namespace" "security" {
-  name = "security"
+  name        = "security"
+  description = "Security tooling, including the runtime security webhook receiver."
 }
 
-resource "nomad_namespace" "core" {
-  name = "core"
+resource "nomad_namespace" "backup" {
+  name        = "backup"
+  description = "Scheduled periodic backup jobs."
 }

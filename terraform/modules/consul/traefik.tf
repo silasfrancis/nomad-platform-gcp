@@ -1,12 +1,8 @@
 # Traefik — Catalog Read Only
 #
-# The actual traefik role uses Consul's catalog provider, not KV, for
-# routing — no KV-read grant is included.
-#
-# Secret name corrected to match bootstrap/'s actual naming:
-# consul-traefik-token-{env}, not traefik-consul-token-{env} (the
-# reversed name used in an earlier draft this session).
-
+# Traefik's catalog provider only ever reads service tags to build
+# routing rules; it never reads or writes Consul's KV store, so no
+# KV-related grant is included here.
 resource "consul_acl_policy" "traefik" {
   name = "traefik-${var.environment}"
   rules = <<-EOT

@@ -1,19 +1,13 @@
 # Service Intentions — Deny-By-Default, Explicit Allow Per Pair
 #
 # One config_entry per destination service, generated from
-# locals.intentions, for this module's single environment.
+# locals.intentions. L4-only (Sources[].Action) — no L7 path/method
+# matching is used yet, though the same resource type supports it
+# without any restructuring if finer-grained rules are ever needed.
 #
-# L4-only (Sources[].Action) — no L7 Permissions/HTTP path matching
-# used yet. The resource type supports full L7 matching without
-# restructuring anything here if finer-grained rules are ever needed
-# (e.g. metrics-api's /db-check vs /metrics reachable by different
-# callers).
-#
-# No nomad-sentinel -> nomad-server intention (Flag 6, resolved): that
-# traffic is a plain Nomad API call, never Connect-mesh traffic, and
-# nomad-server isn't a mesh member. No explicit "deny all others" —
-# ACL default_policy = "deny" already covers every unlisted pair.
-
+# No explicit "deny all others" entry exists here: ACL
+# default_policy = "deny" already covers every pair not listed below,
+# with no additional resource required.
 resource "consul_config_entry" "intention" {
   for_each = local.intentions
 

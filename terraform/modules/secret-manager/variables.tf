@@ -67,6 +67,7 @@ default = {
     "octopus-mssql-admin-password" = { labels = { purpose = "octopus", tier = "mgmt" } }
 
     "github-nomad-repo-pat" = { labels = { purpose = "cicd", tier = "mgmt" } }
+    "slack-webhook-url" = { labels = { purpose = "cicd", tier = "mgmt" } }
     "cloudflare-api-token"  = { labels = { purpose = "traefik", tier = "mgmt" } }
   }
 }

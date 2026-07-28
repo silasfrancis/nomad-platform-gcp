@@ -15,5 +15,7 @@ module "vault" {
 module "octopus" {
   source = "../modules/octopus"
 
-  gcp_project = var.gcp_project
+  gcp_project         = var.gcp_project
+  nomad_address_dev   = var.nomad_address_dev
+  nomad_address_prod  = var.nomad_address_prod
 }

@@ -1,12 +1,15 @@
-# GitHub Actions OIDC — Avoids Any Long-Lived GitHub Secret Just To Reach
-# Vault.
+# GitHub Actions OIDC Authentication
+#
+# Lets the CI runner exchange a short-lived GitHub-issued identity
+# token for Vault access, scoped to one specific repository and branch,
+# with no long-lived credential ever stored in GitHub itself.
 resource "vault_jwt_auth_backend" "github_actions" {
-  path         = "jwt-github-actions"
+  path               = "jwt-github-actions"
   oidc_discovery_url = "https://token.actions.githubusercontent.com"
-  bound_issuer = "https://token.actions.githubusercontent.com"
+  bound_issuer       = "https://token.actions.githubusercontent.com"
 }
 
-resource "vault_jwt_auth_backend_role" "github" {
+resource "vault_jwt_auth_backend_role" "github_actions" {
   backend           = vault_jwt_auth_backend.github_actions.path
   role_name         = "github-actions-ci"
   role_type         = "jwt"

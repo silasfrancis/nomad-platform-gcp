@@ -1,9 +1,10 @@
-# Nomad's Own Consul Token — Server Variant
+# Nomad's Own Consul Tokens
 #
-# Separate credential from the agent token. Nomad is its own Consul API
-# caller: registers nomad-server/nomad-client services, does auto-join
-# discovery, and (server-mode only) manages Connect config entries —
-# hence the extra acl/mesh write grants the client variant doesn't get.
+# Separate from the plain agent token above — Nomad is its own Consul
+# API caller, registering nomad-server/nomad-client services and
+# performing auto-join discovery. The server variant additionally
+# manages Connect configuration entries, hence the extra acl/mesh
+# grants the client variant doesn't need.
 resource "consul_acl_policy" "nomad_server" {
   name = "nomad-server-${var.environment}"
   rules = <<-EOT
@@ -26,12 +27,14 @@ resource "consul_acl_token" "nomad_server" {
   policies    = [consul_acl_policy.nomad_server.name]
 }
 
-# Nomad's Own Consul Token — Client Variant
-#
+resource "google_secret_manager_secret_version" "nomad_server_consul_token" {
+  secret      = "nomad-server-consul-token-${var.environment}"
+  secret_data = consul_acl_token.nomad_server.id
+}
+
 # acl:write here is what lets Nomad clients request Consul Service
-# Identity (SI) tokens automatically for Connect sidecars at allocation
-# time (Nomad 1.7+ Workload Identity) — this is what makes the
-# now-removed static per-service sidecar token block unnecessary.
+# Identity tokens automatically for Connect sidecars at allocation
+# time, instead of any static per-service token being pre-created.
 resource "consul_acl_policy" "nomad_client" {
   name = "nomad-client-${var.environment}"
   rules = <<-EOT
@@ -51,4 +54,9 @@ resource "consul_acl_policy" "nomad_client" {
 resource "consul_acl_token" "nomad_client" {
   description = "Nomad client's own Consul token — dc-${var.environment}"
   policies    = [consul_acl_policy.nomad_client.name]
+}
+
+resource "google_secret_manager_secret_version" "nomad_client_consul_token" {
+  secret      = "nomad-client-consul-token-${var.environment}"
+  secret_data = consul_acl_token.nomad_client.id
 }
