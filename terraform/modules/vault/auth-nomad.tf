@@ -1,12 +1,9 @@
 # Nomad Workload Identity — JWT Auth Backends, One Per Environment
-# No static token anywhere in this chain — Nomad signs a per-allocation
-# JWT, Vault verifies it against Nomad's own JWKS endpoint. See
-# providers.tf's Nomad address variables for the per-env JWKS URLs.
 
 resource "vault_jwt_auth_backend" "nomad_dev" {
   path         = "jwt-nomad-dev"
   jwks_url     = "${var.nomad_address_dev}/.well-known/jwks.json"
-  bound_issuer = "https://nomad.platform.lefrancis.org"
+  bound_issuer = "https://dev-nomad.platform.lefrancis.org"
 }
 
 resource "vault_jwt_auth_backend" "nomad_prod" {

@@ -23,9 +23,9 @@ locals {
       kv_paths  = []
       db_role   = "metrics-api" # database/creds/{env}-metrics-api
     }
-    "ai-agent" = {
+    "nomad-sentinel" = {
       namespace = "monitoring"
-      kv_paths  = ["ai-agent/config"]
+      kv_paths  = ["nomad-sentinel/config"]
       db_role   = "monitoring" # database/creds/{env}-monitoring — nomad-sentinel's agent_anomalies DB
     }
   }

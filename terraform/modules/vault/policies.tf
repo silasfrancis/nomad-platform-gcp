@@ -42,14 +42,6 @@ resource "vault_policy" "consumer" {
 # allocations do, via their own signed JWT. A standing server-level
 # Vault policy would be a leftover from the legacy static-token model.
 
-# NOTE: Octopus Deploy has no Vault policy/AppRole here — traced through
-# the actual data flow (NomadToken/VaultAddr/ImageTag/Datacenter/
-# RemediationMode/ResourceLimits), Octopus never actually reads a Vault
-# secret for anything in this design. NomadToken comes from nomad/'s
-# Terraform via Secret Manager directly; the rest are static values or
-# per-release variables. The AppRole this session originally built for
-# it was speculative scope with no real consumer — dropped.
-
 # GitHub Actions OIDC — Read-Only, Same Path (Currently: Octopus API Key)
 resource "vault_policy" "github_actions" {
   name = "github-actions"

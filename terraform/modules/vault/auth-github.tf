@@ -1,15 +1,13 @@
 # GitHub Actions OIDC — Avoids Any Long-Lived GitHub Secret Just To Reach
-# Vault. The Self-Hosted Runner Lives On The Same Box As Vault, So This
-# Is Purely About Not Storing A Standing Credential In GitHub, Not About
-# Network Reachability.
-resource "vault_jwt_auth_backend" "github" {
+# Vault.
+resource "vault_jwt_auth_backend" "github_actions" {
   path         = "jwt-github-actions"
-  jwks_url     = "https://token.actions.githubusercontent.com/.well-known/jwks"
+  oidc_discovery_url = "https://token.actions.githubusercontent.com"
   bound_issuer = "https://token.actions.githubusercontent.com"
 }
 
 resource "vault_jwt_auth_backend_role" "github" {
-  backend           = vault_jwt_auth_backend.github.path
+  backend           = vault_jwt_auth_backend.github_actions.path
   role_name         = "github-actions-ci"
   role_type         = "jwt"
   bound_audiences   = [var.github_oidc_audience]
@@ -17,8 +15,8 @@ resource "vault_jwt_auth_backend_role" "github" {
   bound_claims_type = "glob"
   bound_claims = {
     repository = var.github_repository
-    ref        = "refs/heads/main" # trunk-based, main branch only — matches CI/CD trigger scope
+    ref        = "refs/heads/main"
   }
   token_policies = [vault_policy.github_actions.name]
-  token_ttl      = 900 # short-lived — a single CI run only
+  token_ttl      = 900
 }

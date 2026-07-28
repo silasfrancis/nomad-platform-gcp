@@ -7,11 +7,7 @@
 #     by Vault, never rotated by Vault — it's dormant after first boot.
 #   - vault-admin is a SEPARATE role, created BY the superuser during
 #     init, granted CREATEROLE + ownership of both databases. THIS is
-#     what Vault's connections authenticate as — matching the standard
-#     enterprise pattern of Vault holding its own dedicated DB identity
-#     rather than reusing the instance's root/superuser account, so
-#     Vault's own `rotate-root` can be used on it later without ever
-#     touching (or needing to know) the container's bootstrap password.
+#     what Vault's connections authenticate as.
 #   - metrics-api/nomad-sentinel get ZERO static credentials — fully
 #     dynamic, minted/revoked by Vault per request via the roles below.
 #
@@ -37,8 +33,8 @@ locals {
   # federated) — the two environments are disambiguated by which local
   # agent's DNS port answers the query, not by hostname.
   postgres_consul_resolvers = {
-    dev  = "postgresql.service.consul:5432?host=127.0.0.1:8600"
-    prod = "postgresql.service.consul:5432?host=127.0.0.1:8601"
+    dev  = "postgresql-dev.service.consul:5432"
+    prod = "postgresql.service.consul:5432"
   }
   # NOTE: the ?host= query-string form above is illustrative — Postgres
   # connection strings don't natively support a custom-DNS-server
@@ -56,6 +52,7 @@ resource "vault_database_secret_backend_connection" "postgres_metrics" {
   backend       = vault_mount.database.path
   name          = "postgres-metrics-${each.key}"
   allowed_roles = ["${each.key}-metrics-api"]
+  verify_connection = false # to be removed after postgres instance is up
 
   postgresql {
     connection_url = "postgresql://{{username}}:{{password}}@${local.postgres_consul_resolvers[each.key]}/metrics?sslmode=disable"
@@ -85,6 +82,7 @@ resource "vault_database_secret_backend_connection" "postgres_monitoring" {
   backend       = vault_mount.database.path
   name          = "postgres-monitoring-${each.key}"
   allowed_roles = ["${each.key}-monitoring"]
+  verify_connection = false # to be removed after postgres instance is up
 
   postgresql {
     connection_url = "postgresql://{{username}}:{{password}}@${local.postgres_consul_resolvers[each.key]}/monitoring?sslmode=disable"
