@@ -59,11 +59,6 @@
     mode: "0755"
     creates: "{{ consul_bin_dir }}/consul"
 
-# --- NEW: Fetch TLS/Gossip/Token Materials — mgmt-vm Only ---
-- name: Fetch Consul secrets via Ansible (mgmt-vm only)
-  ansible.builtin.include_tasks: fetch-secrets.yaml
-  when: consul_fetch_secrets_via_ansible | bool
-
 - name: Compute this instance's systemd service name
   ansible.builtin.set_fact:
     consul_service_name: "{{ 'consul-' + consul_instance_name if consul_instance_name else 'consul' }}"

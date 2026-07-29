@@ -87,7 +87,7 @@ chmod 0600 /etc/nomad.d/tls/key.pem
 
 # nomad-gossip-key — Shared, Not Per-Environment. Server-Only — Nomad
 # Clients Don't Participate In This Gossip Pool At All.
-NOMAD_GOSSIP_KEY="$(fetch_secret "nomad-gossip-key")"
+NOMAD_GOSSIP_KEY="$(fetch_secret "nomad-gossip-key-${ENVIRONMENT}")"
 
 echo "[nomad-server-startup] env=${ENVIRONMENT} dc=${DATACENTER} bootstrap_expect=${BOOTSTRAP_EXPECT} ip=${PRIVATE_IP}"
 

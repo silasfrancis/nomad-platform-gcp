@@ -15,6 +15,7 @@ locals {
   nomad_server_sa_member_dev  = local.bootstrap.service_accounts["nomad-server-sa-dev"].member
   traefik_vm_sa_member_prod       = local.bootstrap.service_accounts["traefik-vm-sa-prod"].member
   traefik_vm_sa_member_dev       = local.bootstrap.service_accounts["traefik-vm-sa-dev"].member
+  traefik_vm_sa_member_internal = local.bootstrap.service_accounts["traefik-vm-sa-internal"].member
 
 
   zones = slice(data.google_compute_zones.available.names, 0, 3)
@@ -65,6 +66,7 @@ locals {
   dev_server_instances = {
     for i in range(var.nomad_dev_server_count) : "nomad-dev-server-${i}" => {
       machine_type            = "e2-small"
+      environment             = "dev"
       zone                     = local.zones[i % length(local.zones)]
       subnetwork               = local.network.subnets["subnet-dev-private"].self_link
       external_ip              = false
@@ -83,6 +85,7 @@ locals {
   prod_server_instances = {
     for i in range(3) : "nomad-prod-server-${i}" => {
       machine_type            = "e2-small"
+      environment             = "prod"
       zone                     = local.zones[i % length(local.zones)]
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
       external_ip              = false
@@ -117,6 +120,17 @@ locals {
       static_external_ip       = true
       external_ip              = true
       service_account_email    = local.traefik_vm_sa_member_prod
+      boot_disk_size_gb        = 20
+      tags                     = ["traefik"]
+      labels                   = { role = "traefik", environment = "prod" }
+    }
+    "traefik-internal" = {
+      machine_type            = "e2-small"
+      zone                     = local.zones[0]
+      subnetwork               = local.network.subnets["subnet-mgmt"].self_link
+      static_external_ip       = false
+      external_ip              = false
+      service_account_email    = local.traefik_vm_sa_member_internal
       boot_disk_size_gb        = 20
       tags                     = ["traefik"]
       labels                   = { role = "traefik", environment = "prod" }

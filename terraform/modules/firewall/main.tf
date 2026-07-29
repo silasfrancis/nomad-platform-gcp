@@ -83,7 +83,6 @@ locals {
       destination_ranges = [
         local.cidr["subnet-dev-private"],
         local.cidr["subnet-prod-private"],
-        local.cidr["subnet-mgmt"],
       ]
       allow = [
         { protocol = "tcp", ports = ["8300", "8301", "8302", "8500"] },

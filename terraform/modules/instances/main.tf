@@ -100,8 +100,10 @@ resource "google_compute_instance" "this" {
   metadata = merge({
     env            = each.value.environment
     datacenter     = each.value.environment == "dev" ? "dc-dev" : "dc-prod"
-    node_pool_type = each.value.spot ? "spot" : "on-demand"
-    node_class     = each.value.spot ? "preemptible" : "critical"
+    bootstrap_expect = lookup({
+      dev  = 1
+      prod = 3
+    }, try(each.value.environment, null), null)
   },
     each.value.startup_script != "" ? { startup-script = each.value.startup_script } : {},
     each.value.spot && each.value.shutdown_script != "" ? { shutdown-script = each.value.shutdown_script } : {},

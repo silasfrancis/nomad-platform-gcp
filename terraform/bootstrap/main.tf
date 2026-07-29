@@ -170,21 +170,26 @@ locals {
   nomad_client_dev_member  = module.service_account.service_accounts["nomad-client-sa-dev"].member
   nomad_client_prod_member = module.service_account.service_accounts["nomad-client-sa-prod"].member
   management_vm_member     = module.service_account.service_accounts["management-vm-sa"].member
-  traefik_vm_dev_member    = module.service_account.service_accounts["traefik-vm-sa-dev"].member
   traefik_vm_prod_member   = module.service_account.service_accounts["traefik-vm-sa-prod"].member
+  traefik_vm_dev_member    = module.service_account.service_accounts["traefik-vm-sa-dev"].member
+  traefik_vm_internal_member = module.service_account.service_accounts["traefik-vm-sa-internal"].member
+
 
   dev_members = [
     local.nomad_server_dev_member,
     local.nomad_client_dev_member,
+    local.traefik_vm_dev_member,
   ]
 
   prod_members = [
     local.nomad_server_prod_member,
     local.nomad_client_prod_member,
+    local.traefik_vm_prod_member,
   ]
 
   management_members = [
     local.management_vm_member,
+    local.traefik_vm_internal_member,
   ]
 }
 
@@ -206,7 +211,7 @@ module "secrets" {
       labels = { purpose = "dev", tier = "scoped", environment = "dev" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = local.dev_members
+          members = concat(local.dev_members, local.management_members)
         }
       }
     }
@@ -214,7 +219,7 @@ module "secrets" {
       labels = { purpose = "prod", tier = "scoped", environment = "prod" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = local.prod_members
+          members = concat(local.prod_members, [local.management_vm_member])
         }
       }
     }
@@ -460,7 +465,7 @@ module "secrets" {
       labels = { purpose = "traefik", tier = "scoped", environment = "dev" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.traefik_vm_dev_member]
+          members = [local.traefik_vm_dev_member, local.traefik_vm_internal_member]
         }
       }
     }
@@ -468,7 +473,7 @@ module "secrets" {
       labels = { purpose = "traefik", tier = "scoped", environment = "prod" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = [local.traefik_vm_prod_member]
+          members = [local.traefik_vm_prod_member, local.traefik_vm_internal_member]
         }
       }
     }
@@ -493,7 +498,7 @@ module "secrets" {
         labels = { purpose = "consul", tier = "scoped", environment = "dev" } 
         iam = {
             "roles/secretmanager.secretAccessor" = {
-            members = [local.nomad_client_dev_member]
+            members = concat(local.nomad_client_dev_member, local.management_members)
             }
         }
     }
@@ -501,7 +506,7 @@ module "secrets" {
         labels = { purpose = "consul", tier = "scoped", environment = "prod" } 
         iam = {
             "roles/secretmanager.secretAccessor" = {
-            members = [local.nomad_client_prod_member]
+            members = concat(local.nomad_client_prod_member, local.management_members)
             }
         }
     }

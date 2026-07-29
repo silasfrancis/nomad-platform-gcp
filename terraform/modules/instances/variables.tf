@@ -19,6 +19,7 @@ variable "instances" {
     machine_type            = string
     zone                     = string
     subnetwork               = string # self-link
+    environment              = optional(string, null)
     static_external_ip       = optional(bool, false)
     external_ip              = optional(bool, false)
     service_account_email    = string

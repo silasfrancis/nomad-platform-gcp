@@ -85,33 +85,6 @@ it.
   sitting in state could otherwise be used to bypass Vault directly.
   Not implemented — noted here as a deliberate, considered next step.
 
-## Things flagged for verification before applying
-
-1. **`consul_acl_token.id`** — the attribute used throughout `consul/`
-   to push token values to Secret Manager. Confirm this matches the
-   pinned provider version's schema (vs. `SecretID`/`secret_id`).
-2. **Octopus provider schema** — the lifecycle retention blocks,
-   `octopusdeploy_process`/`process_step`/`process_steps_order`, and
-   the Cloud Region deployment target resources are written from the
-   current provider documentation but not independently exercised
-   against a live Octopus instance. Verify field names before the
-   first real apply.
-3. **Postgres connection resolution** — Vault's database connections
-   point at `127.0.0.1:8600`/`8601` (each environment's local Consul
-   DNS resolver on the management host). Confirm the exact Postgres
-   hostname registered by the Postgres Nomad job matches what's
-   expected, and that the driver Vault's plugin uses resolves through
-   the intended resolver.
-4. **`postgresql` as one destination for two databases** assumes a
-   single Postgres Nomad job hosting both the `metrics` and
-   `monitoring` databases via separate `CREATE DATABASE` statements,
-   rather than two separate Postgres jobs. Confirm before job specs are
-   written.
-5. **Job-scoped ACL policy binding for `nomad-sentinel`** — Workload
-   Identity requires associating the policy with the specific job
-   (via `-job`/`-group`/`-task` scoping) rather than a standalone
-   token. The exact Terraform resource argument for this hasn't been
-   confirmed against the provider's current schema.
 
 ## Service intentions call graph
 

@@ -53,13 +53,23 @@ locals {
       ]
     }
     "traefik-vm-sa-prod" = {
-      display_name  = "Management VM SA"
+      display_name  = "Traefik VM SA"
       description   = "Attached to mgmt VM. Covers Vault, GitHub runner, Octopus, Grafana, internal Traefik."
       project_roles = []
     }
     "traefik-vm-sa-dev" = {
-      display_name  = "Management VM SA"
-      description   = "Attached to mgmt VM. Covers Vault, GitHub runner, Octopus, Grafana, internal Traefik."
+      display_name  = "Traefik VM SA (Prod)"
+      description   = "Attached to Prod Traefik VM."
+      project_roles = []
+    }
+    "traefik-vm-sa-dev" = {
+      display_name  = "Traefik VM SA (Dev)"
+      description   = "Attached to Dev Traefik VM."
+      project_roles = []
+    }
+    "traefik-vm-sa-internal" = {
+      display_name  = "Traefik VM SA (Internal)"
+      description   = "Attached to Internal Traefik VM."
       project_roles = []
     }
     "packer-builder-sa" = {

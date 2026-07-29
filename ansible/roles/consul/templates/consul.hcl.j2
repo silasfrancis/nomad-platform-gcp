@@ -22,10 +22,6 @@ advertise_addr = "{{ ansible_default_ipv4.address }}"
 
 retry_join = {{ retry_join | to_json }}
 
-{% if consul_fetch_secrets_via_ansible %}
-encrypt = "{{ consul_gossip_key }}"
-{% endif %}
-
 {% if consul_mode == 'server' %}
 bootstrap_expect = {{ bootstrap_expect }}
 {% endif %}
@@ -66,11 +62,6 @@ acl {
   enabled                  = {{ consul_acl_enabled | lower }}
   default_policy           = "{{ consul_acl_default_policy }}"
   enable_token_persistence = true
-{% if consul_fetch_secrets_via_ansible %}
-  tokens {
-    agent = "{{ consul_agent_token }}"
-  }
-{% endif %}
 }
 
 telemetry {

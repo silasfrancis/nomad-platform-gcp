@@ -15,6 +15,10 @@ resource "nomad_acl_policy" "nomad_sentinel" {
       policy = "read"
     }
   EOT
+  job_acl {
+    namespace = "monitoring"
+    job_id    = "nomad-sentinel"
+  }
 }
 
 # No nomad_acl_token is created for nomad-sentinel. The platform uses
