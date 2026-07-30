@@ -3,11 +3,21 @@ galaxy_info:
   role_name: traefik
   description: >
     Installs Traefik as a native binary (cap_net_bind_service, not root)
-    with a systemd unit, per Traefik's own docs. Three modes via
-    traefik_mode: dev-public/prod-public use the Consul catalog provider
-    with Let's Encrypt HTTP-01; internal uses a static file provider with
-    Let's Encrypt DNS-01 via Cloudflare for the *.platform.lefrancis.org
-    wildcard, no public IP.
+    with a systemd unit, per Traefik's own docs. One role, shared by
+    every Traefik process in the platform: the calling playbook sets
+    traefik_active_instances to select which named entries from
+    traefik_instance_catalog (defaults/main.yaml) get configured on
+    this host. dev-public/prod-public use consulCatalog (tag-gated,
+    exposedByDefault: false) with Let's Encrypt HTTP-01, one process
+    per public-subnet VM. mgmt/dev-internal/prod-internal run together
+    on traefik-internal — mgmt is a static file-provider passthrough
+    only (Vault/Octopus/Grafana, no Consul involvement); dev-internal/
+    prod-internal combine the same static passthrough (Nomad/Consul
+    admin APIs) with a consulCatalog provider that's added idempotently
+    once that environment's own consul-traefik-token-{env} secret
+    exists in Secret Manager. All internal instances use Let's Encrypt
+    DNS-01 via Cloudflare for the *.platform.lefrancis.org wildcard, no
+    public IP.
   min_ansible_version: "2.15"
 
 dependencies:

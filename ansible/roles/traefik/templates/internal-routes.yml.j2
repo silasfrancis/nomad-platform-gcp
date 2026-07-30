@@ -1,67 +1,29 @@
-# Managed By Ansible (traefik Role, Internal Mode Only) — A Small Fixed Set
-# Of Internal Tools, Per The Architecture Doc's Section 4.3 Routing Table.
+# Managed By Ansible (traefik Role, Instance: {{ traefik_instance.name }}) — Static
+# Passthrough Routes. These Never Depend On consulCatalog: Vault/Octopus/
+# Grafana (mgmt) And The Nomad/Consul Admin APIs (dev-internal/prod-internal)
+# Are All Fixed Backends, Resolved Once At Playbook-Run Time.
 #
-# nomad.{{ traefik_internal_domain }} And consul.{{ traefik_internal_domain }}
-# Point At A Single Environment Below (traefik_internal_nomad_target/
-# traefik_internal_consul_target) Since The Doc's Routing Table Doesn't
-# Distinguish Dev Vs Prod For These Two Rows. If You Want Both Reachable,
-# Split Into nomad-dev./nomad-prod. Subdomains Instead — Worth Deciding
-# Before Relying On This.
+# Backends With More Than One Resolved Instance (e.g. A 3-Node Prod Raft
+# Cluster) List Every Instance As A Separate loadBalancer Server — Any
+# One Of Them Can Serve The Admin API, So Whichever Is Reachable During
+# A terraform apply Is Enough.
 
 http:
   routers:
-    grafana:
-      rule: "Host(`grafana.{{ traefik_internal_domain }}`)"
-      service: grafana
+{% for route in traefik_instance.static_routes %}
+    {{ route.subdomain }}:
+      rule: "Host(`{{ route.subdomain }}.{{ traefik_instance.domain }}`)"
+      service: {{ route.subdomain }}
       tls:
         certResolver: letsencrypt
-    vault:
-      rule: "Host(`vault.{{ traefik_internal_domain }}`)"
-      service: vault
-      tls:
-        certResolver: letsencrypt
-    nomad:
-      rule: "Host(`nomad.{{ traefik_internal_domain }}`)"
-      service: nomad
-      tls:
-        certResolver: letsencrypt
-    consul:
-      rule: "Host(`consul.{{ traefik_internal_domain }}`)"
-      service: consul
-      tls:
-        certResolver: letsencrypt
-    octopus:
-      rule: "Host(`octopus.{{ traefik_internal_domain }}`)"
-      service: octopus
-      tls:
-        certResolver: letsencrypt
+{% endfor %}
 
   services:
-    grafana:
+{% for route in traefik_instance.static_routes %}
+    {{ route.subdomain }}:
       loadBalancer:
         servers:
-          - url: "http://127.0.0.1:3000"
-    vault:
-      loadBalancer:
-        servers:
-          - url: "https://127.0.0.1:8200"
-    nomad-dev:
-      loadBalancer:
-        servers:
-          - url: "http://{{ server_fqdn_dev }}:4646"
-    nomad-prod:
-      loadBalancer:
-        servers:
-          - url: "http://{{ server_fqdn_prod }}:4646"
-    consul-dev:
-      loadBalancer:
-        servers:
-          - url: "http://{{ server_fqdn_dev }}:8500"
-    consul-prod:
-      loadBalancer:
-        servers:
-          - url: "http://{{ server_fqdn_prod }}:8500"
-    octopus:
-      loadBalancer:
-        servers:
-          - url: "http://127.0.0.1:{{ octopus_web_port }}"
+{% for fqdn in resolved_instance_fqdns %}
+          - url: "{{ route.scheme }}://{{ fqdn }}:{{ route.port }}"
+{% endfor %}
+{% endfor %}

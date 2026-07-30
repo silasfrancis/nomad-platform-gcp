@@ -1,16 +1,15 @@
 ---
-# Run Against: role_traefik Group (Dynamic Inventory). Requires
-# compute/main.tf To Label These Two VMs role=traefik (Not role=mgmt Or
-# Anything Else) — traefik-dev Gets env=dev, traefik-prod Gets env=prod,
-# So traefik_mode Below Resolves Correctly Per-Host From The env Group
-# Ansible Is Already In (dev.yaml/prod.yaml).
+# Runs Against traefik-internal Only. Configures All Three Internal
+# Instances In One Pass — They Share A Host But Are Otherwise
+# Independent Processes (See traefik/defaults/main.yaml).
 
-- name: Configure Public Traefik Nodes
-  hosts: role_traefik
+- name: Configure traefik-internal
+  hosts: traefik_internal
   become: true
   vars:
-    traefik_mode: "{{ 'prod-public' if 'prod' in group_names else 'dev-public' }}"
-    traefik_public_domain: "{{ 'boutique.lefrancis.org' if 'prod' in group_names else 'dev.boutique.lefrancis.org' }}"
+    traefik_active_instances:
+      - mgmt
+      - dev-internal
+      - prod-internal
   roles:
-    - common
     - traefik

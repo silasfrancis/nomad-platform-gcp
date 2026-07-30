@@ -28,6 +28,9 @@ So `dev/` and `prod/` must each be applied at least once before
 After that, all three are independent on every subsequent apply.
 
 ```
+# One-time, per machine:
+./scripts/update-hosts.sh   # then follow its instructions
+
 source ./scripts/pre-apply-env.sh <project-id> dev
 ./scripts/open-tunnel.sh dev <project-id> <zone>
 cd dev && terraform apply
@@ -85,6 +88,43 @@ it.
   sitting in state could otherwise be used to bypass Vault directly.
   Not implemented — noted here as a deliberate, considered next step.
 
+## Things flagged for verification before applying
+
+1. ~~**`consul_acl_token.id`**~~ — **Resolved.** That attribute is the
+   accessor ID, not something any consumer can authenticate with.
+   Every `google_secret_manager_secret_version` in `modules/consul/`
+   now reads from a `consul_acl_token_secret_id` data source instead
+   (confirmed against the provider's own docs — see the comment on
+   `data.consul_acl_token_secret_id.agent` in `modules/consul/agent.tf`).
+2. **Octopus provider schema** — the lifecycle retention blocks,
+   `octopusdeploy_process`/`process_step`/`process_steps_order`, and
+   the Cloud Region deployment target resources are written from the
+   current provider documentation but not independently exercised
+   against a live Octopus instance. Verify field names before the
+   first real apply.
+3. **Postgres connection resolution** — Vault's database connections
+   point at `${traefik_internal_address}:15432`/`15433`, a dedicated
+   TCP passthrough per environment on traefik-internal's dev-internal/
+   prod-internal instances (mgmt-vm has no local Consul agent of its
+   own any more to resolve `postgres.service.consul` directly, and
+   Postgres has no static IP since it's scheduled onto whichever
+   on-demand client node has room). **Not yet wired end to end**: the
+   traefik role doesn't have these two TCP entrypoints, and the
+   Postgres Nomad job spec doesn't have the `traefik.tcp.routers.*`
+   service tags to be discovered by them. `verify_connection = false`
+   on both connections means this module still applies cleanly in the
+   meantime, but no credential can actually be issued until that
+   follow-up lands.
+4. **`postgresql` as one destination for two databases** assumes a
+   single Postgres Nomad job hosting both the `metrics` and
+   `monitoring` databases via separate `CREATE DATABASE` statements,
+   rather than two separate Postgres jobs. Confirm before job specs are
+   written.
+5. **Job-scoped ACL policy binding for `nomad-sentinel`** — Workload
+   Identity requires associating the policy with the specific job
+   (via `-job`/`-group`/`-task` scoping) rather than a standalone
+   token. The exact Terraform resource argument for this hasn't been
+   confirmed against the provider's current schema.
 
 ## Service intentions call graph
 

@@ -1,10 +1,35 @@
 ---
-# Native Binary + Systemd, Not Docker — Matches The Architecture Doc's
-# Note That Traefik Runs The Stock Install, Not A Custom Image Or Nomad
-# Job. Three Modes (traefik_mode): dev-public/prod-public Use The Consul
-# Catalog Provider With Let's Encrypt HTTP-01; internal Uses A Static File
-# Provider With Let's Encrypt DNS-01 Via Cloudflare (Wildcard Cert, No
-# Public IP).
+# Native Binary + Systemd, Not Docker. This Role Is Shared By Every
+# Traefik Process In The Platform — Which Ones Actually Get Configured
+# On This Host Is Entirely Down To traefik_active_instances, Set By
+# The Calling Playbook (Not By This Role). See defaults/main.yaml For
+# What Each Named Instance In The Catalog Actually Is.
+
+- name: Fail Loudly If No Instances Were Selected
+  ansible.builtin.fail:
+    msg: >-
+      traefik_active_instances is empty — the calling playbook must
+      set it to one or more names from traefik_instance_catalog
+      (e.g. [mgmt, dev-internal, prod-internal] for traefik-internal,
+      or [dev-public] for traefik-dev's own playbook).
+  when: traefik_active_instances | length == 0
+
+- name: Resolve Selected Instances From The Catalog
+  ansible.builtin.set_fact:
+    traefik_instances_to_configure: >-
+      {{
+        traefik_instance_catalog
+        | selectattr('name', 'in', traefik_active_instances)
+        | list
+      }}
+
+- name: Fail Loudly If A Selected Name Doesn't Exist In The Catalog
+  ansible.builtin.fail:
+    msg: >-
+      traefik_active_instances names {{ traefik_active_instances }},
+      but only {{ traefik_instances_to_configure | map(attribute='name') | list }}
+      were found in traefik_instance_catalog — check for a typo.
+  when: (traefik_instances_to_configure | length) != (traefik_active_instances | length)
 
 - name: Create Traefik Group
   ansible.builtin.group:
@@ -17,21 +42,8 @@
     group: "{{ traefik_group }}"
     system: true
     shell: /usr/sbin/nologin
-    home: "{{ traefik_config_dir }}"
+    home: "{{ traefik_base_config_dir }}"
     create_home: false
-
-- name: Create Traefik Directories
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: "0750"
-  loop:
-    - "{{ traefik_config_dir }}"
-    - "{{ traefik_dynamic_config_dir }}"
-    - "{{ traefik_log_dir }}"
-    - "{{ traefik_tls_dir }}"
 
 - name: Download And Extract Traefik Binary
   ansible.builtin.unarchive:
@@ -49,118 +61,24 @@
     group: root
     mode: "0755"
 
-- name: Grant Traefik Binary Port-Binding Capability (No Root Needed For 80/443)
+- name: Grant Traefik Binary Port-Binding Capability (No Root Needed For Any Listening Port, Including 80/443)
   community.general.capabilities:
     path: "{{ traefik_bin_dir }}/traefik"
     capability: cap_net_bind_service+ep
     state: present
 
-- name: Read Consul Catalog token
-  ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret={{ secret_consul_token }} --project={{ gcp_project_id }}
-  register: consul_traefik_token
-  no_log: true
-  changed_when: false
-  when: traefik_mode in ['dev-public', 'prod-public']
-
-- name: Fetch Envrionment CA cert
-  ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret={{ secret_ca_cert }} --project={{ gcp_project_id }}
-  register: ca_cert
-  changed_when: false
-  when: traefik_mode in ['dev-public', 'prod-public']
-
-- name: Write CA Certificate
-  ansible.builtin.copy:
-    content: "{{ ca_cert.stdout }}"
-    dest: "{{ traefik_tls_dir }}/ca.pem"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: "0640"
-  when: traefik_mode in ['dev-public', 'prod-public']
-
-# Public Modes Only: Resolve This Environment's Own Server FQDN
-- name: Derive target environment from traefik_mode
-  ansible.builtin.set_fact:
-    traefik_target_env: "{{ traefik_mode.split('-')[0] }}" # dev-public -> dev, prod-public -> prod
-  when: traefik_mode in ['dev-public', 'prod-public']
-
-- name: Fetch this environment's Nomad/Consul server FQDN
-  ansible.builtin.include_tasks: fetch-server-fqdn.yaml
-  vars:
-    target_env: "{{ traefik_target_env }}"
-  when: traefik_mode in ['dev-public', 'prod-public']
-
-# Internal Mode Only: Resolve BOTH Dev And Prod Server FQDNs —
-# internal-routes.yaml.j2 Routes To Both Environments At Once unlike
-# public mode, where only a single environment's FQDN is ever needed.
-- name: Fetch dev server FQDN
-  ansible.builtin.include_tasks: fetch-server-fqdn.yml
-  vars:
-    target_env: dev
-  when: traefik_mode == 'internal'
-
-- name: Fetch prod server FQDN
-  ansible.builtin.include_tasks: fetch-server-fqdn.yml
-  vars:
-    target_env: prod
-  when: traefik_mode == 'internal'
-
-- name: Template Static Traefik Configuration
-  ansible.builtin.template:
-    src: traefik.yaml.j2
-    dest: "{{ traefik_config_dir }}/traefik.yaml"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: "0640"
-  notify: Restart Traefik
-
-# --- Internal Mode Only: Static Routes To Fixed Internal Tools ---
-- name: Template Internal Dynamic Routes
-  ansible.builtin.template:
-    src: internal-routes.yaml.j2
-    dest: "{{ traefik_dynamic_config_dir }}/internal-routes.yaml"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: "0640"
-  when: traefik_mode == 'internal'
-  notify: Restart Traefik
-
-# --- Internal Mode Only: Cloudflare DNS-01 Token ---
-- name: Read Cloudflare API Token From Secret Manager (Internal Mode Only)
+- name: Read Cloudflare API Token (Only Needed If Any Selected Instance Uses DNS-01)
   ansible.builtin.command: >
     gcloud secrets versions access latest
     --secret={{ secret_cloudflare_api_token }} --project={{ gcp_project_id }}
   register: cloudflare_token_read
   no_log: true
   changed_when: false
-  when: traefik_mode == 'internal'
+  when: traefik_instances_to_configure | selectattr('challenge', 'equalto', 'dns-01') | list | length > 0
 
-- name: Write Traefik Environment File (Internal Mode Only — Cloudflare Token)
-  ansible.builtin.copy:
-    dest: "{{ traefik_config_dir }}/traefik.env"
-    content: "CF_DNS_API_TOKEN={{ cloudflare_token_read.stdout }}\n"
-    owner: "{{ traefik_user }}"
-    group: "{{ traefik_group }}"
-    mode: "0600"
-  when: traefik_mode == 'internal'
-  no_log: true
-  notify: Restart Traefik
-
-- name: Template Traefik Systemd Unit
-  ansible.builtin.template:
-    src: traefik.service.j2
-    dest: /etc/systemd/system/traefik.service
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Reload Systemd Daemon
-
-- name: Enable And Start Traefik
-  ansible.builtin.systemd:
-    name: traefik
-    enabled: true
-    state: started
-    daemon_reload: true
+- name: Configure Each Selected Traefik Instance
+  ansible.builtin.include_tasks: configure-instance.yaml
+  loop: "{{ traefik_instances_to_configure }}"
+  loop_control:
+    loop_var: traefik_instance
+    label: "{{ traefik_instance.name }}"

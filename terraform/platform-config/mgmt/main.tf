@@ -1,11 +1,12 @@
 module "vault" {
   source = "../modules/vault"
 
-  gcp_project           = var.gcp_project
-  nomad_address_dev     = var.nomad_address_dev
-  nomad_address_prod    = var.nomad_address_prod
-  github_oidc_audience  = var.github_oidc_audience
-  github_repository     = var.github_repository
+  gcp_project              = var.gcp_project
+  nomad_address_dev        = var.nomad_address_dev
+  nomad_address_prod       = var.nomad_address_prod
+  github_oidc_audience     = var.github_oidc_audience
+  github_repository        = var.github_repository
+  traefik_internal_address = var.traefik_internal_address
 }
 
 # NOTE: dev/ and prod/ must each have been applied at least once

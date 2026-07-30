@@ -27,9 +27,15 @@ resource "consul_acl_token" "nomad_server" {
   policies    = [consul_acl_policy.nomad_server.name]
 }
 
+# See the comment on data.consul_acl_token_secret_id.agent in agent.tf —
+# same reasoning applies to every token in this module.
+data "consul_acl_token_secret_id" "nomad_server" {
+  accessor_id = consul_acl_token.nomad_server.accessor_id
+}
+
 resource "google_secret_manager_secret_version" "nomad_server_consul_token" {
   secret      = "nomad-server-consul-token-${var.environment}"
-  secret_data = consul_acl_token.nomad_server.id
+  secret_data = data.consul_acl_token_secret_id.nomad_server.secret_id
 }
 
 # acl:write here is what lets Nomad clients request Consul Service
@@ -56,7 +62,11 @@ resource "consul_acl_token" "nomad_client" {
   policies    = [consul_acl_policy.nomad_client.name]
 }
 
+data "consul_acl_token_secret_id" "nomad_client" {
+  accessor_id = consul_acl_token.nomad_client.accessor_id
+}
+
 resource "google_secret_manager_secret_version" "nomad_client_consul_token" {
   secret      = "nomad-client-consul-token-${var.environment}"
-  secret_data = consul_acl_token.nomad_client.id
+  secret_data = data.consul_acl_token_secret_id.nomad_client.secret_id
 }

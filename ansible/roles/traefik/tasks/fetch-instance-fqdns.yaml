@@ -1,0 +1,51 @@
+---
+# Resolve One Or More GCE Instances To Their Full Internal FQDNs
+#
+# GCE instances are spread across zones (compute/main.tf's placement
+# for autoscaled/multi-server resources), so a bare short name only
+# reliably resolves when the caller happens to sit in the same zone.
+# The full INSTANCE.ZONE.c.PROJECT.internal form removes that
+# assumption.
+#
+# Only called for instances with a non-empty static_routes list (see
+# tasks/configure-instance.yaml) — the public instances have none and
+# skip this entirely.
+#
+# target_filter may be an exact instance name (e.g. "mgmt-vm", a single
+# static VM) or a name prefix (e.g. "nomad-dev-server-", which may
+# match one instance or several depending on nomad_server_count) —
+# every match is resolved and returned, so callers don't need to know
+# the count in advance. Nomad and Consul servers run on the same
+# instance (compute/main.tf tags nomad-server-{env} + consul-server-{env}
+# on one VM), so one lookup covers both admin APIs.
+#
+# Called with target_filter set by the includer. Returns
+# resolved_instance_fqdns, a list — one entry for a single static VM,
+# one entry per server for a multi-node family.
+
+- name: "Look up instances matching {{ target_filter }}"
+  ansible.builtin.command: >
+    gcloud compute instances list
+    --filter="name~^{{ target_filter }}"
+    --format="value(name,zone.basename())"
+    --project={{ gcp_project_id }}
+  delegate_to: localhost
+  become: false
+  register: _instance_lookup
+  changed_when: false
+
+- name: "Fail loudly if nothing matched {{ target_filter }}"
+  ansible.builtin.fail:
+    msg: >-
+      No GCE instances matched "{{ target_filter }}" — check the
+      instance actually exists before re-running this playbook.
+  when: _instance_lookup.stdout_lines | length == 0
+
+- name: "Build full internal FQDNs for {{ target_filter }}"
+  ansible.builtin.set_fact:
+    resolved_instance_fqdns: >-
+      {{
+        _instance_lookup.stdout_lines
+        | map('regex_replace', '^(\S+)\s+(\S+)$', '\1.\2.c.' ~ gcp_project_id ~ '.internal')
+        | list
+      }}

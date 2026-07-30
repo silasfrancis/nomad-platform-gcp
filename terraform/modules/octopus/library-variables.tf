@@ -73,7 +73,7 @@ resource "octopusdeploy_variable" "image_tag" {
   name     = "ImageTag"
   type     = "String"
   value    = "#{Octopus.Release.Number}"
-  description = "Alias for the release number GitHub Actions sets when it calls octo create-release"
+  description = "Alias for the release number GitHub Actions sets when it calls octo create-release — the same image tag is promoted through every environment, never rebuilt."
 }
 
 resource "octopusdeploy_variable" "slack_webhook_url" {

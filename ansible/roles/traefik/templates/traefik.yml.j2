@@ -1,13 +1,13 @@
-# Managed By Ansible (traefik Role) — traefik_mode: {{ traefik_mode }}
+# Managed By Ansible (traefik Role) — Instance: {{ traefik_instance.name }}
 
 log:
-  filePath: "{{ traefik_log_dir }}/traefik.log"
+  filePath: "{{ traefik_base_log_dir }}/{{ traefik_instance.name }}/traefik.log"
   level: INFO
 
 entryPoints:
+{% if traefik_instance.http_port %}
   web:
-    address: ":{{ traefik_http_port }}"
-{% if traefik_mode in ['dev-public', 'prod-public'] %}
+    address: ":{{ traefik_instance.http_port }}"
     http:
       redirections:
         entryPoint:
@@ -15,45 +15,40 @@ entryPoints:
           scheme: https
 {% endif %}
   websecure:
-    address: ":{{ traefik_https_port }}"
+    address: ":{{ traefik_instance.https_port }}"
 
-{% if traefik_mode in ['dev-public', 'prod-public'] %}
-# Public Modes: Consul Catalog Provider — Reads Service Tags From This
-# Environment's Local Consul Agent To Build Routing Rules Automatically.
-# No Config Change Needed When A New Nomad Job Is Deployed.
 providers:
+{% if traefik_instance.static_routes | length > 0 %}
+  file:
+    directory: "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/dynamic"
+    watch: true
+{% endif %}
+{% if catalog_enabled %}
+  # This Environment's Own Catalog Token Exists — Discover Its Services
+  # Automatically. exposedByDefault Is Always False: Every Service That
+  # Should Be Routed Here Opts In Explicitly Via A traefik.enable=true
+  # Consul Service Tag.
   consulCatalog:
     endpoint:
-      address: "{{ vars['server_fqdn_' + traefik_target_env] }}:8500"
-      token: "{{ consul_traefik_token.stdout }}"
-      tls: 
-        ca: "{{ traefik_tls_dir }}/ca.pem"
-    exposedByDefault: false
+      address: "{% if traefik_instance.static_routes | length > 0 %}{{ resolved_instance_fqdns[0] }}:8500{% else %}localhost:8500{% endif %}"
+      token: "{{ _catalog_token_read.stdout }}"
+      tls:
+        ca: "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/tls/ca.pem"
+    exposedByDefault: {{ traefik_instance.catalog_exposed_by_default | lower }}
     prefix: "traefik"
+{% endif %}
 
 certificatesResolvers:
   letsencrypt:
     acme:
       email: "{{ traefik_acme_email }}"
-      storage: "{{ traefik_config_dir }}/acme.json"
-      httpChallenge:
-        entryPoint: web
-{% else %}
-# Internal Mode: Static File Provider — A Small, Fixed Set Of Internal
-# Tools (Vault, Nomad, Consul, Octopus, Grafana), Not Worth Dynamic
-# Catalog Discovery.
-providers:
-  file:
-    directory: "{{ traefik_dynamic_config_dir }}"
-    watch: true
-
-certificatesResolvers:
-  letsencrypt:
-    acme:
-      email: "{{ traefik_acme_email }}"
-      storage: "{{ traefik_config_dir }}/acme.json"
+      storage: "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/acme.json"
+{% if traefik_instance.challenge == 'dns-01' %}
       dnsChallenge:
         provider: cloudflare
+{% else %}
+      httpChallenge:
+        entryPoint: web
 {% endif %}
 
 api:

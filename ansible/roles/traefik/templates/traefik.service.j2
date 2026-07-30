@@ -1,5 +1,5 @@
 [Unit]
-Description=Traefik ({{ traefik_mode }})
+Description=Traefik ({{ traefik_instance.name }})
 Documentation=https://doc.traefik.io/traefik/
 After=network-online.target
 Wants=network-online.target
@@ -7,10 +7,10 @@ Wants=network-online.target
 [Service]
 User={{ traefik_user }}
 Group={{ traefik_group }}
-{% if traefik_mode == 'internal' %}
-EnvironmentFile={{ traefik_config_dir }}/traefik.env
+{% if traefik_instance.challenge == 'dns-01' %}
+EnvironmentFile={{ traefik_base_config_dir }}/{{ traefik_instance.name }}/traefik.env
 {% endif %}
-ExecStart={{ traefik_bin_dir }}/traefik --configFile={{ traefik_config_dir }}/traefik.yaml
+ExecStart={{ traefik_bin_dir }}/traefik --configFile={{ traefik_base_config_dir }}/{{ traefik_instance.name }}/traefik.yml
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536

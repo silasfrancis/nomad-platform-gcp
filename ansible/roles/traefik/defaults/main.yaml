@@ -6,39 +6,121 @@ traefik_version: "3.7.6"
 traefik_download_url: >-
   https://github.com/traefik/traefik/releases/download/v{{ traefik_version }}/traefik_v{{ traefik_version }}_linux_amd64.tar.gz
 
-# One Of: "dev-public", "prod-public", "internal" — Set Per-Playbook/Host.
-traefik_mode: "internal"
-
 traefik_user: traefik
 traefik_group: traefik
 
 traefik_bin_dir: /usr/local/bin
-traefik_config_dir: /etc/traefik
-traefik_dynamic_config_dir: /etc/traefik/dynamic
-traefik_tls_dir: /etc/traefik/tls
-traefik_log_dir: /var/log/traefik
-
-traefik_http_port: 80
-traefik_https_port: 443
+traefik_base_config_dir: /etc/traefik
+traefik_base_log_dir: /var/log/traefik
 
 traefik_acme_email: "ops@lefrancis.org"
 
-# Only Meaningful In dev-public/prod-public Mode.
-traefik_public_domain: "dev.boutique.lefrancis.org"
-
-# Only Meaningful In internal Mode — Cloudflare DNS-01 For The Wildcard
-# Cert. Requires secret_cloudflare_api_token To Already Exist In Secret
-# Manager (Manually Seeded, Like octopus-api-key And github-bot-pat — Not
-# In default_secrets Yet, Add It There Before Running This Role).
-traefik_internal_domain: "platform.lefrancis.org"
+# Cloudflare DNS-01 token — only read for instances using
+# challenge: dns-01. Shared across all of those (same zone).
 secret_cloudflare_api_token: "cloudflare-api-token"
-secret_consul_token: ""
-secret_ca_cert: ""
 
-# Which Environment's Nomad/Consul Leader nomad.platform.lefrancis.org And
-# consul.platform.lefrancis.org Point At — The Architecture Doc's Routing
-# Table Doesn't Distinguish Dev Vs Prod For These Two Rows. Defaults To
-# dev; Override Or Split Into Per-Env Subdomains If You Want Both
-# Reachable Simultaneously.
-traefik_internal_nomad_target: "nomad-dev-server-0"
-traefik_internal_consul_target: "nomad-dev-server-0"
+# traefik_instance_catalog Is The One Definition Of Every Traefik
+# Process That Exists Anywhere In This Platform — Which Host It Runs
+# On Is Decided By Which Playbook Includes This Role, Not By Anything
+# In This File.
+#
+# A given host only ever configures the subset named in
+# traefik_active_instances (set by the calling playbook, see
+# tasks/main.yaml) — traefik-internal's playbook sets it to
+# [mgmt, dev-internal, prod-internal]; traefik-dev's/traefik-prod's
+# public-subnet playbooks set it to a single-item list each.
+#
+# Field meanings:
+#   https_port     — entryPoint port for this instance's HTTPS listener.
+#                     Internal instances use arbitrary high ports (IAP
+#                     tunnel forwards whatever's configured, no
+#                     public-facing constraint); public instances must
+#                     be 443.
+#   http_port      — only set for challenge: http-01 (needs a real port
+#                     80 for the ACME challenge + http->https redirect).
+#                     ~ (null) for dns-01 instances.
+#   challenge      — dns-01 (Cloudflare, used internally — no public
+#                     DNS record needed) or http-01 (used by the public
+#                     instances, which have real public DNS + a public
+#                     IP to answer the challenge on).
+#   domain         — the base domain this instance issues certs under.
+#   catalog_env    — dev/prod (gets a consulCatalog provider once that
+#                     environment's consul-traefik-token-{env} secret
+#                     exists) or ~ for mgmt, which never talks to Consul.
+#   catalog_exposed_by_default
+#                  — false everywhere: internal instances don't use
+#                     consulCatalog for routing at all (see
+#                     static_routes below), and public instances must
+#                     tag-gate (only frontend, checkout, cart, etc. opt
+#                     in via traefik.enable=true) rather than
+#                     auto-exposing every service in the catalog.
+#   backend_instance_filter
+#                  — GCE instance name (exact, single static VM) or
+#                     name prefix (a family — e.g. Nomad servers, 1 or
+#                     3 depending on nomad_server_count) resolved by
+#                     fetch-instance-fqdns.yaml. Only meaningful when
+#                     static_routes is non-empty; omitted otherwise.
+#   static_routes  — fixed file-provider passthrough routes (admin
+#                     APIs, Vault, Octopus, Grafana). Empty for the
+#                     public instances, which rely entirely on
+#                     consulCatalog + per-service tags instead.
+traefik_instance_catalog:
+  - name: mgmt
+    https_port: 8443
+    http_port: ~
+    challenge: dns-01
+    domain: platform.lefrancis.org
+    catalog_env: ~
+    catalog_exposed_by_default: false
+    backend_instance_filter: "mgmt-vm"
+    static_routes:
+      - { subdomain: vault, scheme: https, port: 8200 }
+      - { subdomain: octopus, scheme: http, port: 8080 }
+      - { subdomain: grafana, scheme: http, port: 3000 }
+
+  - name: dev-internal
+    https_port: 8444
+    http_port: ~
+    challenge: dns-01
+    domain: platform.lefrancis.org
+    catalog_env: dev
+    catalog_exposed_by_default: false
+    backend_instance_filter: "nomad-dev-server-"
+    static_routes:
+      - { subdomain: nomad-dev, scheme: http, port: 4646 }
+      - { subdomain: consul-dev, scheme: http, port: 8500 }
+
+  - name: prod-internal
+    https_port: 8445
+    http_port: ~
+    challenge: dns-01
+    domain: platform.lefrancis.org
+    catalog_env: prod
+    catalog_exposed_by_default: false
+    backend_instance_filter: "nomad-prod-server-"
+    static_routes:
+      - { subdomain: nomad-prod, scheme: http, port: 4646 }
+      - { subdomain: consul-prod, scheme: http, port: 8500 }
+
+  - name: dev-public
+    https_port: 443
+    http_port: 80
+    challenge: http-01
+    domain: dev.boutique.lefrancis.org
+    catalog_env: dev
+    catalog_exposed_by_default: false
+    static_routes: []
+
+  - name: prod-public
+    https_port: 443
+    http_port: 80
+    challenge: http-01
+    domain: boutique.lefrancis.org
+    catalog_env: prod
+    catalog_exposed_by_default: false
+    static_routes: []
+
+# Set by the calling playbook — never left at this empty default. See
+# playbooks/traefik-internal.yml, playbooks/traefik-dev-public.yml, and
+# playbooks/traefik-prod-public.yml.
+traefik_active_instances: []
