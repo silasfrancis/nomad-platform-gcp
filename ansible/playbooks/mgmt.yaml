@@ -22,7 +22,6 @@
     - github-runner
     - docker
     - octopus
-    - traefik
     - role: vault
       tasks_from: backup.yaml
     - role: octopus

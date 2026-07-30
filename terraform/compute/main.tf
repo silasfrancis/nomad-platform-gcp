@@ -28,9 +28,10 @@ locals {
 
   # Shared, Unconditional — Not Gated By active_environments
   #
-  # mgmt-vm serves both dev and prod (Vault, Octopus, Grafana, internal
-  # Traefik) — it's created every apply regardless of which environments
-  # are active, same reasoning as bootstrap/network being non-workspaced.
+  # mgmt-vm (Vault, Octopus, Grafana, Github actions runner)
+  # and traefik-internal (Traefik Internal)
+  # — it's created every apply regardless of which environments
+  # are active
 
   shared_instances = {
     "mgmt-vm" = {
@@ -42,8 +43,6 @@ locals {
       boot_disk_size_gb        = 50
       tags                     = ["mgmt"]
       labels                   = { role = "mgmt" }
-      # startup_script wired in once the Ansible bootstrap/cloud-init
-      # sequence for Vault/Octopus/Grafana/internal-Traefik is written.
 
       # Separate persistent disks for Vault's storage backend and SQL
       # Server's data files — kept off the boot disk so either can be
@@ -54,76 +53,6 @@ locals {
         { name = "sql-data",   size_gb = 30 },
       ]
     }
-  }
-
-  # Environment-Scoped — Gated By active_environments
-  #
-  # nomad-dev-server count is configurable 1-3 (architecture doc 1.3);
-  # nomad-prod-server is fixed at 3 for a real Raft quorum. Each instance
-  # gets its own zone off local.zones so a single-zone outage doesn't take
-  # out every server at once.
-
-  dev_server_instances = {
-    for i in range(var.nomad_dev_server_count) : "nomad-dev-server-${i}" => {
-      machine_type            = "e2-small"
-      environment             = "dev"
-      zone                     = local.zones[i % length(local.zones)]
-      subnetwork               = local.network.subnets["subnet-dev-private"].self_link
-      external_ip              = false
-      service_account_email    = local.nomad_server_sa_member_dev
-      boot_disk_size_gb        = 20
-      tags                     = ["nomad-server-dev", "consul-server-dev"]
-      labels                   = { role = "control-plane", environment = "dev" }
-      startup_script           = local.nomad_server_startup_script
-      additional_disks = [
-        { name = "nomad-data", size_gb = 20 },
-        { name = "consul-data",   size_gb = 20 },
-      ]
-    }
-  }
-
-  prod_server_instances = {
-    for i in range(3) : "nomad-prod-server-${i}" => {
-      machine_type            = "e2-small"
-      environment             = "prod"
-      zone                     = local.zones[i % length(local.zones)]
-      subnetwork               = local.network.subnets["subnet-prod-private"].self_link
-      external_ip              = false
-      service_account_email    = local.nomad_server_sa_member_prod
-      boot_disk_size_gb        = 20
-      tags                     = ["nomad-server-prod", "consul-server-prod"]
-      labels                   = { role = "control-plane", environment = "prod" }
-      startup_script           = local.nomad_server_startup_script
-      additional_disks = [
-        { name = "nomad-data", size_gb = 20 },
-        { name = "consul-data",   size_gb = 20 },
-      ]
-    }
-  }
-
-  traefik_instances = {
-    "traefik-dev" = {
-      machine_type            = "e2-micro"
-      zone                     = local.zones[0]
-      subnetwork               = local.network.subnets["subnet-dev-public"].self_link
-      static_external_ip       = true
-      external_ip              = true
-      service_account_email    = local.traefik_vm_sa_member_dev
-      boot_disk_size_gb        = 20
-      tags                     = ["traefik"]
-      labels                   = { role = "traefik", environment = "dev" }
-    }
-    "traefik-prod" = {
-      machine_type            = "e2-small"
-      zone                     = local.zones[0]
-      subnetwork               = local.network.subnets["subnet-prod-public"].self_link
-      static_external_ip       = true
-      external_ip              = true
-      service_account_email    = local.traefik_vm_sa_member_prod
-      boot_disk_size_gb        = 20
-      tags                     = ["traefik"]
-      labels                   = { role = "traefik", environment = "prod" }
-    }
     "traefik-internal" = {
       machine_type            = "e2-small"
       zone                     = local.zones[0]
@@ -133,24 +62,101 @@ locals {
       service_account_email    = local.traefik_vm_sa_member_internal
       boot_disk_size_gb        = 20
       tags                     = ["traefik"]
-      labels                   = { role = "traefik", environment = "prod" }
+      labels                   = { role = "traefik" }
     }
   }
+
+  # Environment-Scoped — Gated By active_environments
+  #
+  # nomad-dev-server count is configurable 1-3 for a dev Raft quorum
+  # nomad-prod-server is fixed at 3 for a real Raft quorum. Each instance
+  # gets its own zone off local.zones so a single-zone outage doesn't take
+  # out every server at once.
+
+# Dev-Scoped Instances (Nomad Servers + Traefik Dev)
+  dev_server_instances = merge(
+    {
+      for i in range(var.nomad_dev_server_count) : "nomad-dev-server-${i}" => {
+        machine_type          = "e2-small"
+        environment           = "dev"
+        zone                  = local.zones[i % length(local.zones)]
+        subnetwork            = local.network.subnets["subnet-dev-private"].self_link
+        external_ip           = false
+        service_account_email = local.nomad_server_sa_member_dev
+        boot_disk_size_gb     = 20
+        tags                  = ["nomad-server-dev", "consul-server-dev"]
+        labels                = { role = "control-plane", environment = "dev" }
+        startup_script        = local.nomad_server_startup_script
+        additional_disks = [
+          { name = "nomad-data", size_gb = 20 },
+          { name = "consul-data",  size_gb = 20 },
+        ]
+      }
+    },
+    {
+      "traefik-dev" = {
+        machine_type          = "e2-micro"
+        environment           = "dev"
+        zone                  = local.zones[0]
+        subnetwork            = local.network.subnets["subnet-dev-public"].self_link
+        static_external_ip    = true
+        external_ip           = true
+        service_account_email = local.traefik_vm_sa_member_dev
+        boot_disk_size_gb     = 20
+        tags                  = ["traefik"]
+        labels                = { role = "traefik", environment = "dev" }
+      }
+    }
+  )
+
+  # Prod-Scoped Instances (Nomad Servers + Traefik Prod)
+  prod_server_instances = merge(
+    {
+      for i in range(3) : "nomad-prod-server-${i}" => {
+        machine_type          = "e2-small"
+        environment           = "prod"
+        zone                  = local.zones[i % length(local.zones)]
+        subnetwork            = local.network.subnets["subnet-prod-private"].self_link
+        external_ip           = false
+        service_account_email = local.nomad_server_sa_member_prod
+        boot_disk_size_gb     = 20
+        tags                  = ["nomad-server-prod", "consul-server-prod"]
+        labels                = { role = "control-plane", environment = "prod" }
+        startup_script        = local.nomad_server_startup_script
+        additional_disks = [
+          { name = "nomad-data", size_gb = 20 },
+          { name = "consul-data",  size_gb = 20 },
+        ]
+      }
+    },
+    {
+      "traefik-prod" = {
+        machine_type          = "e2-small"
+        environment           = "prod"
+        zone                  = local.zones[0]
+        subnetwork            = local.network.subnets["subnet-prod-public"].self_link
+        static_external_ip    = true
+        external_ip           = true
+        service_account_email = local.traefik_vm_sa_member_prod
+        boot_disk_size_gb     = 20
+        tags                  = ["traefik"]
+        labels                = { role = "traefik", environment = "prod" }
+      }
+    }
+  )
 
   env_instances = merge(
     local.dev_server_instances,
     local.prod_server_instances,
-    local.traefik_instances,
   )
 
   active_env_instances = {
     for name, cfg in local.env_instances : name => cfg
-    if contains(var.active_environments, cfg.labels.environment)
+    if contains(var.active_environments, cfg.environment)
   }
 
-  # Final map fed to the static-vm module. shared_instances is
-  # unconditional — active_environments = [] still creates mgmt-vm and
-  # nothing else.
+  # Final map fed to the instances module. shared_instances is
+  # unconditional — active_environments = [] still creates mgmt-vm, traefik-internal and nothing else.
   instances = merge(local.shared_instances, local.active_env_instances)
 
   all_migs = {
