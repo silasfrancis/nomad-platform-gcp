@@ -21,12 +21,9 @@ resource "consul_acl_token" "traefik" {
 }
 
 data "consul_acl_token_secret_id" "traefik" {
-  accessor_id = consul_acl_token.traefik.accessor_id
+  accessor_id = consul_acl_token.traefik.id
 }
 
-# This is the exact secret traefik-internal's Ansible role polls for
-# idempotently (consul-traefik-token-{env}) — until this apply happens,
-# that role's consulCatalog block stays disabled for this environment.
 resource "google_secret_manager_secret_version" "traefik_token" {
   secret      = "consul-traefik-token-${var.environment}"
   secret_data = data.consul_acl_token_secret_id.traefik.secret_id

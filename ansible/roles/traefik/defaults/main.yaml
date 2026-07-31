@@ -73,6 +73,7 @@ traefik_instance_catalog:
     catalog_env: ~
     catalog_exposed_by_default: false
     backend_instance_filter: "mgmt-vm"
+    tcp_entrypoint: ~
     static_routes:
       - { subdomain: vault, scheme: https, port: 8200 }
       - { subdomain: octopus, scheme: http, port: 8080 }
@@ -86,6 +87,7 @@ traefik_instance_catalog:
     catalog_env: dev
     catalog_exposed_by_default: false
     backend_instance_filter: "nomad-dev-server-"
+    tcp_entrypoint: { name: postgres, port: 15432 }
     static_routes:
       - { subdomain: nomad-dev, scheme: http, port: 4646 }
       - { subdomain: consul-dev, scheme: http, port: 8500 }
@@ -98,6 +100,7 @@ traefik_instance_catalog:
     catalog_env: prod
     catalog_exposed_by_default: false
     backend_instance_filter: "nomad-prod-server-"
+    tcp_entrypoint: { name: postgres, port: 15433 }
     static_routes:
       - { subdomain: nomad-prod, scheme: http, port: 4646 }
       - { subdomain: consul-prod, scheme: http, port: 8500 }
@@ -121,6 +124,5 @@ traefik_instance_catalog:
     static_routes: []
 
 # Set by the calling playbook — never left at this empty default. See
-# playbooks/traefik-internal.yml, playbooks/traefik-dev-public.yml, and
-# playbooks/traefik-prod-public.yml.
+# playbooks/traefik-internal.yaml and playbooks/traefik-public.yaml
 traefik_active_instances: []

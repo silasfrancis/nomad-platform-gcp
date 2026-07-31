@@ -10,7 +10,7 @@ Group={{ traefik_group }}
 {% if traefik_instance.challenge == 'dns-01' %}
 EnvironmentFile={{ traefik_base_config_dir }}/{{ traefik_instance.name }}/traefik.env
 {% endif %}
-ExecStart={{ traefik_bin_dir }}/traefik --configFile={{ traefik_base_config_dir }}/{{ traefik_instance.name }}/traefik.yml
+ExecStart={{ traefik_bin_dir }}/traefik --configFile={{ traefik_base_config_dir }}/{{ traefik_instance.name }}/traefik.yaml
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536

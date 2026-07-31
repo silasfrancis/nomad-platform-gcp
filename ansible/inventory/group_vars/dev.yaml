@@ -14,3 +14,6 @@ bootstrap_expect: 1
 # Environment — Fill In Once compute/ Has Applied.
 retry_join:
   - "nomad-dev-server-0"
+
+traefik_active_instances:
+  - dev-public

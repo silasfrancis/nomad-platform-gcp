@@ -30,7 +30,7 @@ resource "consul_acl_token" "nomad_server" {
 # See the comment on data.consul_acl_token_secret_id.agent in agent.tf —
 # same reasoning applies to every token in this module.
 data "consul_acl_token_secret_id" "nomad_server" {
-  accessor_id = consul_acl_token.nomad_server.accessor_id
+  accessor_id = consul_acl_token.nomad_server.id
 }
 
 resource "google_secret_manager_secret_version" "nomad_server_consul_token" {
@@ -63,7 +63,7 @@ resource "consul_acl_token" "nomad_client" {
 }
 
 data "consul_acl_token_secret_id" "nomad_client" {
-  accessor_id = consul_acl_token.nomad_client.accessor_id
+  accessor_id = consul_acl_token.nomad_client.id
 }
 
 resource "google_secret_manager_secret_version" "nomad_client_consul_token" {

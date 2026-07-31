@@ -16,6 +16,10 @@ entryPoints:
 {% endif %}
   websecure:
     address: ":{{ traefik_instance.https_port }}"
+{% if traefik_instance.tcp_entrypoint %}
+  {{ traefik_instance.tcp_entrypoint.name }}:
+    address: ":{{ traefik_instance.tcp_entrypoint.port }}"
+{% endif %}
 
 providers:
 {% if traefik_instance.static_routes | length > 0 %}

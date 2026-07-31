@@ -26,12 +26,9 @@ resource "consul_acl_token" "agent" {
 # consul_acl_token deliberately never stores a token's secret in state
 # (only the accessor is safe to keep there) — this data source is the
 # provider's own documented way to read the secret back out once, right
-# after creation. Every google_secret_manager_secret_version below must
-# read from here, never from consul_acl_token.<name>.id directly: that
-# attribute is the accessor ID, not something any consumer can actually
-# authenticate with.
+# after creation.
 data "consul_acl_token_secret_id" "agent" {
-  accessor_id = consul_acl_token.agent.accessor_id
+  accessor_id = consul_acl_token.agent.id
 }
 
 resource "google_secret_manager_secret_version" "consul_server_agent_token" {

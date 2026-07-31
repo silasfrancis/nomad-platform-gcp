@@ -4,8 +4,5 @@
 - name: Configure traefik-prod (Public)
   hosts: traefik_prod_public
   become: true
-  vars:
-    traefik_active_instances:
-      - prod-public
   roles:
     - traefik

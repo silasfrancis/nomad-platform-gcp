@@ -78,8 +78,8 @@
 
 - name: "[{{ traefik_instance.name }}] Template Static Traefik Configuration"
   ansible.builtin.template:
-    src: traefik.yml.j2
-    dest: "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/traefik.yml"
+    src: traefik.yaml.j2
+    dest: "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/traefik.yaml"
     owner: "{{ traefik_user }}"
     group: "{{ traefik_group }}"
     mode: "0640"
@@ -89,8 +89,8 @@
 # There's Nothing For This Template To Render.
 - name: "[{{ traefik_instance.name }}] Template Dynamic Routes (Static Admin-API/Tool Passthrough)"
   ansible.builtin.template:
-    src: internal-routes.yml.j2
-    dest: "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/dynamic/routes.yml"
+    src: internal-routes.yaml.j2
+    dest: "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/dynamic/routes.yaml"
     owner: "{{ traefik_user }}"
     group: "{{ traefik_group }}"
     mode: "0640"
