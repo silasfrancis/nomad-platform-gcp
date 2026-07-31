@@ -11,9 +11,14 @@ locals {
       kv_paths  = ["shared/postgres/admin"]
       db_role   = null
     }
+    "redis" = {
+      namespace = "datastore"
+      kv_paths  = ["shared/redis"]
+      db_role   = null
+    }
     "cartservice" = {
       namespace = "boutique"
-      kv_paths  = ["cartservice/redis"]
+      kv_paths  = ["shared/redis"]
       db_role   = null
     }
     "metrics-api" = {

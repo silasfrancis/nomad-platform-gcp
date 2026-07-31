@@ -168,7 +168,7 @@ locals {
       spot                     = false
       service_account_email    = local.nomad_client_sa_member_dev
       tags                     = ["nomad-client-dev", "consul-client-dev"]
-      labels                   = { role = "worker", environment = "dev", pool = "ondemand" }
+      labels                   = { role = "worker", environment = "dev", pool = "on-demand" }
       environment              = "dev"
       scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
       startup_script           = local.nomad_client_startup_script
@@ -194,7 +194,7 @@ locals {
       spot                     = false
       service_account_email    = local.nomad_client_sa_member_prod
       tags                     = ["nomad-client-prod", "consul-client-prod"]
-      labels                   = { role = "worker", environment = "prod", pool = "ondemand" }
+      labels                   = { role = "worker", environment = "prod", pool = "on-demand" }
       environment              = "prod"
       scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
       startup_script           = local.nomad_client_startup_script

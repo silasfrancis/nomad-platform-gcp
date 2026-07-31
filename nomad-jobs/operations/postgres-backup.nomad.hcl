@@ -1,0 +1,83 @@
+# nomad-jobs/operations/postgres-backup.nomad.hcl
+#
+# Daily 03:00 UTC per architecture doc section 10. Dumps both
+# databases (metrics, monitoring) in one pass — same instance, same
+# credentials, per postgres.nomad.hcl's bootstrap task.
+#
+# Uses the vault-admin credential (the same one Vault's database
+# engine uses to mint dynamic roles) rather than a dedicated
+# read-only backup role — genuinely overprivileged for a job that only
+# ever reads, flagged here rather than left silent. Reasonable for now
+# given this never leaves the private VPC (same trust model already
+# accepted for Postgres's own plaintext TCP passthrough), but a
+# dedicated read-only role would be the tighter version of this.
+
+job "postgres-backup" {
+  datacenters = ["#{Datacenter}"]
+  namespace   = "operations"
+  type        = "batch"
+
+  periodic {
+    cron             = "0 3 * * *"
+    prohibit_overlap = true
+    time_zone        = "UTC"
+  }
+
+  group "postgres-backup" {
+    count = 1
+
+    affinity {
+      attribute = "${meta.node_pool_type}"
+      operator  = "="
+      value     = "spot"
+      weight    = 50
+    }
+
+    vault {
+      role = "postgres-backup-#{Environment}"
+    }
+
+    task "postgres-backup" {
+      driver = "docker"
+
+      config {
+        image   = "google/cloud-sdk:alpine"
+        command = "/bin/sh"
+        args    = ["-c", "/local/backup.sh"]
+      }
+
+      template {
+        data = <<EOF
+{{ with secret "kv/data/#{Environment}/postgres/vault-admin" }}
+PGPASSWORD={{ .Data.data.password }}
+{{ end }}
+PGHOST=postgres-#{Environment}.service.consul
+PGPORT=5432
+PGUSER=vault-admin
+EOF
+        destination = "secrets/postgres-backup.env"
+        env         = true
+      }
+
+      template {
+        data = <<EOF
+#!/bin/sh
+set -eu
+apk add --no-cache postgresql16-client >/dev/null
+STAMP=$(date +%Y%m%dT%H%M%SZ)
+for DB in metrics monitoring; do
+  pg_dump "$DB" | gzip > "/local/${DB}-${STAMP}.sql.gz"
+done
+gcloud storage cp /local/*.sql.gz gs://platform-artifacts/pg-backups/
+EOF
+        destination = "local/backup.sh"
+        perms       = "0755"
+      }
+
+      resources {
+        cpu    = #{Cpu}
+        memory = #{Memory}
+      }
+    }
+  }
+}
