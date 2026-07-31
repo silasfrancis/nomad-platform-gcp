@@ -11,7 +11,7 @@
 
 resource "nomad_namespace" "boutique" {
   name        = "boutique"
-  description = "Customer-facing application workloads and their supporting Redis instance."
+  description = "Customer-facing application workloads"
 }
 
 resource "nomad_namespace" "monitoring" {
@@ -19,9 +19,9 @@ resource "nomad_namespace" "monitoring" {
   description = "Observability stack: the AI monitoring agent, the metrics API, Prometheus, and related monitoring services."
 }
 
-resource "nomad_namespace" "database" {
-  name        = "database"
-  description = "Stateful database workloads, such as PostgreSQL, kept isolated from application and tooling namespaces."
+resource "nomad_namespace" "datastore" {
+  name        = "datastore"
+  description = "Stateful database workloads, such as PostgreSQL and Redis, kept isolated from application and tooling namespaces."
 }
 
 resource "nomad_namespace" "security" {
@@ -29,7 +29,7 @@ resource "nomad_namespace" "security" {
   description = "Security tooling, including the runtime security webhook receiver."
 }
 
-resource "nomad_namespace" "backup" {
-  name        = "backup"
-  description = "Scheduled periodic backup jobs."
+resource "nomad_namespace" "operations" {
+  name        = "operations"
+  description = "Scheduled periodic backup jobs and other operations tasks."
 }

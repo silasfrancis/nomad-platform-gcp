@@ -7,7 +7,7 @@
 locals {
   vault_consumers = {
     "postgres" = {
-      namespace = "database"
+      namespace = "datastore"
       kv_paths  = ["shared/postgres/admin"]
       db_role   = null
     }
