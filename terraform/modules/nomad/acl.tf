@@ -50,6 +50,15 @@ resource "nomad_acl_policy" "octopus_deploy" {
     namespace "monitoring" {
       policy = "write"
     }
+    namespace "security" {
+      policy = "write"
+    }
+    namespace "datastore" {
+      policy = "write"
+    }
+    namespace "operations" {
+      policy = "write"
+    }
   EOT
 }
 

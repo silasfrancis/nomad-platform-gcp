@@ -17,3 +17,4 @@ variable "slack_webhook_secret_name" {
   default     = "octopus-slack-webhook-url"
   description = "Name of the GCP Secret Manager secret holding the Slack webhook URL used by the Notify Slack deployment step. The secret itself is created and populated outside this module."
 }
+

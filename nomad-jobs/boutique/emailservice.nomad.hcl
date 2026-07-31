@@ -6,7 +6,7 @@
 
 job "emailservice" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "boutique"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -17,7 +17,7 @@ job "emailservice" {
   }
 
   group "emailservice" {
-    count = 1
+    count = #{ReplicaCount}
 
     affinity {
       attribute = "${meta.node_pool_type}"

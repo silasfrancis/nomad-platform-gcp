@@ -9,7 +9,7 @@
 
 job "frontend" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "boutique"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -23,7 +23,7 @@ job "frontend" {
   }
 
   group "frontend" {
-    count = 1
+    count = #{ReplicaCount}
 
     # Direct customer transaction path — never Spot.
     constraint {

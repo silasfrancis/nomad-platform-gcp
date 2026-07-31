@@ -18,7 +18,7 @@
 
 job "postgres" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "datastore"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   # Postgres itself doesn't get an update strategy in the canary/
@@ -32,7 +32,7 @@ job "postgres" {
   }
 
   group "postgres" {
-    count = 1
+    count = #{ReplicaCount}
 
     # Stateful — same hard on-demand constraint as every other
     # stateful/Vault-credential-dependent workload in this project.

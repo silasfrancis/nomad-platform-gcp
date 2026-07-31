@@ -21,7 +21,7 @@
 
 job "nomad-sentinel#{DeploymentSlot}" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "monitoring"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -32,7 +32,7 @@ job "nomad-sentinel#{DeploymentSlot}" {
   }
 
   group "nomad-sentinel" {
-    count = 1
+    count = #{ReplicaCount}
 
     # Monitoring must survive Spot preemption.
     constraint {

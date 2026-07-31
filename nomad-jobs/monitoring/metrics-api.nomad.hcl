@@ -23,7 +23,7 @@
 
 job "metrics-api#{DeploymentSlot}" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "monitoring"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -34,7 +34,7 @@ job "metrics-api#{DeploymentSlot}" {
   }
 
   group "metrics-api" {
-    count = 1
+    count = #{ReplicaCount}
 
     # Stateful/Vault-credential-dependent.
     constraint {

@@ -25,3 +25,12 @@ resource "google_dns_managed_zone" "platform_private" {
 
   labels = var.labels
 }
+
+resource "google_dns_record_set" "this" {
+  for_each     = var.records
+  name         = "${each.key}.${var.dns_suffix}"
+  managed_zone = google_dns_managed_zone.platform_private.name
+  type         = "A"
+  ttl          = 300
+  rrdatas      = [each.value]
+}

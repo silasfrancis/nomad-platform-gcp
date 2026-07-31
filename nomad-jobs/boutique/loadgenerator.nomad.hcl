@@ -8,7 +8,7 @@
 
 job "loadgenerator" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "boutique"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -19,7 +19,7 @@ job "loadgenerator" {
   }
 
   group "loadgenerator" {
-    count = 1
+    count = #{ReplicaCount}
 
     constraint {
       attribute = "${meta.node_pool_type}"

@@ -6,7 +6,7 @@
 
 job "recommendationservice" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "boutique"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -17,7 +17,7 @@ job "recommendationservice" {
   }
 
   group "recommendationservice" {
-    count = 1
+    count = #{ReplicaCount}
 
     constraint {
       attribute = "${meta.node_pool_type}"

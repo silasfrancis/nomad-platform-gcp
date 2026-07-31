@@ -35,14 +35,11 @@ resource "vault_mount" "database" {
 # connection actually works end to end. Until then, verify_connection
 # = false below means this module still applies cleanly, but no
 # credential can actually be issued.
-#
-# Naming convention: production keeps the bare name, development gets a
-# "-dev" suffix (postgres-dev, not dev-postgres) — applied consistently
-# across every per-environment name in this module.
+
 locals {
   postgres_traefik_endpoints = {
-    dev  = "${var.traefik_internal_address}:15432"
-    prod = "${var.traefik_internal_address}:15433"
+    dev  = "postgres-dev.platform.lefrancis.org:15432"
+    prod = "postgres-prod.platform.lefrancis.org:15433"
   }
 }
 

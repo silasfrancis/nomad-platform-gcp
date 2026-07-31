@@ -14,7 +14,7 @@
 
 job "postgres-backup" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "operations"
+  namespace   = "#{DeploymentNamespace}"
   type        = "batch"
 
   periodic {
@@ -24,7 +24,7 @@ job "postgres-backup" {
   }
 
   group "postgres-backup" {
-    count = 1
+    count = #{ReplicaCount}
 
     affinity {
       attribute = "${meta.node_pool_type}"

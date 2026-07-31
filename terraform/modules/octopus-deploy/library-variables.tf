@@ -31,6 +31,12 @@ locals {
     dev  = var.nomad_address_dev
     prod = var.nomad_address_prod
   }
+
+  # Base image path — same registry regardless of environment, unlike
+  # everything else that's split dev/prod. One repo, images promoted
+  # through environments by tag, not rebuilt — per the architecture
+  # doc's CI/CD design (GitHub Actions builds once per commit).
+  artifact_registry_path = ""
 }
 
 resource "octopusdeploy_variable" "nomad_api_url" {
@@ -82,4 +88,33 @@ resource "octopusdeploy_variable" "slack_webhook_url" {
   type         = "Sensitive"
   is_sensitive = true
   value        = data.google_secret_manager_secret_version.slack_webhook_url.secret_data
+}
+
+resource "octopusdeploy_variable" "datacenter" {
+  for_each = toset(["dev", "prod"])
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "Datacenter"
+  type     = "String"
+  value    = "dc-${each.key}"
+  scope {
+    environments = [local.env_by_key[each.key]]
+  }
+}
+
+resource "octopusdeploy_variable" "environment" {
+  for_each = toset(["dev", "prod"])
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "Environment"
+  type     = "String"
+  value    = each.key
+  scope {
+    environments = [local.env_by_key[each.key]]
+  }
+}
+
+resource "octopusdeploy_variable" "artifact_registry" {
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "ArtifactRegistry"
+  type     = "String"
+  value    = local.artifact_registry_path # e.g. "us-central1-docker.pkg.dev/${var.gcp_project}/platform-images"
 }

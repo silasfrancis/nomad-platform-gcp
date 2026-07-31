@@ -4,7 +4,7 @@
 
 job "adservice" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "boutique"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -15,7 +15,7 @@ job "adservice" {
   }
 
   group "adservice" {
-    count = 1
+    count = #{ReplicaCount}
 
     constraint {
       attribute = "${meta.node_pool_type}"

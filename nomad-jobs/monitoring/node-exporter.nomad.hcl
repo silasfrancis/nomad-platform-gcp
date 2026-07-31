@@ -6,7 +6,7 @@
 
 job "node-exporter" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "monitoring"
+  namespace   = "#{DeploymentNamespace}"
   type        = "system"
 
   update {

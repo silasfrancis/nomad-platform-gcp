@@ -7,7 +7,7 @@
 
 job "currencyservice" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "boutique"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -18,7 +18,7 @@ job "currencyservice" {
   }
 
   group "currencyservice" {
-    count = 1
+    count = #{ReplicaCount}
 
     affinity {
       attribute = "${meta.node_pool_type}"

@@ -54,17 +54,6 @@ module "nat" {
   ]
 }
 
-# Cloud DNS
-
-module "dns" {
-  source             = "../modules/dns"
-  project_id         = var.project_id
-  network_self_link  = module.vpc.network_self_link
-  dns_name           = "platform.lefrancis.org."
-  labels             = local.labels
-}
-
-
 # Logging — Configurable Log Buckets
 #
 # Add a new entry to var.log_buckets (module input, or edit the module's

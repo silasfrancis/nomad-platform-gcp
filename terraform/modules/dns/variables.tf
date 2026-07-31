@@ -17,3 +17,13 @@ variable "labels" {
   type    = map(string)
   default = {}
 }
+
+variable "dns_suffix" {
+  type        = string
+  description = "e.g. \"platform.lefrancis.org.\" — trailing dot required by google_dns_record_set"
+}
+
+variable "records" {
+  type        = map(string)
+  description = "short hostname => target IP, e.g. { vault = \"10.2.1.x\" }"
+}

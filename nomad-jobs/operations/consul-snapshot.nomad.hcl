@@ -8,7 +8,7 @@
 
 job "consul-snapshot" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "operations"
+  namespace   = "#{DeploymentNamespace}"
   type        = "batch"
 
   periodic {
@@ -18,7 +18,7 @@ job "consul-snapshot" {
   }
 
   group "consul-snapshot" {
-    count = 1
+    count = #{ReplicaCount}
 
     # Short-lived, idempotent, retry-safe — soft Spot preference is
     # fine, unlike the always-on services above.

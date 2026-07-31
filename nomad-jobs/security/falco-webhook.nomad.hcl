@@ -13,7 +13,7 @@
 
 job "falco-webhook" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "security"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -24,7 +24,7 @@ job "falco-webhook" {
   }
 
   group "falco-webhook" {
-    count = 1
+    count = #{ReplicaCount}
 
     network {
       port "http" {

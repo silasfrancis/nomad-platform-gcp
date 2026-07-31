@@ -21,7 +21,7 @@
 
 job "redis" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "datastore"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -31,7 +31,7 @@ job "redis" {
   }
 
   group "redis" {
-    count = 1
+    count = #{ReplicaCount}
 
     # Stateful — same hard on-demand constraint as Postgres. A restart
     # on Spot would just mean cartservice's cart data resets (matches

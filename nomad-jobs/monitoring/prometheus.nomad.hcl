@@ -2,14 +2,24 @@
 #
 # One instance per environment (this same job spec promoted dev ->
 # prod, scraping only its own cluster — dev and prod are never
-# federated). Scrape config itself lives in configs/prometheus/ (not
-# in this repo directory), pulled in via the artifact stanza below
-# from the platform-artifacts GCS bucket rather than baked into this
-# file — so updating scrape targets doesn't require a new job version.
+# federated). Config is templated inline and substituted by Octopus at
+# deploy time, not baked into the image or fetched from anywhere
+# external — the one exception to this project's usual
+# bake-into-image pattern, since scrape targets are the kind of thing
+# you want to change without a full image rebuild.
+#
+# NOT YET COMPLETE: Vault is a documented scrape target (architecture
+# doc 8.2) but lives on mgmt-vm, outside this cluster entirely, and
+# the existing firewall table only opens mgmt -> env (9100/3100/4317),
+# not env -> mgmt:8200 the other direction a scrape would need. Left
+# out of the job below rather than silently included and broken —
+# needs either a firewall addition or dropping Vault from this
+# Prometheus's own scrape list (Grafana could point at Vault's own
+# /metrics through a different path instead).
 
 job "prometheus" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "monitoring"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -20,7 +30,7 @@ job "prometheus" {
   }
 
   group "prometheus" {
-    count = 1
+    count = #{ReplicaCount}
 
     constraint {
       attribute = "${meta.node_pool_type}"
@@ -50,8 +60,40 @@ job "prometheus" {
         volumes = ["prometheus-data:/prometheus"]
       }
 
-      artifact {
-        source      = "gcs::https://www.googleapis.com/storage/v1/platform-artifacts/configs/prometheus/#{Environment}.yml"
+      template {
+        data = <<EOF
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  # Node Exporter, Traefik, and every application service (Online
+  # Boutique + metrics-api + nomad-sentinel) are all Consul-registered
+  # with health checks — one Consul SD config per role, filtered by
+  # tag, rather than a static target list that goes stale the moment
+  # a MIG scales.
+  - job_name: node-exporter
+    consul_sd_configs:
+      - server: 'localhost:8500'
+        services: ['node-exporter']
+
+  - job_name: traefik
+    consul_sd_configs:
+      - server: 'localhost:8500'
+        services: ['nomad-dev', 'nomad-prod', 'consul-dev', 'consul-prod']
+
+  - job_name: boutique-services
+    consul_sd_configs:
+      - server: 'localhost:8500'
+        tags: ['metrics']
+
+  - job_name: nomad
+    static_configs:
+      - targets: ['#{Datacenter}-server.service.consul:4646']
+
+  - job_name: consul
+    static_configs:
+      - targets: ['localhost:8500']
+EOF
         destination = "local/prometheus.yml"
       }
 

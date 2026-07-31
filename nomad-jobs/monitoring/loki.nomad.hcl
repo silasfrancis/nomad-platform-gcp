@@ -1,12 +1,13 @@
 # nomad-jobs/monitoring/loki.nomad.hcl
 #
 # One instance per environment — receives logs from that
-# environment's Grafana Alloy instances only. Config pulled from
-# configs/loki/ in GCS, same pattern as prometheus.nomad.hcl.
+# environment's Grafana Alloy instances only. Config templated inline
+# and substituted by Octopus at deploy time, same reasoning and same
+# exception-to-the-bake-into-image-pattern as prometheus.nomad.hcl.
 
 job "loki" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "monitoring"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -17,7 +18,7 @@ job "loki" {
   }
 
   group "loki" {
-    count = 1
+    count = #{ReplicaCount}
 
     constraint {
       attribute = "${meta.node_pool_type}"
@@ -47,8 +48,37 @@ job "loki" {
         volumes = ["loki-data:/loki"]
       }
 
-      artifact {
-        source      = "gcs::https://www.googleapis.com/storage/v1/platform-artifacts/configs/loki/#{Environment}.yml"
+      template {
+        data = <<EOF
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 720h
+EOF
         destination = "local/loki.yml"
       }
 

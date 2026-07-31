@@ -7,7 +7,7 @@
 
 job "cartservice" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "boutique"
+  namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
@@ -21,7 +21,7 @@ job "cartservice" {
   }
 
   group "cartservice" {
-    count = 1
+    count = #{ReplicaCount}
 
     constraint {
       attribute = "${meta.node_pool_type}"

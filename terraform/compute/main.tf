@@ -256,17 +256,22 @@ module "mig" {
   migs          = local.active_migs
 }
 
-# DNS Recordsets — Deferred From network/
-#
-# The private zone (platform.lefrancis.org) was created in network/, but
-# recordsets couldn't be added there since mgmt-vm's internal IP didn't
-# exist yet. It does now. mgmt-vm is unconditional, so this always resolves.
+module "traefik_internal_dns" {
+  source            = "../modules/dns"
+  project_id        = var.project_id
+  network_self_link = local.network.network_self_link
+  dns_suffix        = "platform.lefrancis.org."
 
-resource "google_dns_record_set" "platform_wildcard" {
-  project      = var.project_id
-  name         = "*.platform.lefrancis.org."
-  type         = "A"
-  ttl          = 300
-  managed_zone = local.network.dns_zone_name
-  rrdatas      = [module.static_vm.instances["mgmt-vm"].internal_ip]
+  records = {
+    vault       = module.instances.instances["traefik-internal"].internal_ip
+    octopus     = module.instances.instances["traefik-internal"].internal_ip
+    grafana     = module.instances.instances["traefik-internal"].internal_ip
+    nomad-dev   = module.instances.instances["traefik-internal"].internal_ip
+    consul-dev  = module.instances.instances["traefik-internal"].internal_ip
+    nomad-prod  = module.instances.instances["traefik-internal"].internal_ip
+    consul-prod = module.instances.instances["traefik-internal"].internal_ip
+    postgres-dev = module.instances.instances["traefik-internal"].internal_ip
+    postgres-prod = module.instances.instances["traefik-internal"].internal_ip
+  }
+
 }

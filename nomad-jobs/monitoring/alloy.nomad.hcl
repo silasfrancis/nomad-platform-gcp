@@ -8,10 +8,17 @@
 # every task's logs are queryable via LogQL immediately after
 # deployment, no sidecar injection or per-job log driver config
 # needed.
+#
+# Config is baked into its own image (built via CI, same pattern as
+# every application service) rather than templated at deploy time —
+# Prometheus/Loki are the only two exceptions to that, per the actual
+# deployment model. This needs a small custom Dockerfile wrapping the
+# upstream grafana/alloy image + a config.alloy file, not just the
+# stock image.
 
 job "alloy" {
   datacenters = ["#{Datacenter}"]
-  namespace   = "monitoring"
+  namespace   = "#{DeploymentNamespace}"
   type        = "system"
 
   update {
@@ -31,17 +38,12 @@ job "alloy" {
       driver = "docker"
 
       config {
-        image   = "grafana/alloy:v1.5.1"
+        image   = "#{ArtifactRegistry}/alloy:#{ImageTag}"
         ports   = ["http"]
-        args    = ["run", "/local/config.alloy"]
+        args    = ["run", "/etc/alloy/config.alloy"]
         volumes = [
           "/var/nomad/alloc:/var/nomad/alloc:ro",
         ]
-      }
-
-      artifact {
-        source      = "gcs::https://www.googleapis.com/storage/v1/platform-artifacts/configs/alloy/#{Environment}.alloy"
-        destination = "local/config.alloy"
       }
 
       resources {
