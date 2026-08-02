@@ -1,8 +1,8 @@
 # nomad-jobs/boutique/emailservice.nomad.hcl
 #
 # Rolling deployment, soft affinity toward Spot. Logs a mock
-# confirmation only — reads just PORT + DISABLE_PROFILER, no external
-# secrets or real email provider integration.
+# confirmation only. Connect mesh retrofit: group-level service {},
+# receiving-only — called by checkoutservice.
 
 job "emailservice" {
   datacenters = ["#{Datacenter}"]
@@ -27,8 +27,26 @@ job "emailservice" {
     }
 
     network {
+      mode = "bridge"
+
       port "grpc" {
         to = 8080
+      }
+    }
+
+    service {
+      name = "emailservice"
+      port = "grpc"
+
+      check {
+        type     = "grpc"
+        port     = "grpc"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      connect {
+        sidecar_service {}
       }
     }
 
@@ -48,18 +66,6 @@ job "emailservice" {
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}
-      }
-
-      service {
-        name = "emailservice"
-        port = "grpc"
-
-        check {
-          type     = "grpc"
-          port     = "grpc"
-          interval = "10s"
-          timeout  = "2s"
-        }
       }
     }
   }

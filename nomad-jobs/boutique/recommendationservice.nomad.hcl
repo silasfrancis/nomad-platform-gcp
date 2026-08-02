@@ -1,8 +1,10 @@
 # nomad-jobs/boutique/recommendationservice.nomad.hcl
 #
-# Rolling deployment, hard spot-only — fully stateless, non-critical,
-# batch-like recommendation lookups. Zero production impact if
-# preempted mid-request; client retries.
+# Rolling deployment, hard spot-only. Connect mesh retrofit:
+# group-level service {}, one upstream (productcatalogservice) — env
+# var switches from Consul DNS to localhost:<local_bind_port>, since
+# with Connect a service talks to its own sidecar, never directly to
+# the remote one.
 
 job "recommendationservice" {
   datacenters = ["#{Datacenter}"]
@@ -26,8 +28,33 @@ job "recommendationservice" {
     }
 
     network {
+      mode = "bridge"
+
       port "grpc" {
         to = 8080
+      }
+    }
+
+    service {
+      name = "recommendationservice"
+      port = "grpc"
+
+      check {
+        type     = "grpc"
+        port     = "grpc"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      connect {
+        sidecar_service {
+          proxy {
+            upstreams {
+              destination_name = "productcatalogservice"
+              local_bind_port  = 3550
+            }
+          }
+        }
       }
     }
 
@@ -41,24 +68,12 @@ job "recommendationservice" {
 
       env {
         PORT                         = "8080"
-        PRODUCT_CATALOG_SERVICE_ADDR = "productcatalogservice.service.consul:3550"
+        PRODUCT_CATALOG_SERVICE_ADDR = "localhost:3550"
       }
 
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}
-      }
-
-      service {
-        name = "recommendationservice"
-        port = "grpc"
-
-        check {
-          type     = "grpc"
-          port     = "grpc"
-          interval = "10s"
-          timeout  = "2s"
-        }
       }
     }
   }

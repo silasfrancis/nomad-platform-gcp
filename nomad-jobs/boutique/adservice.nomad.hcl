@@ -1,6 +1,7 @@
 # nomad-jobs/boutique/adservice.nomad.hcl
 #
-# Rolling deployment, hard spot-only — fully stateless, non-critical.
+# Rolling deployment, hard spot-only. Connect mesh retrofit:
+# group-level service {}, receiving-only — called by frontend.
 
 job "adservice" {
   datacenters = ["#{Datacenter}"]
@@ -24,8 +25,26 @@ job "adservice" {
     }
 
     network {
+      mode = "bridge"
+
       port "grpc" {
         to = 9555
+      }
+    }
+
+    service {
+      name = "adservice"
+      port = "grpc"
+
+      check {
+        type     = "grpc"
+        port     = "grpc"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      connect {
+        sidecar_service {}
       }
     }
 
@@ -44,18 +63,6 @@ job "adservice" {
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}
-      }
-
-      service {
-        name = "adservice"
-        port = "grpc"
-
-        check {
-          type     = "grpc"
-          port     = "grpc"
-          interval = "10s"
-          timeout  = "2s"
-        }
       }
     }
   }

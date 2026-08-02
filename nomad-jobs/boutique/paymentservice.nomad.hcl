@@ -1,10 +1,10 @@
 # nomad-jobs/boutique/paymentservice.nomad.hcl
 #
-# Rolling deployment (not in the canary list) but still hard
-# on-demand — it's on the direct customer transaction path even
-# though it isn't one of the 4 services canaried, per the
-# architecture doc's scheduling table. App mocks payment in-process;
-# reads only PORT + DISABLE_PROFILER, no external secrets.
+# Rolling deployment but hard on-demand — direct customer transaction
+# path even though not one of the 4 canaried services. App mocks
+# payment in-process; reads only PORT + DISABLE_PROFILER.
+# Connect mesh retrofit: group-level service {}, receiving-only —
+# called by checkoutservice.
 
 job "paymentservice" {
   datacenters = ["#{Datacenter}"]
@@ -28,8 +28,26 @@ job "paymentservice" {
     }
 
     network {
+      mode = "bridge"
+
       port "grpc" {
         to = 50051
+      }
+    }
+
+    service {
+      name = "paymentservice"
+      port = "grpc"
+
+      check {
+        type     = "grpc"
+        port     = "grpc"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      connect {
+        sidecar_service {}
       }
     }
 
@@ -42,25 +60,13 @@ job "paymentservice" {
       }
 
       env {
-        PORT               = "50051"
-        DISABLE_PROFILER   = "1"
+        PORT             = "50051"
+        DISABLE_PROFILER = "1"
       }
 
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}
-      }
-
-      service {
-        name = "paymentservice"
-        port = "grpc"
-
-        check {
-          type     = "grpc"
-          port     = "grpc"
-          interval = "10s"
-          timeout  = "2s"
-        }
       }
     }
   }

@@ -1,9 +1,15 @@
 # nomad-jobs/monitoring/loki.nomad.hcl
 #
 # One instance per environment — receives logs from that
-# environment's Grafana Alloy instances only. Config templated inline
-# and substituted by Octopus at deploy time, same reasoning and same
-# exception-to-the-bake-into-image-pattern as prometheus.nomad.hcl.
+# environment's Grafana Alloy instances. Config is baked into its own
+# image (monitoring/loki/ source directory, own Dockerfile wrapping
+# the upstream grafana/loki image + a loki.yml) — same pattern as
+# every other job now, not templated at deploy time.
+#
+# Connect mesh retrofit (unrelated to the config-baking change above):
+# group-level service {}, receiving-only — falco-webhook reaches this
+# via its own upstream. Alloy also calls this, but see alloy.nomad.hcl
+# for why that side isn't actually wired up yet.
 
 job "loki" {
   datacenters = ["#{Datacenter}"]
@@ -33,8 +39,26 @@ job "loki" {
     }
 
     network {
+      mode = "bridge"
+
       port "http" {
         to = 3100
+      }
+    }
+
+    service {
+      name = "loki"
+      port = "http"
+
+      check {
+        type     = "http"
+        path     = "/ready"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      connect {
+        sidecar_service {}
       }
     }
 
@@ -42,61 +66,14 @@ job "loki" {
       driver = "docker"
 
       config {
-        image   = "grafana/loki:3.3.2"
+        image   = "#{ArtifactRegistry}/loki:#{ImageTag}"
         ports   = ["http"]
-        args    = ["-config.file=/local/loki.yml"]
         volumes = ["loki-data:/loki"]
-      }
-
-      template {
-        data = <<EOF
-auth_enabled: false
-
-server:
-  http_listen_port: 3100
-
-common:
-  path_prefix: /loki
-  storage:
-    filesystem:
-      chunks_directory: /loki/chunks
-      rules_directory: /loki/rules
-  replication_factor: 1
-  ring:
-    kvstore:
-      store: inmemory
-
-schema_config:
-  configs:
-    - from: 2024-01-01
-      store: tsdb
-      object_store: filesystem
-      schema: v13
-      index:
-        prefix: index_
-        period: 24h
-
-limits_config:
-  retention_period: 720h
-EOF
-        destination = "local/loki.yml"
       }
 
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}
-      }
-
-      service {
-        name = "loki"
-        port = "http"
-
-        check {
-          type     = "http"
-          path     = "/ready"
-          interval = "10s"
-          timeout  = "2s"
-        }
       }
     }
   }

@@ -9,15 +9,14 @@
 # invalid or unset. #{RemediationMode} must be "execute" in dev's
 # Octopus variable set and "propose" in prod's — never implicit.
 #
-# HISTORY_DATABASE_URL: the architecture doc describes this as
-# "shared credentials" with metrics-api, but giving nomad-sentinel a
-# copy of metrics-api's own dynamic role seems like the wrong kind of
-# sharing (two unrelated services holding the same credential rather
-# than each having their own, scoped role). Using a separate
-# nomad-sentinel-specific dynamic role against the same "monitoring"
-# database instead — same net effect (one Postgres instance, agent_anomalies
-# table), better isolation. Flagging the deviation from the doc's literal
-# wording rather than silently matching it.
+# HISTORY_DATABASE_URL uses its own dedicated dynamic Vault role
+# against the same "monitoring" database, rather than sharing
+# metrics-api's role as the architecture doc's wording literally
+# suggests — better isolation, flagged as an intentional deviation.
+#
+# Connect mesh retrofit: group-level service {}, one upstream
+# (postgres-#{Environment}) for HISTORY_DATABASE_URL, now
+# localhost:5432 instead of Consul DNS.
 
 job "nomad-sentinel#{DeploymentSlot}" {
   datacenters = ["#{Datacenter}"]
@@ -42,8 +41,35 @@ job "nomad-sentinel#{DeploymentSlot}" {
     }
 
     network {
+      mode = "bridge"
+
       port "http" {
         to = 8090
+      }
+    }
+
+    service {
+      name = "nomad-sentinel#{DeploymentSlot}"
+      port = "http"
+
+      check {
+        type     = "http"
+        path     = "/health"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      tags = ["metrics"]
+
+      connect {
+        sidecar_service {
+          proxy {
+            upstreams {
+              destination_name = "postgres-#{Environment}"
+              local_bind_port  = 5432
+            }
+          }
+        }
       }
     }
 
@@ -68,7 +94,7 @@ SLACK_WEBHOOK_URL={{ .Data.data.slack_webhook_url }}
 NOMAD_TOKEN={{ .Data.data.nomad_token }}
 {{ end }}
 {{ with secret "database/creds/#{Environment}-nomad-sentinel" }}
-HISTORY_DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@postgres-#{Environment}.service.consul:5432/monitoring?sslmode=disable
+HISTORY_DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@localhost:5432/monitoring?sslmode=disable
 {{ end }}
 PORT=8090
 REMEDIATION_MODE=#{RemediationMode}
@@ -81,20 +107,6 @@ EOF
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}
-      }
-
-      service {
-        name = "nomad-sentinel#{DeploymentSlot}"
-        port = "http"
-
-        check {
-          type     = "http"
-          path     = "/health"
-          interval = "10s"
-          timeout  = "2s"
-        }
-
-        tags = ["metrics"]
       }
     }
   }

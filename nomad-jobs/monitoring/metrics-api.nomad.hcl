@@ -4,22 +4,22 @@
 # rather than quietly working around it: the doc's own Traefik routing
 # table (section 4.3) has no entry for metrics-api at all, and nothing
 # else in this project calls it by a stable hostname that would need a
-# blue/green pointer flipped (Prometheus just scrapes whatever's
-# registered in Consul). The two-parallel-job-names mechanic below is
-# built to match what the doc describes, but what the "switch" is
-# actually switching *for* isn't resolved — worth a docs pass, not
-# something I want to silently paper over here.
+# blue/green pointer flipped. The two-parallel-job-names mechanic below
+# is built to match what the doc describes, but what the "switch" is
+# actually switching *for* isn't resolved — worth a docs pass.
 #
-# #{DeploymentSlot} is "-blue" or "-green" (Octopus variable) — each
-# release alternates which one it deploys as, per architecture doc 6.5.
+# Connect mesh retrofit: group-level service {}, one upstream
+# (postgres-#{Environment}) — after Octopus's own substitution this
+# resolves to a literal Consul service name like "postgres-dev", which
+# is exactly what destination_name needs (a name Consul actually knows
+# about, not a Nomad-side variable).
 #
 # DATABASE_URL is Vault's dynamic 1h-TTL credential
-# (database/creds/#{Environment}-metrics-api). change_mode = "noop" on
-# that template deliberately does NOT restart the process on rotation
-# — the app re-reads the env var fresh on every connection attempt
-# (never caches it at import time), so an in-place file rewrite is all
-# that's needed. A restart here would be actively wrong: it'd revoke
-# the very credential a live connection might be using mid-request.
+# (database/creds/#{Environment}-metrics-api), now pointed at
+# localhost:5432 (the sidecar's local_bind_port) instead of Consul DNS.
+# change_mode = "noop" on that template deliberately does NOT restart
+# the process on rotation — the app re-reads the env var fresh on every
+# connection attempt, so an in-place file rewrite is all that's needed.
 
 job "metrics-api#{DeploymentSlot}" {
   datacenters = ["#{Datacenter}"]
@@ -36,7 +36,6 @@ job "metrics-api#{DeploymentSlot}" {
   group "metrics-api" {
     count = #{ReplicaCount}
 
-    # Stateful/Vault-credential-dependent.
     constraint {
       attribute = "${meta.node_pool_type}"
       operator  = "="
@@ -44,13 +43,40 @@ job "metrics-api#{DeploymentSlot}" {
     }
 
     network {
+      mode = "bridge"
+
       port "http" {
         to = 8080
       }
     }
 
+    service {
+      name = "metrics-api#{DeploymentSlot}"
+      port = "http"
+
+      check {
+        type     = "http"
+        path     = "/health"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      tags = ["metrics"]
+
+      connect {
+        sidecar_service {
+          proxy {
+            upstreams {
+              destination_name = "postgres-#{Environment}"
+              local_bind_port  = 5432
+            }
+          }
+        }
+      }
+    }
+
     vault {
-      role       = "metrics-api-#{Environment}"
+      role        = "metrics-api-#{Environment}"
       change_mode = "noop"
     }
 
@@ -65,7 +91,7 @@ job "metrics-api#{DeploymentSlot}" {
       template {
         data = <<EOF
 {{ with secret "database/creds/#{Environment}-metrics-api" }}
-DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@postgres-#{Environment}.service.consul:5432/metrics?sslmode=disable
+DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@localhost:5432/metrics?sslmode=disable
 {{ end }}
 PORT=8080
 EOF
@@ -77,20 +103,6 @@ EOF
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}
-      }
-
-      service {
-        name = "metrics-api#{DeploymentSlot}"
-        port = "http"
-
-        check {
-          type     = "http"
-          path     = "/health"
-          interval = "10s"
-          timeout  = "2s"
-        }
-
-        tags = ["metrics"]
       }
     }
   }

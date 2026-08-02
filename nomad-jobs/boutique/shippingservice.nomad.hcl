@@ -1,7 +1,8 @@
 # nomad-jobs/boutique/shippingservice.nomad.hcl
 #
-# Rolling deployment, soft affinity toward Spot — stateless gRPC,
-# Nomad reschedules cleanly on preemption.
+# Rolling deployment, soft affinity toward Spot.
+# Connect mesh retrofit: group-level service {}, receiving-only —
+# called by frontend/checkoutservice.
 
 job "shippingservice" {
   datacenters = ["#{Datacenter}"]
@@ -26,8 +27,26 @@ job "shippingservice" {
     }
 
     network {
+      mode = "bridge"
+
       port "grpc" {
         to = 50051
+      }
+    }
+
+    service {
+      name = "shippingservice"
+      port = "grpc"
+
+      check {
+        type     = "grpc"
+        port     = "grpc"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      connect {
+        sidecar_service {}
       }
     }
 
@@ -46,18 +65,6 @@ job "shippingservice" {
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}
-      }
-
-      service {
-        name = "shippingservice"
-        port = "grpc"
-
-        check {
-          type     = "grpc"
-          port     = "grpc"
-          interval = "10s"
-          timeout  = "2s"
-        }
       }
     }
   }

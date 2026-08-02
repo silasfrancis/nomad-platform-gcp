@@ -1,11 +1,14 @@
 # nomad-jobs/datastore/redis.nomad.hcl
 #
 # Shared Redis instance — cartservice is the only real consumer today,
-# but the job/service/Vault path are named generically (not
-# cartservice-specific) so a future consumer can share this instance
-# without a rename. No host volume, deliberately — matches the
-# upstream Online Boutique K8s manifest's emptyDir{}: cart data is
-# intentionally ephemeral and resets on restart.
+# but the job/service/Vault path are named generically so a future
+# consumer can share this instance without a rename. No host volume,
+# deliberately — matches the upstream Online Boutique K8s manifest's
+# emptyDir{}: cart data is intentionally ephemeral and resets on
+# restart.
+#
+# Connect mesh retrofit: group-level service {}, receiving-only —
+# cartservice reaches this via its own upstream now, not Consul DNS.
 #
 # NOTE — single shared password, no per-consumer isolation: --requirepass
 # is one secret for the whole instance. Fine with exactly one consumer;
@@ -33,11 +36,6 @@ job "redis" {
   group "redis" {
     count = #{ReplicaCount}
 
-    # Stateful — same hard on-demand constraint as Postgres. A restart
-    # on Spot would just mean cartservice's cart data resets (matches
-    # upstream's already-ephemeral design), but on-demand keeps that
-    # from happening on every routine Spot preemption rather than only
-    # on a real restart.
     constraint {
       attribute = "${meta.node_pool_type}"
       operator  = "="
@@ -45,8 +43,26 @@ job "redis" {
     }
 
     network {
+      mode = "bridge"
+
       port "redis" {
-        static = 6379
+        to = 6379
+      }
+    }
+
+    service {
+      name = "redis"
+      port = "redis"
+
+      check {
+        type     = "tcp"
+        port     = "redis"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      connect {
+        sidecar_service {}
       }
     }
 
@@ -78,25 +94,8 @@ EOT
       }
 
       resources {
-        cpu    = 100
-        memory = 128
-      }
-
-      service {
-        name = "redis"
-        port = "redis"
-
-        check {
-          type     = "tcp"
-          port     = "redis"
-          interval = "10s"
-          timeout  = "2s"
-        }
-
-        # No traefik.enable tag — Redis is never routed through
-        # Traefik. Consumers reach it directly via Consul DNS
-        # (redis.service.consul:6379), same as any other internal
-        # service-to-service call in this project.
+        cpu    = #{Cpu}
+        memory = #{Memory}
       }
     }
   }

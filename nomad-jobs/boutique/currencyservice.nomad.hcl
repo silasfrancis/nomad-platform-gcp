@@ -1,9 +1,8 @@
 # nomad-jobs/boutique/currencyservice.nomad.hcl
 #
-# Rolling deployment (Nomad default — no canary/blue-green needed for
-# a stateless, non-customer-facing-directly service). Soft affinity
-# toward Spot: stateless gRPC, Nomad reschedules cleanly on
-# preemption, so there's no hard requirement to stay on-demand.
+# Rolling deployment (Nomad default). Soft affinity toward Spot.
+# Connect mesh retrofit: service {} at group level (Consul Connect
+# requirement), receiving-only — called by frontend/checkoutservice.
 
 job "currencyservice" {
   datacenters = ["#{Datacenter}"]
@@ -28,8 +27,26 @@ job "currencyservice" {
     }
 
     network {
+      mode = "bridge"
+
       port "grpc" {
         to = 7000
+      }
+    }
+
+    service {
+      name = "currencyservice"
+      port = "grpc"
+
+      check {
+        type     = "grpc"
+        port     = "grpc"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      connect {
+        sidecar_service {}
       }
     }
 
@@ -48,18 +65,6 @@ job "currencyservice" {
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}
-      }
-
-      service {
-        name = "currencyservice"
-        port = "grpc"
-
-        check {
-          type     = "grpc"
-          port     = "grpc"
-          interval = "10s"
-          timeout  = "2s"
-        }
       }
     }
   }

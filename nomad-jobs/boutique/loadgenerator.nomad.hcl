@@ -1,10 +1,17 @@
 # nomad-jobs/boutique/loadgenerator.nomad.hcl
 #
 # Headless Locust, generating continuous traffic against frontend.
-# Purely outbound — no port to expose, nothing else discovers it via
-# Consul, so no network/service stanza is needed (unlike every other
-# job in this namespace). Hard spot-only: test traffic, zero
-# production impact if preempted.
+#
+# UNVERIFIED EDGE CASE: this is the one service in this whole retrofit
+# with no real inbound port at all — purely outbound. I've declared a
+# minimal network port (8089, Locust's own default, unused in headless
+# mode) just to give the group/service stanza something to attach the
+# sidecar to, but I'm not fully certain this is the cleanest way Nomad
+# expects a connect-enabled, upstream-only, no-real-listener service
+# to be declared — worth checking against current Nomad Connect docs
+# before trusting this one, unlike everything else in this retrofit.
+#
+# Hard spot-only: test traffic, zero production impact if preempted.
 
 job "loadgenerator" {
   datacenters = ["#{Datacenter}"]
@@ -27,17 +34,42 @@ job "loadgenerator" {
       value     = "spot"
     }
 
+    network {
+      mode = "bridge"
+
+      port "ui" {
+        to = 8089
+      }
+    }
+
+    service {
+      name = "loadgenerator"
+      port = "ui"
+
+      connect {
+        sidecar_service {
+          proxy {
+            upstreams {
+              destination_name = "frontend"
+              local_bind_port  = 8080
+            }
+          }
+        }
+      }
+    }
+
     task "loadgenerator" {
       driver = "docker"
 
       config {
         image = "#{ArtifactRegistry}/loadgenerator:#{ImageTag}"
+        ports = ["ui"]
       }
 
       env {
-        FRONTEND_ADDR = "frontend.service.consul:8080"
-        USERS         = "10"
-        SPAWN_RATE    = "1"
+        FRONTEND_ADDR   = "localhost:8080"
+        USERS           = "10"
+        SPAWN_RATE      = "1"
         LOCUST_HEADLESS = "true"
       }
 

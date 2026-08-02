@@ -1,9 +1,13 @@
 # nomad-jobs/boutique/cartservice.nomad.hcl
 #
 # Canary deployment, on-demand only (direct customer transaction
-# path). Reads the shared Redis instance's password from Vault —
-# kv/data/{env}/shared/redis, not a cartservice-specific path, since
-# that KV path was generalized for future consumers (see chat).
+# path). Connect mesh retrofit: group-level service {}, one upstream
+# (redis) — Connect proxies plain TCP fine, not just HTTP/gRPC, so
+# Redis's wire protocol works the same way through the sidecar as
+# everything else here. REDIS_ADDR now points at
+# localhost:<local_bind_port> instead of Consul DNS; the password
+# still comes from kv/data/{env}/shared/redis exactly as before —
+# Connect handles the network hop, not authentication.
 
 job "cartservice" {
   datacenters = ["#{Datacenter}"]
@@ -30,8 +34,33 @@ job "cartservice" {
     }
 
     network {
+      mode = "bridge"
+
       port "grpc" {
         to = 7070
+      }
+    }
+
+    service {
+      name = "cartservice"
+      port = "grpc"
+
+      check {
+        type     = "grpc"
+        port     = "grpc"
+        interval = "10s"
+        timeout  = "2s"
+      }
+
+      connect {
+        sidecar_service {
+          proxy {
+            upstreams {
+              destination_name = "redis"
+              local_bind_port  = 6379
+            }
+          }
+        }
       }
     }
 
@@ -49,11 +78,12 @@ job "cartservice" {
 
       # REDIS_ADDR is passed straight to StackExchange.Redis's own
       # connection string parser — no custom parsing in app code, per
-      # architecture doc 5.2.
+      # architecture doc 5.2. localhost:6379 here is the sidecar's
+      # local_bind_port, not Redis's own port directly.
       template {
         data = <<EOF
 {{ with secret "kv/data/#{Environment}/shared/redis" }}
-REDIS_ADDR=redis.service.consul:6379,password={{ .Data.data.password }}
+REDIS_ADDR=localhost:6379,password={{ .Data.data.password }}
 {{ end }}
 PORT=7070
 EOF
@@ -64,18 +94,6 @@ EOF
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}
-      }
-
-      service {
-        name = "cartservice"
-        port = "grpc"
-
-        check {
-          type     = "grpc"
-          port     = "grpc"
-          interval = "10s"
-          timeout  = "2s"
-        }
       }
     }
   }
