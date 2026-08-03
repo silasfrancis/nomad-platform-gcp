@@ -2,10 +2,10 @@
 #
 # Canary deployment, on-demand only — orchestrates the actual purchase
 # transaction across 6 downstream services. Connect mesh retrofit:
-# group-level service {}, 6 upstreams — every *_ADDR env var switches
-# from Consul DNS to localhost:<local_bind_port>, one port per
-# upstream, matching each downstream service's own port so nothing
-# else needs to change on their end.
+# group-level service {}, 6 upstreams — every *_ADDR env var uses
+# Nomad's own NOMAD_UPSTREAM_ADDR_<service> for each one, rather than
+# hardcoding localhost:<port>, so the value can never silently drift
+# out of sync with whatever local_bind_port is set below.
 
 job "checkoutservice" {
   datacenters = ["#{Datacenter}"]
@@ -79,6 +79,15 @@ job "checkoutservice" {
             }
           }
         }
+
+        # 6 upstreams — modest bump over the single-upstream floor for
+        # extra proxy concurrency headroom.
+        sidecar_task {
+          resources {
+            cpu    = 150
+            memory = 192
+          }
+        }
       }
     }
 
@@ -92,12 +101,12 @@ job "checkoutservice" {
 
       env {
         PORT                         = "5050"
-        PRODUCT_CATALOG_SERVICE_ADDR = "localhost:3550"
-        SHIPPING_SERVICE_ADDR        = "localhost:50051"
-        PAYMENT_SERVICE_ADDR         = "localhost:50052"
-        EMAIL_SERVICE_ADDR           = "localhost:8080"
-        CURRENCY_SERVICE_ADDR        = "localhost:7000"
-        CART_SERVICE_ADDR            = "localhost:7070"
+        PRODUCT_CATALOG_SERVICE_ADDR = "${NOMAD_UPSTREAM_ADDR_productcatalogservice}"
+        SHIPPING_SERVICE_ADDR        = "${NOMAD_UPSTREAM_ADDR_shippingservice}"
+        PAYMENT_SERVICE_ADDR         = "${NOMAD_UPSTREAM_ADDR_paymentservice}"
+        EMAIL_SERVICE_ADDR           = "${NOMAD_UPSTREAM_ADDR_emailservice}"
+        CURRENCY_SERVICE_ADDR        = "${NOMAD_UPSTREAM_ADDR_currencyservice}"
+        CART_SERVICE_ADDR            = "${NOMAD_UPSTREAM_ADDR_cartservice}"
       }
 
       resources {

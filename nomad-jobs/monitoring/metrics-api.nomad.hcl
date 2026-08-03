@@ -1,36 +1,58 @@
 # nomad-jobs/monitoring/metrics-api.nomad.hcl
 #
-# Blue-green per the architecture doc — but flagging something real
-# rather than quietly working around it: the doc's own Traefik routing
-# table (section 4.3) has no entry for metrics-api at all, and nothing
-# else in this project calls it by a stable hostname that would need a
-# blue/green pointer flipped. The two-parallel-job-names mechanic below
-# is built to match what the doc describes, but what the "switch" is
-# actually switching *for* isn't resolved — worth a docs pass.
+# Blue-green via Nomad's own native mechanism — canary set equal to
+# count, not a separate job name. This resolves the ambiguity flagged
+# earlier (no Traefik route exists for this service, so a Traefik-side
+# blue/green pointer flip was never actually the right mechanism): the
+# new version runs fully alongside the old one under the SAME job/
+# service name, gets validated, and `nomad job promote` cuts over
+# atomically by tearing down every old allocation. No #{DeploymentSlot}
+# variable needed anywhere.
 #
-# Connect mesh retrofit: group-level service {}, one upstream
-# (postgres-#{Environment}) — after Octopus's own substitution this
-# resolves to a literal Consul service name like "postgres-dev", which
-# is exactly what destination_name needs (a name Consul actually knows
-# about, not a Nomad-side variable).
+# Vault role is bare "metrics-api" — no environment suffix. Dev/prod
+# separation happens because they're registered under two entirely
+# separate JWT backends (jwt-nomad-dev vs jwt-nomad-prod), not because
+# the role name itself varies.
 #
-# DATABASE_URL is Vault's dynamic 1h-TTL credential
-# (database/creds/#{Environment}-metrics-api), now pointed at
-# localhost:5432 (the sidecar's local_bind_port) instead of Consul DNS.
-# change_mode = "noop" on that template deliberately does NOT restart
-# the process on rotation — the app re-reads the env var fresh on every
-# connection attempt, so an in-place file rewrite is all that's needed.
+# #{VaultDbRole} is a new per-(project,environment) Octopus variable —
+# db_role in vault_consumers is "metrics-api", and the actual Vault
+# database role name follows an asymmetric convention: prod gets the
+# bare name ("metrics-api"), dev gets a "-dev" suffix ("metrics-api-dev").
+# That's not something Octopus's plain text substitution can compute
+# via a ternary, so it's a literal value set once per environment
+# rather than derived.
+#
+# Connect mesh: one upstream (postgres, no environment suffix — see
+# postgres.nomad.hcl for why). Using NOMAD_UPSTREAM_ADDR_postgres
+# rather than hardcoding localhost:5432 removes any chance of the
+# local_bind_port and the app's env var silently drifting out of sync.
+#
+# DATABASE_URL correctness fix: this template has NO env = true. Nomad
+# documents plainly that env = true + change_mode = "noop" is silently
+# a no-op for updates — the file gets rewritten with the new
+# credential when Vault rotates the lease, but a running container's
+# actual environment is fixed at exec time and never updates live.
+# Since we deliberately don't want a restart on every 1h rotation, the
+# app itself must read this file directly off disk on every new
+# connection attempt (not os.environ) — this is the "read fresh, never
+# cached" behavior the architecture doc describes, now actually wired
+# correctly rather than just described that way. PORT lives in its own
+# plain env {} block instead, since it never changes and doesn't need
+# any of this.
 
-job "metrics-api#{DeploymentSlot}" {
+job "metrics-api" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
-    max_parallel     = 1
-    min_healthy_time = "10s"
-    healthy_deadline = "3m"
-    auto_revert      = true
+    canary            = #{ReplicaCount}
+    max_parallel      = #{ReplicaCount}
+    min_healthy_time  = "30s"
+    healthy_deadline  = "5m"
+    progress_deadline = "10m"
+    auto_revert       = true
+    auto_promote      = false
   }
 
   group "metrics-api" {
@@ -51,7 +73,7 @@ job "metrics-api#{DeploymentSlot}" {
     }
 
     service {
-      name = "metrics-api#{DeploymentSlot}"
+      name = "metrics-api"
       port = "http"
 
       check {
@@ -67,17 +89,24 @@ job "metrics-api#{DeploymentSlot}" {
         sidecar_service {
           proxy {
             upstreams {
-              destination_name = "postgres-#{Environment}"
+              destination_name = "postgres"
               local_bind_port  = 5432
             }
+          }
+        }
+
+        # One upstream, receiving-only otherwise — 100/128 floor.
+        sidecar_task {
+          resources {
+            cpu    = 100
+            memory = 128
           }
         }
       }
     }
 
     vault {
-      role        = "metrics-api-#{Environment}"
-      change_mode = "noop"
+      role = "metrics-api"
     }
 
     task "metrics-api" {
@@ -88,15 +117,20 @@ job "metrics-api#{DeploymentSlot}" {
         ports = ["http"]
       }
 
+      env {
+        PORT = "8080"
+      }
+
+      # File-only, deliberately no env = true — see header comment.
+      # The app must read this file directly on every connection
+      # attempt to actually pick up a rotated credential.
       template {
         data = <<EOF
-{{ with secret "database/creds/#{Environment}-metrics-api" }}
-DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@localhost:5432/metrics?sslmode=disable
+{{ with secret "database/creds/#{VaultDbRole}" }}
+DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "NOMAD_UPSTREAM_ADDR_postgres" }}/metrics?sslmode=disable
 {{ end }}
-PORT=8080
 EOF
-        destination = "secrets/metrics-api.env"
-        env         = true
+        destination = "secrets/database-url.env"
         change_mode = "noop"
       }
 

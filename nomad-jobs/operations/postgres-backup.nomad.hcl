@@ -1,5 +1,15 @@
 # nomad-jobs/operations/postgres-backup.nomad.hcl
 #
+# This job intentionally connects via Consul DNS rather than Consul
+# Connect — not every workload needs to be a mesh participant.
+# Establishing a sidecar has real startup overhead and a standing
+# resource cost; neither is a good trade for a connection that exists
+# once a day for a few seconds. Worth being precise about what this
+# isn't: it's not a security exception, since Postgres's real port
+# stays reachable directly either way (Connect doesn't lock down a
+# service's real listening port unless transparent_proxy is enabled,
+# which it isn't here) — this is purely an operational-cost decision.
+#
 # Daily 03:00 UTC per architecture doc section 10. Dumps both
 # databases (metrics, monitoring) in one pass — same instance, same
 # credentials, per postgres.nomad.hcl's bootstrap task.
@@ -34,7 +44,7 @@ job "postgres-backup" {
     }
 
     vault {
-      role = "postgres-backup-#{Environment}"
+      role = "postgres-backup"
     }
 
     task "postgres-backup" {
@@ -48,10 +58,10 @@ job "postgres-backup" {
 
       template {
         data = <<EOF
-{{ with secret "kv/data/#{Environment}/postgres/vault-admin" }}
-PGPASSWORD={{ .Data.data.password }}
+{{ with secret "kv/data/shared/postgres/admin" }}
+PGPASSWORD={{ .Data.data.vault_admin_password }}
 {{ end }}
-PGHOST=postgres-#{Environment}.service.consul
+PGHOST=postgres.service.consul
 PGPORT=5432
 PGUSER=vault-admin
 EOF
@@ -68,7 +78,7 @@ STAMP=$(date +%Y%m%dT%H%M%SZ)
 for DB in metrics monitoring; do
   pg_dump "$DB" | gzip > "/local/${DB}-${STAMP}.sql.gz"
 done
-gcloud storage cp /local/*.sql.gz gs://platform-artifacts/pg-backups/
+gcloud storage cp /local/*.sql.gz gs://platform-artifacts/pg-backups/#{Environment}/
 EOF
         destination = "local/backup.sh"
         perms       = "0755"

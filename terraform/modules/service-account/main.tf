@@ -4,8 +4,8 @@ locals {
       display_name  = "Nomad Server SA"
       description   = "Attached to control-plane VMs running Nomad Server and Consul Server."
       # Project-level roles assigned here provide baseline functionality
-      # (e.g. logging, monitoring, and Compute Engine instance discovery for
-      # Nomad/Consul auto-join).
+      # (e.g. logging, monitoring,Compute Engine instance discovery for
+      # Nomad/Consul auto-join and Compute storage for persistent disks).
       #
       # Sensitive permissions (such as Secret Manager, Cloud Storage, KMS, and
       # other workload-specific access) are intentionally excluded from these
@@ -32,7 +32,8 @@ locals {
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
-        "roles/compute.viewer"
+        "roles/compute.viewer",
+        "roles/compute.storageAdmin"
       ]
     }
     "nomad-client-sa-dev" = {
@@ -41,7 +42,8 @@ locals {
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
-        "roles/compute.viewer"
+        "roles/compute.viewer",
+        "roles/compute.storageAdmin"
       ]
     }
     "management-vm-sa" = {

@@ -30,7 +30,7 @@ job "consul-snapshot" {
     }
 
     vault {
-      role = "consul-snapshot-#{Environment}"
+      role = "consul-snapshot"
     }
 
     task "consul-snapshot" {
@@ -57,7 +57,7 @@ set -eu
 chmod +x /local/consul
 STAMP=$(date +%Y%m%dT%H%M%SZ)
 /local/consul snapshot save "/local/consul-#{Environment}-${STAMP}.snap"
-gcloud storage cp /local/consul-*.snap gs://platform-artifacts/consul-snapshots/
+gcloud storage cp /local/consul-*.snap gs://platform-artifacts/consul-snapshots/#{Environment}/
 EOF
         destination = "local/backup.sh"
         perms       = "0755"

@@ -45,10 +45,6 @@ resource "vault_policy" "consumer" {
   EOT
 }
 
-# Octopus Deploy has no policy here at all — Vault is not integrated
-# with Octopus. NomadToken and every other value Octopus's deployment
-# process needs comes from Secret Manager directly, never through
-# Vault.
 
 # GitHub Actions — read-only, scoped to the CI/CD variable path only.
 resource "vault_policy" "github_actions" {

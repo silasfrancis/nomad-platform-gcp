@@ -5,18 +5,27 @@
 # 1h TTL) and nomad-sentinel's "monitoring" database, agent_anomalies
 # table.
 #
-# Connect mesh retrofit: group-level service {}, receiving-only for
-# metrics-api/nomad-sentinel — both now reach this via their own
-# upstream, not Consul DNS. The traefik.* tags stay on this SAME
-# service block, unchanged — those are for Vault's own connection
-# (external to this Nomad cluster entirely, on mgmt-vm, no local
-# Consul agent, hence the TCP passthrough through traefik-internal).
-# Two different consumers, two different access paths, one service
-# registration serving both — Connect doesn't replace or conflict with
-# the passthrough, it's an entirely separate concern layered on top.
+# Service name is just "postgres" — no environment suffix. Dev and
+# prod are entirely separate Nomad clusters and separate Consul
+# datacenters; nothing ever shares one catalog where "postgres" could
+# collide between them. The env-specific naming that matters (for
+# Vault, the one consumer that genuinely needs simultaneous access to
+# both) lives at the DNS layer (postgres-dev/postgres-prod hostnames
+# on traefik-internal) — a different mechanism entirely, not the
+# Consul service name.
 #
-# NOT YET dedicated-node-scheduled. Known limitation, tracked as a
-# changelog item — see docs/CHANGELOG.md once it exists.
+# Bootstrap credentials live at ONE shared path, kv/data/shared/postgres/admin
+# (not per-environment) — matches vault_consumers' actual kv_paths
+# entry, which grants that literal path with no env variant. Both the
+# superuser password and the vault-admin password are fields on that
+# same secret.
+#
+# CSI, not host volumes — NOT YET COMPLETE: the GCE Persistent Disk
+# CSI driver itself isn't deployed anywhere (needs its own controller +
+# node-plugin jobs), and the Nomad client service accounts don't yet
+# have the GCE disk-management IAM permissions the driver needs to
+# create/attach/detach volumes. This volume block assumes both exist;
+# neither does yet.
 
 job "postgres" {
   datacenters = ["#{Datacenter}"]
@@ -39,9 +48,11 @@ job "postgres" {
     }
 
     volume "postgres-data" {
-      type      = "host"
-      source    = "postgres-data-#{Environment}"
-      read_only = false
+      type            = "csi"
+      source           = "postgres-data-#{Environment}"
+      read_only        = false
+      attachment_mode  = "file-system"
+      access_mode      = "single-node-writer"
     }
 
     network {
@@ -53,7 +64,7 @@ job "postgres" {
     }
 
     service {
-      name = "postgres-#{Environment}"
+      name = "postgres"
       port = "db"
 
       check {
@@ -72,11 +83,20 @@ job "postgres" {
 
       connect {
         sidecar_service {}
+
+        # Receiving-only sidecar (no upstreams of its own) — 100/128 is
+        # a workable floor. Hardcoded per your ask, not an Octopus var.
+        sidecar_task {
+          resources {
+            cpu    = 100
+            memory = 128
+          }
+        }
       }
     }
 
     vault {
-      role = "postgres-#{Environment}"
+      role = "postgres"
     }
 
     task "bootstrap" {
@@ -95,11 +115,11 @@ job "postgres" {
 
       template {
         data = <<EOF
-{{ with secret "kv/data/#{Environment}/postgres/superuser" }}
+{{ with secret "kv/data/shared/postgres/admin" }}
 PGHOST=localhost
 PGPORT=5432
 PGUSER=postgres
-PGPASSWORD={{ .Data.data.password }}
+PGPASSWORD={{ .Data.data.superuser_password }}
 {{ end }}
 EOF
         destination = "secrets/postgres.env"
@@ -108,11 +128,11 @@ EOF
 
       template {
         data = <<EOF
-{{ with secret "kv/data/#{Environment}/postgres/vault-admin" }}
+{{ with secret "kv/data/shared/postgres/admin" }}
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'vault-admin') THEN
-    CREATE ROLE "vault-admin" WITH LOGIN CREATEROLE PASSWORD '{{ .Data.data.password }}';
+    CREATE ROLE "vault-admin" WITH LOGIN CREATEROLE PASSWORD '{{ .Data.data.vault_admin_password }}';
   END IF;
 END
 $$;
@@ -135,15 +155,17 @@ EOF
       config {
         image = "postgres:16-alpine"
         ports = ["db"]
-        volumes = [
-          "postgres-data:/var/lib/postgresql/data",
-        ]
+      }
+
+      volume_mount {
+        volume      = "postgres-data"
+        destination = "/var/lib/postgresql/data"
       }
 
       template {
         data = <<EOF
-{{ with secret "kv/data/#{Environment}/postgres/superuser" }}
-POSTGRES_PASSWORD={{ .Data.data.password }}
+{{ with secret "kv/data/shared/postgres/admin" }}
+POSTGRES_PASSWORD={{ .Data.data.superuser_password }}
 {{ end }}
 POSTGRES_USER=postgres
 PGDATA=/var/lib/postgresql/data/pgdata

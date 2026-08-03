@@ -61,11 +61,19 @@ job "cartservice" {
             }
           }
         }
+
+        # One upstream — 100/128 floor.
+        sidecar_task {
+          resources {
+            cpu    = 100
+            memory = 128
+          }
+        }
       }
     }
 
     vault {
-      role = "cartservice-#{Environment}"
+      role = "cartservice"
     }
 
     task "cartservice" {
@@ -78,12 +86,14 @@ job "cartservice" {
 
       # REDIS_ADDR is passed straight to StackExchange.Redis's own
       # connection string parser — no custom parsing in app code, per
-      # architecture doc 5.2. localhost:6379 here is the sidecar's
-      # local_bind_port, not Redis's own port directly.
+      # architecture doc 5.2. {{ env "NOMAD_UPSTREAM_ADDR_redis" }}
+      # resolves to the sidecar's local_bind_port at render time —
+      # used instead of hardcoding localhost:6379 so it can't drift
+      # out of sync with the upstream block above.
       template {
         data = <<EOF
-{{ with secret "kv/data/#{Environment}/shared/redis" }}
-REDIS_ADDR=localhost:6379,password={{ .Data.data.password }}
+{{ with secret "kv/data/shared/redis" }}
+REDIS_ADDR={{ env "NOMAD_UPSTREAM_ADDR_redis" }},password={{ .Data.data.password }}
 {{ end }}
 PORT=7070
 EOF

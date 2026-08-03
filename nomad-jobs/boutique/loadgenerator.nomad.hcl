@@ -55,6 +55,14 @@ job "loadgenerator" {
             }
           }
         }
+
+        # One upstream — 100/128 floor.
+        sidecar_task {
+          resources {
+            cpu    = 100
+            memory = 128
+          }
+        }
       }
     }
 
@@ -67,7 +75,7 @@ job "loadgenerator" {
       }
 
       env {
-        FRONTEND_ADDR   = "localhost:8080"
+        FRONTEND_ADDR   = "${NOMAD_UPSTREAM_ADDR_frontend}"
         USERS           = "10"
         SPAWN_RATE      = "1"
         LOCUST_HEADLESS = "true"

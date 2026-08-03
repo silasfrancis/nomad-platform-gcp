@@ -1,33 +1,46 @@
 # nomad-jobs/monitoring/nomad-sentinel.nomad.hcl
 #
-# Same blue-green caveat as metrics-api.nomad.hcl applies here too —
-# no Traefik route exists for this service in the doc's routing table
-# either.
+# Same native blue-green mechanism as metrics-api.nomad.hcl — see that
+# file's header comment for the full reasoning. No #{DeploymentSlot}.
 #
 # REMEDIATION_MODE has no default anywhere in this file, on purpose —
 # per architecture doc 7.3, the agent crash-fails at startup if it's
 # invalid or unset. #{RemediationMode} must be "execute" in dev's
-# Octopus variable set and "propose" in prod's — never implicit.
+# Octopus variable set and "propose" in prod's — never implicit. Lives
+# in its own plain env {} block along with PORT, since neither of
+# these ever rotates.
 #
-# HISTORY_DATABASE_URL uses its own dedicated dynamic Vault role
-# against the same "monitoring" database, rather than sharing
-# metrics-api's role as the architecture doc's wording literally
-# suggests — better isolation, flagged as an intentional deviation.
+# KV path fixed to kv/data/{env}/nomad-sentinel/config — matches what
+# vault_consumers actually grants; the job previously read from
+# ai-agent/config, which doesn't match the granted path at all.
 #
-# Connect mesh retrofit: group-level service {}, one upstream
-# (postgres-#{Environment}) for HISTORY_DATABASE_URL, now
-# localhost:5432 instead of Consul DNS.
+# #{VaultDbRole} — same pattern as metrics-api.nomad.hcl. db_role in
+# vault_consumers is "monitoring" for this consumer; prod resolves to
+# the bare name ("monitoring"), dev to "monitoring-dev". Set once per
+# environment as a literal Octopus variable, not computed.
+#
+# Two separate template blocks, deliberately: the static KV secrets
+# (GEMINI_API_KEY, SLACK_WEBHOOK_URL, NOMAD_TOKEN) rarely change and
+# are fine as real env = true vars with the default restart behavior.
+# HISTORY_DATABASE_URL is the one dynamic, hourly-rotating value — its
+# own template, no env = true, change_mode = "noop" — same reasoning
+# as metrics-api.nomad.hcl's DATABASE_URL: the app must read this
+# specific file directly on every connection attempt, not os.environ,
+# or a rotated credential never actually reaches the running process.
 
-job "nomad-sentinel#{DeploymentSlot}" {
+job "nomad-sentinel" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
   update {
-    max_parallel     = 1
-    min_healthy_time = "10s"
-    healthy_deadline = "3m"
-    auto_revert      = true
+    canary            = #{ReplicaCount}
+    max_parallel      = #{ReplicaCount}
+    min_healthy_time  = "30s"
+    healthy_deadline  = "5m"
+    progress_deadline = "10m"
+    auto_revert       = true
+    auto_promote      = false
   }
 
   group "nomad-sentinel" {
@@ -49,7 +62,7 @@ job "nomad-sentinel#{DeploymentSlot}" {
     }
 
     service {
-      name = "nomad-sentinel#{DeploymentSlot}"
+      name = "nomad-sentinel"
       port = "http"
 
       check {
@@ -65,17 +78,23 @@ job "nomad-sentinel#{DeploymentSlot}" {
         sidecar_service {
           proxy {
             upstreams {
-              destination_name = "postgres-#{Environment}"
+              destination_name = "postgres"
               local_bind_port  = 5432
             }
+          }
+        }
+
+        sidecar_task {
+          resources {
+            cpu    = 100
+            memory = 128
           }
         }
       }
     }
 
     vault {
-      role        = "nomad-sentinel-#{Environment}"
-      change_mode = "noop"
+      role = "nomad-sentinel"
     }
 
     task "nomad-sentinel" {
@@ -86,21 +105,31 @@ job "nomad-sentinel#{DeploymentSlot}" {
         ports = ["http"]
       }
 
+      env {
+        PORT             = "8090"
+        REMEDIATION_MODE = "#{RemediationMode}"
+      }
+
       template {
         data = <<EOF
-{{ with secret "kv/data/#{Environment}/ai-agent/config" }}
+{{ with secret "kv/data/#{Environment}/nomad-sentinel/config" }}
 GEMINI_API_KEY={{ .Data.data.gemini_api_key }}
 SLACK_WEBHOOK_URL={{ .Data.data.slack_webhook_url }}
 NOMAD_TOKEN={{ .Data.data.nomad_token }}
 {{ end }}
-{{ with secret "database/creds/#{Environment}-nomad-sentinel" }}
-HISTORY_DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@localhost:5432/monitoring?sslmode=disable
-{{ end }}
-PORT=8090
-REMEDIATION_MODE=#{RemediationMode}
 EOF
-        destination = "secrets/nomad-sentinel.env"
+        destination = "secrets/nomad-sentinel-config.env"
         env         = true
+      }
+
+      # File-only, deliberately no env = true — see header comment.
+      template {
+        data = <<EOF
+{{ with secret "database/creds/#{VaultDbRole}" }}
+HISTORY_DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "NOMAD_UPSTREAM_ADDR_postgres" }}/monitoring?sslmode=disable
+{{ end }}
+EOF
+        destination = "secrets/history-database-url.env"
         change_mode = "noop"
       }
 

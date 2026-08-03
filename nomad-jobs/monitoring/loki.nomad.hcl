@@ -32,10 +32,13 @@ job "loki" {
       value     = "on-demand"
     }
 
+    # CSI, not host — same NOT YET COMPLETE flag as postgres.nomad.hcl.
     volume "loki-data" {
-      type      = "host"
-      source    = "loki-data-#{Environment}"
-      read_only = false
+      type            = "csi"
+      source          = "loki-data-#{Environment}"
+      read_only       = false
+      attachment_mode = "file-system"
+      access_mode     = "single-node-writer"
     }
 
     network {
@@ -59,6 +62,15 @@ job "loki" {
 
       connect {
         sidecar_service {}
+
+        # Receiving-only sidecar (no upstreams of its own) — 100/128
+        # is a workable floor. Hardcoded per your ask, not an Octopus var.
+        sidecar_task {
+          resources {
+            cpu    = 100
+            memory = 128
+          }
+        }
       }
     }
 
@@ -66,9 +78,13 @@ job "loki" {
       driver = "docker"
 
       config {
-        image   = "#{ArtifactRegistry}/loki:#{ImageTag}"
-        ports   = ["http"]
-        volumes = ["loki-data:/loki"]
+        image = "#{ArtifactRegistry}/loki:#{ImageTag}"
+        ports = ["http"]
+      }
+
+      volume_mount {
+        volume      = "loki-data"
+        destination = "/loki"
       }
 
       resources {

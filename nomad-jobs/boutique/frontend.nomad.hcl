@@ -122,6 +122,15 @@ job "frontend" {
             }
           }
         }
+
+        # 7 upstreams — highest in this whole retrofit, sized up
+        # accordingly from the single-upstream floor.
+        sidecar_task {
+          resources {
+            cpu    = 150
+            memory = 192
+          }
+        }
       }
     }
 
@@ -136,13 +145,13 @@ job "frontend" {
       env {
         PORT                          = "8080"
         ENV_PLATFORM                  = "gcp"
-        PRODUCT_CATALOG_SERVICE_ADDR  = "localhost:3550"
-        CURRENCY_SERVICE_ADDR         = "localhost:7000"
-        CART_SERVICE_ADDR             = "localhost:7070"
-        RECOMMENDATION_SERVICE_ADDR   = "localhost:8082"
-        SHIPPING_SERVICE_ADDR         = "localhost:50051"
-        CHECKOUT_SERVICE_ADDR         = "localhost:5050"
-        AD_SERVICE_ADDR               = "localhost:9555"
+        PRODUCT_CATALOG_SERVICE_ADDR  = "${NOMAD_UPSTREAM_ADDR_productcatalogservice}"
+        CURRENCY_SERVICE_ADDR         = "${NOMAD_UPSTREAM_ADDR_currencyservice}"
+        CART_SERVICE_ADDR             = "${NOMAD_UPSTREAM_ADDR_cartservice}"
+        RECOMMENDATION_SERVICE_ADDR   = "${NOMAD_UPSTREAM_ADDR_recommendationservice}"
+        SHIPPING_SERVICE_ADDR         = "${NOMAD_UPSTREAM_ADDR_shippingservice}"
+        CHECKOUT_SERVICE_ADDR         = "${NOMAD_UPSTREAM_ADDR_checkoutservice}"
+        AD_SERVICE_ADDR               = "${NOMAD_UPSTREAM_ADDR_adservice}"
         # SHOPPING_ASSISTANT_SERVICE_ADDR intentionally omitted — see
         # architecture doc 13, requires GCP AlloyDB + Secret Manager,
         # neither used in this project.

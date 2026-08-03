@@ -31,6 +31,16 @@ locals {
       kv_paths  = ["nomad-sentinel/config"]
       db_role   = "monitoring"
     }
+    "consul-snapshot" = {
+      namespace = "operations"
+      kv_paths  = ["backup/consul-token"]
+      db_role   = null
+    }
+    "postgres-backup" = {
+      namespace = "operations"
+      kv_paths  = ["shared/postgres/admin"]
+      db_role   = null
+    }
   }
 }
 

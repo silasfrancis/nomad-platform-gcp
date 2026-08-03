@@ -1,10 +1,11 @@
 # nomad-jobs/boutique/recommendationservice.nomad.hcl
 #
 # Rolling deployment, hard spot-only. Connect mesh retrofit:
-# group-level service {}, one upstream (productcatalogservice) — env
-# var switches from Consul DNS to localhost:<local_bind_port>, since
-# with Connect a service talks to its own sidecar, never directly to
-# the remote one.
+# group-level service {}, one upstream (productcatalogservice) —
+# NOMAD_UPSTREAM_ADDR_productcatalogservice is Nomad's own generated
+# env var for this upstream's sidecar address, used instead of
+# hardcoding localhost:<port> so the value can never silently drift
+# out of sync with whatever local_bind_port is actually set below.
 
 job "recommendationservice" {
   datacenters = ["#{Datacenter}"]
@@ -55,6 +56,14 @@ job "recommendationservice" {
             }
           }
         }
+
+        # One upstream — 100/128 floor.
+        sidecar_task {
+          resources {
+            cpu    = 100
+            memory = 128
+          }
+        }
       }
     }
 
@@ -68,7 +77,7 @@ job "recommendationservice" {
 
       env {
         PORT                         = "8080"
-        PRODUCT_CATALOG_SERVICE_ADDR = "localhost:3550"
+        PRODUCT_CATALOG_SERVICE_ADDR = "${NOMAD_UPSTREAM_ADDR_productcatalogservice}"
       }
 
       resources {

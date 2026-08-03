@@ -86,7 +86,7 @@ resource "vault_database_secret_backend_connection" "postgres_monitoring" {
   for_each      = toset(["dev", "prod"])
   backend       = vault_mount.database.path
   name          = each.key == "prod" ? "postgres-monitoring-prod" : "postgres-monitoring-dev"
-  allowed_roles = [each.key == "prod" ? "monitoring" : "monitoring-dev"]
+  allowed_roles = [each.key == "prod" ? "monitoring-prod" : "monitoring-dev"]
   verify_connection = false
 
   postgresql {

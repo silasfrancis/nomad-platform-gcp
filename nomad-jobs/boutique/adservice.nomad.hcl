@@ -45,6 +45,15 @@ job "adservice" {
 
       connect {
         sidecar_service {}
+
+        # Receiving-only sidecar (no upstreams of its own) — 100/128
+        # is a workable floor. Hardcoded per your ask, not an Octopus var.
+        sidecar_task {
+          resources {
+            cpu    = 100
+            memory = 128
+          }
+        }
       }
     }
 

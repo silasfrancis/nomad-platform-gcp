@@ -63,11 +63,20 @@ job "redis" {
 
       connect {
         sidecar_service {}
+
+        # Receiving-only sidecar (no upstreams of its own) — 100/128
+        # is a workable floor. Hardcoded per your ask, not an Octopus var.
+        sidecar_task {
+          resources {
+            cpu    = 100
+            memory = 128
+          }
+        }
       }
     }
 
     vault {
-      role = "redis-#{Environment}"
+      role = "redis"
     }
 
     task "redis" {
@@ -85,7 +94,7 @@ job "redis" {
       # getting a cartservice-scoped one.
       template {
         data = <<EOT
-{{ with secret "kv/data/#{Environment}/shared/redis" }}
+{{ with secret "kv/data/shared/redis" }}
 REDIS_PASSWORD={{ .Data.data.password }}
 {{ end }}
 EOT

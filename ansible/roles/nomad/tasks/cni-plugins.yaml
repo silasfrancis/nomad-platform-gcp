@@ -1,19 +1,13 @@
 # CNI Plugins — Bridge Networking For Consul Connect
 # Reference CNI plugins provide bridge/host-local/loopback/portmap, the
-# low-level primitives Nomad's bridge network mode needs. consul-cni is
-# HashiCorp's own plugin — invoked by Consul's Connect sidecar to set up
-# traffic redirection inside each allocation's network namespace.
+# low-level primitives Nomad's bridge network mode needs.
+# consul-cni integrates Consul Connect with the CNI networking stack.
+# Nomad invokes it while preparing an allocation's network namespace,
+# allowing transparent proxy redirection for Connect-enabled workloads.
+
 - name: Ensure /opt/cni/bin exists
   ansible.builtin.file:
     path: /opt/cni/bin
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Ensure /etc/cni/net.d exists
-  ansible.builtin.file:
-    path: /etc/cni/net.d
     state: directory
     owner: root
     group: root
@@ -46,7 +40,34 @@
     remote_src: true
     owner: root
     group: root
+
+- name: Ensure required CNI binaries are executable
+  ansible.builtin.file:
+    path: "{{ item }}"
     mode: "0755"
+  loop:
+    - /opt/cni/bin/bridge
+    - /opt/cni/bin/host-local
+    - /opt/cni/bin/loopback
+    - /opt/cni/bin/portmap
+    - /opt/cni/bin/consul-cni
+
+- name: Verify required CNI binaries are installed
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /opt/cni/bin/bridge
+    - /opt/cni/bin/host-local
+    - /opt/cni/bin/loopback
+    - /opt/cni/bin/portmap
+    - /opt/cni/bin/consul-cni
+  register: cni_plugin_stats
+
+- name: Fail if any required CNI plugin is missing
+  ansible.builtin.fail:
+    msg: "Required CNI plugin {{ item.stat.path }} was not installed."
+  when: not item.stat.exists
+  loop: "{{ cni_plugin_stats.results }}"
 
 - name: Clean up downloaded archives
   ansible.builtin.file:

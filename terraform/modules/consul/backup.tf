@@ -1,0 +1,26 @@
+resource "consul_acl_policy" "consul_snapshot" {
+  name = "consul-snapshot-${var.environment}"
+  rules = <<-EOT
+    operator "" {
+      policy = "write"
+    }
+  EOT
+}
+
+resource "consul_acl_token" "consul_snapshot" {
+  description = "Consul snapshot token — dc-${var.environment}"
+  policies    = [consul_acl_policy.consul_snapshot.name]
+}
+
+data "consul_acl_token_secret_id" "consul_snapshot" {
+  accessor_id = consul_acl_token.consul_snapshot.id
+}
+
+
+resource "vault_kv_secret_v2" "consul_snapshot_token" {
+  mount    = "kv"
+  name     = "backup/${var.environment}/consul-token"
+  data_json = jsonencode({
+    token = "${data.consul_acl_token_secret_id.consul_snapshot.secret_id}"
+  })
+}

@@ -40,10 +40,16 @@ job "prometheus" {
       value     = "on-demand"
     }
 
+    # CSI, not host — NOT YET COMPLETE, same flag as postgres.nomad.hcl:
+    # the GCE PD CSI driver itself isn't deployed anywhere yet, and the
+    # Nomad client service accounts don't have the disk-management IAM
+    # permissions it needs.
     volume "prometheus-data" {
-      type      = "host"
-      source    = "prometheus-data-#{Environment}"
-      read_only = false
+      type            = "csi"
+      source          = "prometheus-data-#{Environment}"
+      read_only       = false
+      attachment_mode = "file-system"
+      access_mode     = "single-node-writer"
     }
 
     network {
@@ -68,9 +74,13 @@ job "prometheus" {
       driver = "docker"
 
       config {
-        image   = "#{ArtifactRegistry}/prometheus:#{ImageTag}"
-        ports   = ["http"]
-        volumes = ["prometheus-data:/prometheus"]
+        image = "#{ArtifactRegistry}/prometheus:#{ImageTag}"
+        ports = ["http"]
+      }
+
+      volume_mount {
+        volume      = "prometheus-data"
+        destination = "/prometheus"
       }
 
       resources {

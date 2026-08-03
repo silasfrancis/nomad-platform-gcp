@@ -60,7 +60,7 @@ default = {
 
     # --- mgmt: Ongoing Secrets Consumed By Ansible Roles Running On
     # mgmt-vm (management-vm-sa). ---
-    "vault-backup-token" = { labels = { purpose = "vault", tier = "mgmt" } }
+    "vault-snapshot-token" = { labels = { purpose = "vault", tier = "mgmt" } }
 
     "octopus-admin-api-key"        = { labels = { purpose = "octopus", tier = "mgmt" } }
     "octopus-master-key"           = { labels = { purpose = "octopus", tier = "mgmt" } }
