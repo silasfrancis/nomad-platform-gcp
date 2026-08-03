@@ -1,9 +1,8 @@
 resource "consul_acl_policy" "consul_snapshot" {
   name = "consul-snapshot-${var.environment}"
   rules = <<-EOT
-    operator "" {
-      policy = "write"
-    }
+    operator = "write"
+    acl      = "write"
   EOT
 }
 
@@ -15,7 +14,6 @@ resource "consul_acl_token" "consul_snapshot" {
 data "consul_acl_token_secret_id" "consul_snapshot" {
   accessor_id = consul_acl_token.consul_snapshot.id
 }
-
 
 resource "vault_kv_secret_v2" "consul_snapshot_token" {
   mount    = "kv"
