@@ -38,7 +38,7 @@ resource "vault_policy" "consumer" {
     %{~ endif ~}
     %{~ endfor ~}
     %{~ if each.value.config.db_role != null ~}
-    path "database/creds/${each.value.environment == "prod" ? each.value.config.db_role : "${each.value.config.db_role}-dev"}" {
+    path "database/creds/${each.value.environment == "prod" ? "${each.value.config.db_role}-prod" : "${each.value.config.db_role}-dev"}" {
       capabilities = ["read"]
     }
     %{~ endif ~}

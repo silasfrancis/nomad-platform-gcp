@@ -20,6 +20,16 @@ entryPoints:
   {{ traefik_instance.tcp_entrypoint.name }}:
     address: ":{{ traefik_instance.tcp_entrypoint.port }}"
 {% endif %}
+{% if traefik_instance.internal_https_port %}
+  # A Second, Separate HTTPS Listener — Deliberately Not Named
+  # "websecure" (Every Other Instance's Own Entrypoint Uses That Name)
+  # So An Internal-Only Service Tagged Onto This Entrypoint Can Never
+  # Get Picked Up By A Public Instance Sharing The Same Consul Catalog.
+  # See The internal_https_port Field Comment In defaults/main.yaml
+  # For The Full Reasoning.
+  internal:
+    address: ":{{ traefik_instance.internal_https_port }}"
+{% endif %}
 
 providers:
 {% if traefik_instance.static_routes | length > 0 %}

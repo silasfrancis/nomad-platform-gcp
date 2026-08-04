@@ -88,6 +88,7 @@ traefik_instance_catalog:
     catalog_exposed_by_default: false
     backend_instance_filter: "nomad-dev-server-"
     tcp_entrypoint: { name: postgres, port: 15432 }
+    internal_https_port: 15434
     static_routes:
       - { subdomain: nomad-dev, scheme: http, port: 4646 }
       - { subdomain: consul-dev, scheme: http, port: 8500 }
@@ -101,6 +102,7 @@ traefik_instance_catalog:
     catalog_exposed_by_default: false
     backend_instance_filter: "nomad-prod-server-"
     tcp_entrypoint: { name: postgres, port: 15433 }
+    internal_https_port: 15435
     static_routes:
       - { subdomain: nomad-prod, scheme: http, port: 4646 }
       - { subdomain: consul-prod, scheme: http, port: 8500 }

@@ -19,9 +19,17 @@
 # the bare name ("monitoring"), dev to "monitoring-dev". Set once per
 # environment as a literal Octopus variable, not computed.
 #
+# NOMAD_TOKEN no longer comes from this KV secret at all — the
+# platform uses Nomad Workload Identity by default (see
+# nomad_acl_policy.nomad_sentinel), so this job authenticates to
+# Nomad's own API using its own signed identity via identity { env = true }
+# below, not a static token stored anywhere in Vault. The KV secret's
+# actual shape needs updating to match (drop the nomad_token field —
+# only gemini_api_key/slack_webhook_url remain).
+#
 # Two separate template blocks, deliberately: the static KV secrets
-# (GEMINI_API_KEY, SLACK_WEBHOOK_URL, NOMAD_TOKEN) rarely change and
-# are fine as real env = true vars with the default restart behavior.
+# (GEMINI_API_KEY, SLACK_WEBHOOK_URL) rarely change and are fine as
+# real env = true vars with the default restart behavior.
 # HISTORY_DATABASE_URL is the one dynamic, hourly-rotating value — its
 # own template, no env = true, change_mode = "noop" — same reasoning
 # as metrics-api.nomad.hcl's DATABASE_URL: the app must read this
@@ -105,6 +113,14 @@ job "nomad-sentinel" {
         ports = ["http"]
       }
 
+      # Nomad's own signed workload identity, exposed as NOMAD_TOKEN —
+      # the standard env var name the nomad CLI/API client already
+      # looks for by convention, so nomad-sentinel's own Nomad-API
+      # calls need no special-casing on the app side.
+      identity {
+        env = true
+      }
+
       env {
         PORT             = "8090"
         REMEDIATION_MODE = "#{RemediationMode}"
@@ -115,7 +131,6 @@ job "nomad-sentinel" {
 {{ with secret "kv/data/#{Environment}/nomad-sentinel/config" }}
 GEMINI_API_KEY={{ .Data.data.gemini_api_key }}
 SLACK_WEBHOOK_URL={{ .Data.data.slack_webhook_url }}
-NOMAD_TOKEN={{ .Data.data.nomad_token }}
 {{ end }}
 EOF
         destination = "secrets/nomad-sentinel-config.env"

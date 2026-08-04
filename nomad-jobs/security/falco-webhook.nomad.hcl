@@ -5,6 +5,12 @@
 # Nomad job at all). Forwards to Loki (label: source=falco) and, for
 # severity >= WARNING, calls nomad-sentinel over internal HTTP.
 #
+# Now routed through traefik-internal so every client node's Falco
+# config has one stable URL to send alerts to, rather than needing to
+# track this job's allocation as it moves between nodes — see the
+# service {} block's tags below and its own comment for why that
+# route uses a dedicated entrypoint rather than the shared one.
+#
 # Connect mesh retrofit: group-level service {}, two upstreams —
 # loki's remote port (3100) and nomad-sentinel's (8090) don't collide
 # with each other, so no offset needed on either.
@@ -51,6 +57,22 @@ job "falco-webhook" {
         interval = "10s"
         timeout  = "2s"
       }
+
+      # Routed through traefik-internal's dedicated "internal"
+      # entrypoint, not the shared "websecure" one both admin-API
+      # routes AND catalog-discovered services use — see the header
+      # comment above and defaults/main.yaml's internal_https_port
+      # field comment in the traefik role for why that distinction is
+      # a real security boundary, not a style choice. This is what
+      # gives Falco (running as a host systemd service on every client
+      # node, configured via Ansible, not a Nomad job at all) a stable
+      # URL to send its alerts to.
+      tags = [
+        "traefik.enable=true",
+        "traefik.http.routers.falco-webhook.rule=Host(`falco-webhook.platform.lefrancis.org`)",
+        "traefik.http.routers.falco-webhook.entrypoints=internal",
+        "traefik.http.routers.falco-webhook.tls.certresolver=letsencrypt",
+      ]
 
       connect {
         sidecar_service {

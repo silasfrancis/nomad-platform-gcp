@@ -46,8 +46,8 @@ locals {
 resource "vault_database_secret_backend_connection" "postgres_metrics" {
   for_each      = toset(["dev", "prod"])
   backend       = vault_mount.database.path
-  name          = each.key == "prod" ? "postgres-metrics-prod" : "postgres-metrics-dev"
-  allowed_roles = [each.key == "prod" ? "metrics-api-prod" : "metrics-api-dev"]
+  name          = each.key == "prod" ? "${local.metrics-api.db_role}-prod" : "${local.metrics-api.db_role}-dev"
+  allowed_roles = [each.key == "prod" ? "${local.metrics-api.db_role}-prod" : "${local.metrics-api.db_role}-dev"]
 
   # verify_connection is intentionally false: this module can be
   # applied before Postgres itself has ever been deployed. Leaving
@@ -66,7 +66,7 @@ resource "vault_database_secret_backend_connection" "postgres_metrics" {
 resource "vault_database_secret_backend_role" "metrics_api" {
   for_each = toset(["dev", "prod"])
   backend  = vault_mount.database.path
-  name     = each.key == "prod" ? "metrics-api-prod" : "metrics-api-dev"
+  name     = each.key == "prod" ? "${local.metrics-api.db_role}-prod" : "${local.metrics-api.db_role}-dev"
   db_name  = vault_database_secret_backend_connection.postgres_metrics[each.key].name
 
   creation_statements = [
@@ -85,8 +85,8 @@ resource "vault_database_secret_backend_role" "metrics_api" {
 resource "vault_database_secret_backend_connection" "postgres_monitoring" {
   for_each      = toset(["dev", "prod"])
   backend       = vault_mount.database.path
-  name          = each.key == "prod" ? "postgres-monitoring-prod" : "postgres-monitoring-dev"
-  allowed_roles = [each.key == "prod" ? "monitoring-prod" : "monitoring-dev"]
+  name          = each.key == "prod" ? "${local.monitoring.db_role}-prod" : "${local.monitoring.db_role}-dev"
+  allowed_roles = [each.key == "prod" ? "${local.monitoring.db_role}-prod" : "${local.monitoring.db_role}-dev"]
   verify_connection = false
 
   postgresql {
@@ -99,7 +99,7 @@ resource "vault_database_secret_backend_connection" "postgres_monitoring" {
 resource "vault_database_secret_backend_role" "monitoring" {
   for_each = toset(["dev", "prod"])
   backend  = vault_mount.database.path
-  name     = each.key == "prod" ? "monitoring-prod" : "monitoring-dev"
+  name     = each.key == "prod" ? "${local.monitoring.db_role}-prod" : "${local.monitoring.db_role}-dev"
   db_name  = vault_database_secret_backend_connection.postgres_monitoring[each.key].name
 
   creation_statements = [
