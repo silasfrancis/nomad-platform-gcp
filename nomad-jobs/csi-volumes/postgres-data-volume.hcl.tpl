@@ -26,3 +26,8 @@ capability {
 parameters {
   type = "$DISK_TYPE"
 }
+
+mount_options {
+  fs_type     = "ext4"
+  mount_flags = ["noatime"]
+}
