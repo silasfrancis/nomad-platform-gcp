@@ -272,7 +272,11 @@ module "traefik_internal_dns" {
     consul-prod = module.instances.instances["traefik-internal"].internal_ip
     postgres-dev = module.instances.instances["traefik-internal"].internal_ip
     postgres-prod = module.instances.instances["traefik-internal"].internal_ip
-    falco-webhook = module.instances.instances["traefik-internal"].internal_ip
+    falco-webhook-dev = module.instances.instances["traefik-internal"].internal_ip
+    falco-webhook-prod = module.instances.instances["traefik-internal"].internal_ip
+    prometheus-dev = module.instances.instances["traefik-internal"].internal_ip
+    prometheus-prod = module.instances.instances["traefik-internal"].internal_ip
+    loki-dev = module.instances.instances["traefik-internal"].internal_ip
+    lokie-prod = module.instances.instances["traefik-internal"].internal_ip
   }
-
 }

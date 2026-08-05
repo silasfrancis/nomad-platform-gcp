@@ -1,9 +1,11 @@
 # nomad-jobs/plugins/csi-node.nomad.hcl
 #
+# Same deployment reasoning as csi-controller.nomad.hcl — not Octopus,
+# real Nomad variables instead of #{} tokens.
+#
 # Node half of the same driver — runs on every client node (system
 # job, both on-demand and Spot pools; any node might need to mount a
-# volume), handles the actual NodeStageVolume/NodePublishVolume calls
-# locally. --run-controller-service=false disables the controller-side
+# volume). --run-controller-service=false disables the controller-side
 # gRPC service here, mirroring csi-controller.nomad.hcl's split the
 # other way.
 #
@@ -15,9 +17,26 @@
 # plugin_id must match on both the controller and node plugin for
 # Nomad to treat them as the same driver.
 
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
+variable "artifact_registry" {
+  type = string
+}
+
+variable "image_tag" {
+  type = string
+}
+
+locals {
+  datacenter = "dc-${var.environment}"
+}
+
 job "csi-node" {
-  datacenters = ["#{Datacenter}"]
-  namespace   = "#{DeploymentNamespace}"
+  datacenters = [local.datacenter]
+  namespace   = "plugins"
   type        = "system"
 
   update {
@@ -27,11 +46,20 @@ job "csi-node" {
   }
 
   group "csi-node" {
+    # Technically redundant for a system job (Nomad already places at
+    # most one allocation per node), but the Nomad docs' own
+    # plugin-efs example includes this on the node plugin too —
+    # matching that rather than assuming it's unnecessary here.
+    constraint {
+      operator = "distinct_hosts"
+      value    = true
+    }
+
     task "csi-node" {
       driver = "docker"
 
       config {
-        image      = "#{ArtifactRegistry}/gcp-compute-persistent-disk-csi-driver:#{ImageTag}"
+        image      = "${var.artifact_registry}/gcp-compute-persistent-disk-csi-driver:${var.image_tag}"
         privileged = true
         args = [
           "--endpoint=unix://csi/csi.sock",
@@ -50,8 +78,8 @@ job "csi-node" {
       }
 
       resources {
-        cpu    = #{Cpu}
-        memory = #{Memory}
+        cpu    = 200
+        memory = 256
       }
     }
   }

@@ -1,28 +1,48 @@
 # nomad-jobs/plugins/csi-controller.nomad.hcl
 #
+# NOT deployed via Octopus — plugins change rarely enough that a
+# manual, deliberate `nomad job run` (via deploy.sh, IAP-tunneled)
+# beats wiring up a full CI pipeline for something this infrequent.
+# Real Nomad variable blocks instead of #{} Octopus tokens — one file
+# covers both environments via -var overrides at apply time, same
+# mental model as Terraform.
+#
 # GCE Persistent Disk CSI driver, controller half — talks to the GCE
 # API for CreateVolume/DeleteVolume/ControllerPublish, doesn't need to
 # run on every node the way the node plugin does. --run-node-service=false
-# disables the node-side gRPC service on this instance, per the
-# driver's own two flags (both default true if unset — confirmed
-# against the driver's own docs).
+# disables the node-side gRPC service on this instance.
 #
 # Mirrors upstream kubernetes-sigs/gcp-compute-persistent-disk-csi-driver
-# into #{ArtifactRegistry} rather than pulling registry.k8s.io directly —
+# into artifact_registry rather than pulling registry.k8s.io directly —
 # same "no images pulled from an external registry" policy the
-# architecture doc already states for Online Boutique (5.1). This is a
-# different CI shape than every other image in this project, though:
-# a mirror/retag pipeline, not a build-from-source one — worth keeping
-# distinct when CI/CD gets built.
+# architecture doc already states for Online Boutique (5.1).
 #
 # NOT YET VERIFIED: the GCE service account this runs under needs
 # compute.instances.get/attachDisk/detachDisk plus roles/compute.storageAdmin
 # and roles/iam.serviceAccountUser, per the driver's own install docs —
 # not yet added to the Nomad client service accounts.
 
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
+variable "artifact_registry" {
+  type        = string
+  description = "Same registry regardless of environment — no per-env default needed, unlike environment/image_tag."
+}
+
+variable "image_tag" {
+  type = string
+}
+
+locals {
+  datacenter = "dc-${var.environment}"
+}
+
 job "csi-controller" {
-  datacenters = ["#{Datacenter}"]
-  namespace   = "#{DeploymentNamespace}"
+  datacenters = [local.datacenter]
+  namespace   = "plugins"
   type        = "service"
 
   update {
@@ -32,7 +52,7 @@ job "csi-controller" {
   }
 
   group "csi-controller" {
-    count = #{ReplicaCount}
+    count = 1
 
     constraint {
       attribute = "${meta.node_pool_type}"
@@ -40,11 +60,19 @@ job "csi-controller" {
       value     = "on-demand"
     }
 
+    # Distributes replicas across nodes if count is ever bumped above
+    # 1 — per the Nomad docs' own recommendation for CSI controller
+    # plugins specifically.
+    constraint {
+      operator = "distinct_hosts"
+      value    = true
+    }
+
     task "csi-controller" {
       driver = "docker"
 
       config {
-        image = "#{ArtifactRegistry}/gcp-compute-persistent-disk-csi-driver:#{ImageTag}"
+        image = "${var.artifact_registry}/gcp-compute-persistent-disk-csi-driver:${var.image_tag}"
         args = [
           "--endpoint=unix://csi/csi.sock",
           "--run-controller-service=true",
@@ -52,12 +80,8 @@ job "csi-controller" {
         ]
       }
 
-      # This id ("gce-pd") is the one thing every volume registration
-      # in this project must reference exactly — see
-      # datastore/postgres-data-volume.hcl,
-      # monitoring/prometheus-data-volume.hcl, and
-      # monitoring/loki-data-volume.hcl's plugin_id fields, which all
-      # point back here.
+      # This id ("gce-pd") is the one thing every volume spec in
+      # csi-volumes/ must reference exactly in its own plugin_id field.
       csi_plugin {
         id        = "gce-pd"
         type      = "controller"
@@ -65,8 +89,8 @@ job "csi-controller" {
       }
 
       resources {
-        cpu    = #{Cpu}
-        memory = #{Memory}
+        cpu    = 200
+        memory = 256
       }
     }
   }

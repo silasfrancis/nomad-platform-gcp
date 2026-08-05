@@ -123,24 +123,6 @@ locals {
       deny = []
     }
 
-    "grafana-query" = {
-      # Grafana runs on mgmt (systemd) and queries Prometheus + Loki, both
-      # of which run per-environment as Nomad jobs on dev/prod client nodes
-      # (architecture doc section 8.1). node_exporter (9100) is scraped
-      # in-cluster by each environment's own Prometheus via Consul catalog
-      # SD — mgmt never touches 9100 directly, so no rule is needed for it.
-      # 9090 = Prometheus HTTP/query API, 3100 = Loki HTTP/query API.
-      direction           = "INGRESS"
-      priority            = 1000
-      source_ranges       = [local.cidr["subnet-mgmt"]]
-      destination_ranges  = [
-        local.cidr["subnet-dev-private"],
-        local.cidr["subnet-prod-private"],
-      ]
-      allow = [{ protocol = "tcp", ports = ["9090", "3100"] }]
-      deny  = []
-    }
-
     # Traefik (public) proxies only frontend:8080 into its own environment's
     # private subnet (architecture doc section 4.3 — no other backend service
     # is routed through Traefik).

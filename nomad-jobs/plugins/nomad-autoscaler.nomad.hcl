@@ -1,19 +1,28 @@
 # nomad-jobs/plugins/nomad-autoscaler.nomad.hcl
 #
-# One instance per environment — manages both scaling mechanisms
-# documented in the architecture doc 2.5:
+# Same deployment reasoning as csi-controller.nomad.hcl — not Octopus,
+# real Nomad variables instead of #{} tokens.
+#
+# One instance per environment (deploy.sh's -var=environment picks
+# which) — manages both scaling mechanisms documented in the
+# architecture doc 2.5:
 #
 # Task scaling (frontend's HPA-equivalent): needs NO configuration
 # here at all. The Autoscaler discovers frontend's own scaling {}
 # block via the Nomad API automatically; the agent config below only
-# needs to know Prometheus exists as an APM source.
+# needs to know Prometheus exists as an APM source — reached via plain
+# Consul DNS (prometheus.service.consul:9090), NOT a Connect upstream.
+# An earlier version of this file referenced NOMAD_UPSTREAM_ADDR_prometheus,
+# which never existed: this job has no sidecar, and Prometheus itself
+# is deliberately unmeshed (see prometheus.nomad.hcl), so there was
+# never an upstream to reference in the first place. Fixed here.
 #
 # Cluster scaling (MIG resize): needs one policy per MIG, hardcoded
 # into the agent config's own scaling blocks (not derived from
-# anything in a job spec) — 4 MIGs total across both environments, 2
-# per environment (ondemand + spot), so this job's own config only
-# ever references its own 2. #{OndemandMigName}/#{SpotMigName} are new
-# Octopus variables holding the literal MIG names from compute/main.tf.
+# anything in a job spec) — this environment's own 2 (ondemand + spot).
+# var.gcp_zone/ondemand_mig_name/spot_mig_name have no defaults,
+# deliberately — literal GCE resource names with no reasonable
+# universal default, unlike environment.
 #
 # NOT YET BUILT, TWO SEPARATE PIECES:
 #
@@ -25,17 +34,50 @@
 #
 # 2. This job's own Nomad ACL policy — the plugin's docs state a Nomad
 #    ACL token is required for node-drain/scale operations. Per the
-#    same reasoning nomad-sentinel now uses (Workload Identity, not a
-#    static token), this uses identity { env = true } instead — but
-#    the actual Nomad ACL *policy* granting that identity the right
+#    same Workload Identity reasoning nomad-sentinel now uses, this
+#    uses identity { env = true } instead of a static token — but the
+#    actual Nomad ACL *policy* granting that identity the right
 #    permissions (node write, for drains) doesn't exist in
 #    modules/nomad/ yet, matching nomad_acl_policy.nomad_sentinel's
 #    shape but scoped to node operations instead of namespace-wide
 #    read/write.
 
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
+variable "gcp_project" {
+  type = string
+}
+
+variable "artifact_registry" {
+  type = string
+}
+
+variable "image_tag" {
+  type = string
+}
+
+variable "gcp_zone" {
+  type = string
+}
+
+variable "ondemand_mig_name" {
+  type = string
+}
+
+variable "spot_mig_name" {
+  type = string
+}
+
+locals {
+  datacenter = "dc-${var.environment}"
+}
+
 job "nomad-autoscaler" {
-  datacenters = ["#{Datacenter}"]
-  namespace   = "#{DeploymentNamespace}"
+  datacenters = [local.datacenter]
+  namespace   = "plugins"
   type        = "service"
 
   update {
@@ -45,7 +87,7 @@ job "nomad-autoscaler" {
   }
 
   group "nomad-autoscaler" {
-    count = #{ReplicaCount}
+    count = 1
 
     constraint {
       attribute = "${meta.node_pool_type}"
@@ -63,9 +105,9 @@ job "nomad-autoscaler" {
       driver = "docker"
 
       config {
-        image   = "#{ArtifactRegistry}/nomad-autoscaler:#{ImageTag}"
-        ports   = ["http"]
-        args    = ["agent", "-config", "/local/config.hcl"]
+        image = "${var.artifact_registry}/nomad-autoscaler:${var.image_tag}"
+        ports = ["http"]
+        args  = ["agent", "-config", "/local/config.hcl"]
       }
 
       # Workload Identity, not a static Nomad ACL token — consistent
@@ -77,8 +119,8 @@ job "nomad-autoscaler" {
       }
 
       # GCE credentials for the gce-mig target plugin specifically —
-      # this is a DIFFERENT identity than the Nomad ACL one above; the
-      # plugin needs to call the GCP Compute API, not Nomad's own API.
+      # a DIFFERENT identity than the Nomad ACL one above; the plugin
+      # needs to call the GCP Compute API, not Nomad's own API.
       # File-based per the plugin's own recommendation (never as an
       # env var, which would be visible to every plugin + the agent
       # process, not just this one).
@@ -88,7 +130,7 @@ job "nomad-autoscaler" {
 
       template {
         data = <<EOF
-{{ with secret "gcp/roleset/nomad-autoscaler-#{Environment}/key" }}
+{{ with secret "gcp/roleset/nomad-autoscaler-${var.environment}/key" }}
 {{ .Data.private_key_data | base64Decode }}
 {{ end }}
 EOF
@@ -109,7 +151,7 @@ nomad {
 apm "prometheus" {
   driver = "prometheus"
   config = {
-    address = "http://{{ env "NOMAD_UPSTREAM_ADDR_prometheus" }}"
+    address = "http://prometheus.service.consul:9090"
   }
 }
 
@@ -149,9 +191,9 @@ scaling "cluster_policy_ondemand" {
     }
 
     target "gce-mig" {
-      project  = "#{GcpProject}"
-      zone     = "#{GcpZone}"
-      mig_name = "#{OndemandMigName}"
+      project  = "${var.gcp_project}"
+      zone     = "${var.gcp_zone}"
+      mig_name = "${var.ondemand_mig_name}"
     }
   }
 }
@@ -175,9 +217,9 @@ scaling "cluster_policy_spot" {
     }
 
     target "gce-mig" {
-      project  = "#{GcpProject}"
-      zone     = "#{GcpZone}"
-      mig_name = "#{SpotMigName}"
+      project  = "${var.gcp_project}"
+      zone     = "${var.gcp_zone}"
+      mig_name = "${var.spot_mig_name}"
     }
   }
 }
@@ -186,8 +228,8 @@ EOF
       }
 
       resources {
-        cpu    = #{Cpu}
-        memory = #{Memory}
+        cpu    = 200
+        memory = 256
       }
     }
   }
