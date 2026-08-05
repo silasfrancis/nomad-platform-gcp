@@ -14,8 +14,10 @@ http:
     {{ route.subdomain }}:
       rule: "Host(`{{ route.subdomain }}.{{ traefik_instance.domain }}`)"
       service: {{ route.subdomain }}
+      {% if route.scheme == 'https' %}
       tls:
         certResolver: letsencrypt
+      {% endif %}
 {% endfor %}
 
   services:

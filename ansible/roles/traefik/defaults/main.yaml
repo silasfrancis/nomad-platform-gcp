@@ -76,8 +76,8 @@ traefik_instance_catalog:
     tcp_entrypoint: ~
     static_routes:
       - { subdomain: vault, scheme: https, port: 8200 }
-      - { subdomain: octopus, scheme: http, port: 8080 }
-      - { subdomain: grafana, scheme: http, port: 3000 }
+      - { subdomain: octopus, scheme: https, port: 8080 }
+      - { subdomain: grafana, scheme: https, port: 3000 }
 
   - name: dev-internal
     https_port: 8444
