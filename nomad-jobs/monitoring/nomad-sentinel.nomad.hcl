@@ -80,7 +80,13 @@ job "nomad-sentinel" {
         timeout  = "2s"
       }
 
-      tags = ["metrics"]
+      tags = [
+        "traefik.enable=true",
+        "traefik.http.routers.nomad-sentinel.rule=Host(`nomad-sentinel-#{Environment}.platform.lefrancis.org`)",
+        "traefik.http.routers.nomad-sentinel.entrypoints=internal",
+        "traefik.http.routers.nomad-sentinel.tls.certresolver=letsencrypt",
+      ]
+    }
 
       connect {
         sidecar_service {

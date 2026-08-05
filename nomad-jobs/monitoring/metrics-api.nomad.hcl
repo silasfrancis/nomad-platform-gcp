@@ -83,7 +83,13 @@ job "metrics-api" {
         timeout  = "2s"
       }
 
-      tags = ["metrics"]
+      tags = [
+        "traefik.enable=true",
+        "traefik.http.routers.metrics-api.rule=Host(`metrics-api-#{Environment}.platform.lefrancis.org`)",
+        "traefik.http.routers.metrics-api.entrypoints=internal",
+        "traefik.http.routers.metrics-api.tls.certresolver=letsencrypt",
+      ]
+    }
 
       connect {
         sidecar_service {

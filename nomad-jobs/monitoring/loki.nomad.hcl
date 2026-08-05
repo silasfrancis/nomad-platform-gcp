@@ -32,7 +32,6 @@ job "loki" {
       value     = "on-demand"
     }
 
-    # CSI, not host — same NOT YET COMPLETE flag as postgres.nomad.hcl.
     volume "loki-data" {
       type            = "csi"
       source          = "loki-data-#{Environment}"
@@ -60,11 +59,18 @@ job "loki" {
         timeout  = "2s"
       }
 
+      # Grafana on mgmt-vm reaches it via traefik-internal's dedicated "internal"
+      # entrypoint, since Grafana isn't in the mesh at all.
+      tags = [
+        "traefik.enable=true",
+        "traefik.http.routers.loki.rule=Host(`loki-#{Environment}.platform.lefrancis.org`)",
+        "traefik.http.routers.loki.entrypoints=internal",
+        "traefik.http.routers.loki.tls.certresolver=letsencrypt",
+      ]
+
       connect {
         sidecar_service {}
 
-        # Receiving-only sidecar (no upstreams of its own) — 100/128
-        # is a workable floor. Hardcoded per your ask, not an Octopus var.
         sidecar_task {
           resources {
             cpu    = 100

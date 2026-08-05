@@ -40,10 +40,6 @@ job "prometheus" {
       value     = "on-demand"
     }
 
-    # CSI, not host — NOT YET COMPLETE, same flag as postgres.nomad.hcl:
-    # the GCE PD CSI driver itself isn't deployed anywhere yet, and the
-    # Nomad client service accounts don't have the disk-management IAM
-    # permissions it needs.
     volume "prometheus-data" {
       type            = "csi"
       source          = "prometheus-data-#{Environment}"
@@ -68,6 +64,14 @@ job "prometheus" {
         interval = "10s"
         timeout  = "2s"
       }
+    }
+
+      tags = [
+        "traefik.enable=true",
+        "traefik.http.routers.prometheus.rule=Host(`prometheus-#{Environment}.platform.lefrancis.org`)",
+        "traefik.http.routers.prometheus.entrypoints=internal",
+        "traefik.http.routers.prometheus.tls.certresolver=letsencrypt",
+      ]
     }
 
     task "prometheus" {

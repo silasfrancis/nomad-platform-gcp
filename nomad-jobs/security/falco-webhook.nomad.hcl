@@ -1,28 +1,7 @@
-# nomad-jobs/security/falco-webhook.nomad.hcl
-#
-# Small Go service — receives Falco's JSON alerts (Falco itself runs
-# as a host systemd service on every client node via Ansible, not a
-# Nomad job at all). Forwards to Loki (label: source=falco) and, for
+# Falco Webhook service: A small Go application that receives Falco's JSON alerts 
+# (Falco itself runs as a host systemd service on every client node via Ansible).
+# Receives alerts from Falco, forwards to Loki (label: source=falco) and, for
 # severity >= WARNING, calls nomad-sentinel over internal HTTP.
-#
-# Now routed through traefik-internal so every client node's Falco
-# config has one stable URL to send alerts to, rather than needing to
-# track this job's allocation as it moves between nodes — see the
-# service {} block's tags below and its own comment for why that
-# route uses a dedicated entrypoint rather than the shared one.
-#
-# Connect mesh retrofit: group-level service {}, two upstreams —
-# loki's remote port (3100) and nomad-sentinel's (8090) don't collide
-# with each other, so no offset needed on either.
-#
-# LOKI_ADDR uses NOMAD_UPSTREAM_ADDR_loki. AI_AGENT_ADDR stays
-# hardcoded at localhost:8090 rather than NOMAD_UPSTREAM_ADDR_nomad-sentinel
-# — that name has a hyphen, and HashiCorp's own docs and a real,
-# confirmed GitHub issue disagree on whether Nomad generates the env
-# var with the literal hyphen or an underscore in its place. Rather
-# than guess, this one stays as a plain hardcoded value matching
-# nomad-sentinel's local_bind_port below — worth revisiting once
-# that's actually verified against this Nomad version.
 
 job "falco-webhook" {
   datacenters = ["#{Datacenter}"]
@@ -59,17 +38,11 @@ job "falco-webhook" {
       }
 
       # Routed through traefik-internal's dedicated "internal"
-      # entrypoint, not the shared "websecure" one both admin-API
-      # routes AND catalog-discovered services use — see the header
-      # comment above and defaults/main.yaml's internal_https_port
-      # field comment in the traefik role for why that distinction is
-      # a real security boundary, not a style choice. This is what
-      # gives Falco (running as a host systemd service on every client
-      # node, configured via Ansible, not a Nomad job at all) a stable
-      # URL to send its alerts to.
+      # entrypoint. This is what gives Falco (running as a host systemd service on every client
+      # node via Ansible) a stable URL to send its alerts to.
       tags = [
         "traefik.enable=true",
-        "traefik.http.routers.falco-webhook.rule=Host(`falco-webhook.platform.lefrancis.org`)",
+        "traefik.http.routers.falco-webhook.rule=Host(`falco-webhook-#{Environment}.platform.lefrancis.org`)",
         "traefik.http.routers.falco-webhook.entrypoints=internal",
         "traefik.http.routers.falco-webhook.tls.certresolver=letsencrypt",
       ]
@@ -109,6 +82,8 @@ job "falco-webhook" {
       env {
         PORT          = "8080"
         LOKI_ADDR     = "${NOMAD_UPSTREAM_ADDR_loki}"
+        # Explicit localhost avoids depending on Nomad's generated
+        # NOMAD_UPSTREAM_ADDR_* variable naming for hyphenated services.
         AI_AGENT_ADDR = "localhost:8090"
       }
 

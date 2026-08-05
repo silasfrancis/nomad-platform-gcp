@@ -58,9 +58,10 @@ default = {
     # nomad-acl-admin-token-{dev,prod} DROPPED — duplicate of nomad-operator-token-{dev,prod}
     # consul-acl-admin-token-{dev,prod} DROPPED — duplicate of consul-operator-token-{dev,prod}
 
-    # --- mgmt: Ongoing Secrets Consumed By Ansible Roles Running On
-    # mgmt-vm (management-vm-sa). ---
+    # mgmt: Ongoing Secrets Consumed By Ansible Roles Running On
+    # mgmt-vm (management-vm-sa).
     "vault-snapshot-token" = { labels = { purpose = "vault", tier = "mgmt" } }
+    "grafana-admin-token"  = { labels = { purpose = "grafana", tier = "mgmt" } }
 
     "octopus-admin-api-key"        = { labels = { purpose = "octopus", tier = "mgmt" } }
     "octopus-master-key"           = { labels = { purpose = "octopus", tier = "mgmt" } }

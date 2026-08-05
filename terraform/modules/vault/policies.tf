@@ -55,3 +55,26 @@ resource "vault_policy" "github_actions" {
     }
   EOT
 }
+
+# Vault snapshots/backup policy
+resource "vault_policy" "snapshot" {
+  name = "snapshot"
+  policy = <<-EOT
+    path "sys/storage/raft/snapshot" {
+      capabilities = [
+        "read",
+        "update",
+        "sudo",
+      ]
+    }
+  EOT
+}
+
+resource "vault_policy" "grafana_admin" {
+  name = "grafana-admin"
+  policy = <<-EOT
+    path "kv/shared/grafana/admin/*" {
+      capabilities = ["read"]
+    }
+  EOT
+}
