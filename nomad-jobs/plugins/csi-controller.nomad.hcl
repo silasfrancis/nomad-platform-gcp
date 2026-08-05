@@ -27,15 +27,6 @@ variable "environment" {
   default = "dev"
 }
 
-variable "artifact_registry" {
-  type        = string
-  description = "Same registry regardless of environment — no per-env default needed, unlike environment/image_tag."
-}
-
-variable "image_tag" {
-  type = string
-}
-
 locals {
   datacenter = "dc-${var.environment}"
 }
@@ -46,7 +37,7 @@ job "csi-controller" {
   type        = "service"
 
   update {
-    max_parallel     = 1
+    max_parallel      = 1
     min_healthy_time = "10s"
     healthy_deadline = "3m"
   }
@@ -72,7 +63,7 @@ job "csi-controller" {
       driver = "docker"
 
       config {
-        image = "${var.artifact_registry}/gcp-compute-persistent-disk-csi-driver:${var.image_tag}"
+        image = "us-central1-docker.pkg.dev/my-project/artifact-registry/gcp-compute-persistent-disk-csi-driver:v1.13.0"
         args = [
           "--endpoint=unix://csi/csi.sock",
           "--run-controller-service=true",

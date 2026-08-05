@@ -41,6 +41,10 @@ locals {
       kv_paths  = ["shared/postgres/admin"]
       db_role   = null
     }
+    "nomad-autoscaler" = {
+      namespace = "plugins"
+      kv_paths  = []
+      db_role   = null
+    }
   }
 }
-

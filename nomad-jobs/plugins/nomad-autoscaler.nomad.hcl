@@ -20,9 +20,6 @@
 # Cluster scaling (MIG resize): needs one policy per MIG, hardcoded
 # into the agent config's own scaling blocks (not derived from
 # anything in a job spec) — this environment's own 2 (ondemand + spot).
-# var.gcp_zone/ondemand_mig_name/spot_mig_name have no defaults,
-# deliberately — literal GCE resource names with no reasonable
-# universal default, unlike environment.
 #
 # NOT YET BUILT, TWO SEPARATE PIECES:
 #
@@ -47,27 +44,11 @@ variable "environment" {
   default = "dev"
 }
 
-variable "gcp_project" {
+variable "project"{
   type = string
 }
 
-variable "artifact_registry" {
-  type = string
-}
-
-variable "image_tag" {
-  type = string
-}
-
-variable "gcp_zone" {
-  type = string
-}
-
-variable "ondemand_mig_name" {
-  type = string
-}
-
-variable "spot_mig_name" {
+variable "zone"{
   type = string
 }
 
@@ -81,7 +62,7 @@ job "nomad-autoscaler" {
   type        = "service"
 
   update {
-    max_parallel     = 1
+    max_parallel      = 1
     min_healthy_time = "10s"
     healthy_deadline = "3m"
   }
@@ -105,15 +86,12 @@ job "nomad-autoscaler" {
       driver = "docker"
 
       config {
-        image = "${var.artifact_registry}/nomad-autoscaler:${var.image_tag}"
+        image = "us-central1-docker.pkg.dev/my-project/artifact-registry/nomad-autoscaler:v0.4.0"
         ports = ["http"]
         args  = ["agent", "-config", "/local/config.hcl"]
       }
 
-      # Workload Identity, not a static Nomad ACL token — consistent
-      # with nomad-sentinel.nomad.hcl. Whatever this identity is bound
-      # to in Nomad's own ACL system (not yet defined) needs at least
-      # node write access for drain-before-scale-in.
+      # Workload Identity, not a static Nomad ACL token
       identity {
         env = true
       }
@@ -178,7 +156,7 @@ scaling "cluster_policy_ondemand" {
   max     = 10
 
   policy {
-    cooldown            = "10m"
+    cooldown             = "10m"
     evaluation_interval  = "1m"
 
     check "blocked_evaluations" {
@@ -191,9 +169,9 @@ scaling "cluster_policy_ondemand" {
     }
 
     target "gce-mig" {
-      project  = "${var.gcp_project}"
-      zone     = "${var.gcp_zone}"
-      mig_name = "${var.ondemand_mig_name}"
+      project  = "${var.project}"
+      zone     = "${var.zone}"
+      mig_name = "nomad-${var.environment}-ondemand" 
     }
   }
 }
@@ -204,7 +182,7 @@ scaling "cluster_policy_spot" {
   max     = 10
 
   policy {
-    cooldown            = "10m"
+    cooldown             = "10m"
     evaluation_interval  = "1m"
 
     check "blocked_evaluations" {
@@ -217,9 +195,9 @@ scaling "cluster_policy_spot" {
     }
 
     target "gce-mig" {
-      project  = "${var.gcp_project}"
-      zone     = "${var.gcp_zone}"
-      mig_name = "${var.spot_mig_name}"
+      project  = "${var.project}"
+      zone     = "${var.zone}"
+      mig_name = "nomad-${var.environment}-spot"
     }
   }
 }

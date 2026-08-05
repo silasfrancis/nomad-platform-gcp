@@ -22,14 +22,6 @@ variable "environment" {
   default = "dev"
 }
 
-variable "artifact_registry" {
-  type = string
-}
-
-variable "image_tag" {
-  type = string
-}
-
 locals {
   datacenter = "dc-${var.environment}"
 }
@@ -40,7 +32,7 @@ job "csi-node" {
   type        = "system"
 
   update {
-    max_parallel     = 1
+    max_parallel      = 1
     min_healthy_time = "10s"
     healthy_deadline = "3m"
   }
@@ -59,7 +51,7 @@ job "csi-node" {
       driver = "docker"
 
       config {
-        image      = "${var.artifact_registry}/gcp-compute-persistent-disk-csi-driver:${var.image_tag}"
+        image      = "us-central1-docker.pkg.dev/my-project/artifact-registry/gcp-compute-persistent-disk-csi-driver:v1.13.0"
         privileged = true
         args = [
           "--endpoint=unix://csi/csi.sock",
