@@ -27,9 +27,6 @@ job "csi-controller" {
       value     = "on-demand"
     }
 
-    # Distributes replicas across nodes if count is ever bumped above
-    # 1 — per the Nomad docs' own recommendation for CSI controller
-    # plugins specifically.
     constraint {
       operator = "distinct_hosts"
       value    = true
@@ -47,8 +44,6 @@ job "csi-controller" {
         ]
       }
 
-      # This id ("gce-pd") is the one thing every volume spec in
-      # csi-volumes/ must reference exactly in its own plugin_id field.
       csi_plugin {
         id        = "gce-pd"
         type      = "controller"
