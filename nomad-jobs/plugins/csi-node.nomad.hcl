@@ -19,10 +19,7 @@ job "csi-node" {
   }
 
   group "csi-node" {
-    # Technically redundant for a system job (Nomad already places at
-    # most one allocation per node), but the Nomad docs' own
-    # plugin-efs example includes this on the node plugin too —
-    # matching that rather than assuming it's unnecessary here.
+
     constraint {
       operator = "distinct_hosts"
       value    = true
@@ -32,7 +29,7 @@ job "csi-node" {
       driver = "docker"
 
       config {
-        image      = "us-central1-docker.pkg.dev/my-project/artifact-registry/gcp-compute-persistent-disk-csi-driver:v1.13.0"
+        image      = "registry.k8s.io/cloud-provider-gcp/gcp-compute-persistent-disk-csi-driver:v1.20.0"
         privileged = true
         args = [
           "--endpoint=unix://csi/csi.sock",
