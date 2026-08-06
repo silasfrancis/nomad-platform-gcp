@@ -1,0 +1,27 @@
+---
+# ansible-grafana-role/grafana/defaults/main.yaml
+#
+# Grafana runs on mgmt-vm via Docker Compose, not Nomad — the one
+# monitoring tool that isn't per-environment, so it doesn't belong to
+# either Nomad cluster. Unlike prior versions of this role, this one
+# templates almost nothing: provisioning configs and dashboards are
+# baked into monitoring/grafana/'s own image at build time (same
+# shared CI pipeline as every other monitoring tool), so all this
+# role actually does is fetch the admin password and run the
+# pre-built image.
+
+grafana_base_dir: /opt/grafana
+grafana_image: "{{ artifact_registry }}/grafana:{{ image_tag }}"
+grafana_port: 3000
+
+# Secret Manager -> Vault token -> Vault KV chain, not a hardcoded
+# secret path or a static token: gcp_secret_vault_token_name is the
+# GCP Secret Manager secret holding a Vault token scoped (via the
+# policy/token resource already created in platform-config) to read
+# exactly kv/shared/grafana/admin and nothing else. This mirrors the
+# "bootstrap-only" use of Secret Manager the architecture doc
+# describes elsewhere — it's the one place a Vault token itself needs
+# bootstrapping from outside Vault.
+gcp_project: "REPLACE-with-actual-project"
+gcp_secret_vault_token_name: "grafana-vault-token"
+vault_addr: "https://vault.platform.lefrancis.org:8443"

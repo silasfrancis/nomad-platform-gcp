@@ -1,0 +1,57 @@
+---
+# ansible-grafana-role/grafana/tasks/main.yaml
+#
+# Much shorter than the prior version of this role — no more
+# templating provisioning configs or dashboards (baked into the image
+# at build time now). This role's whole job is: get a Vault token,
+# use it to read one secret, run the pre-built image.
+#
+# Assumes the "docker" role (already in ansible/roles/) has already
+# run on mgmt-vm — this role doesn't install Docker itself, just
+# depends on it via meta/main.yaml.
+
+- name: Create Grafana Base Directory
+  ansible.builtin.file:
+    path: "{{ grafana_base_dir }}/data"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Read Grafana's Vault Token From GCP Secret Manager
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret={{ gcp_secret_vault_token_name }} --project={{ gcp_project }}
+  register: vault_token_read
+  no_log: true
+  changed_when: false
+
+- name: Read Grafana Admin Password From Vault
+  ansible.builtin.command: vault kv get -field=password kv/shared/grafana/admin
+  environment:
+    VAULT_ADDR: "{{ vault_addr }}"
+    VAULT_TOKEN: "{{ vault_token_read.stdout }}"
+  register: grafana_admin_password_read
+  no_log: true
+  changed_when: false
+
+- name: Set Admin Password Fact
+  ansible.builtin.set_fact:
+    grafana_admin_password: "{{ grafana_admin_password_read.stdout }}"
+  no_log: true
+
+- name: Template Docker Compose File
+  ansible.builtin.template:
+    src: docker-compose.yaml.j2
+    dest: "{{ grafana_base_dir }}/docker-compose.yaml"
+    owner: root
+    group: root
+    mode: "0640"
+  register: compose_file
+
+- name: Pull Grafana Image And (Re)Start The Stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ grafana_base_dir }}"
+    pull: always
+    state: present
+    recreate: "{{ 'always' if compose_file.changed else 'auto' }}"

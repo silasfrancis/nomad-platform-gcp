@@ -1,0 +1,11 @@
+---
+# ansible-grafana-role/playbooks/grafana.yaml
+#
+# Runs against mgmt-vm only — Grafana is the one monitoring tool that
+# isn't per-environment (see meta/main.yaml).
+
+- name: Configure Grafana
+  hosts: mgmt_vm
+  become: true
+  roles:
+    - grafana

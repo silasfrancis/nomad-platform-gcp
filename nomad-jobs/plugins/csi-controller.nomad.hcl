@@ -1,27 +1,3 @@
-# nomad-jobs/plugins/csi-controller.nomad.hcl
-#
-# NOT deployed via Octopus — plugins change rarely enough that a
-# manual, deliberate `nomad job run` (via deploy.sh, IAP-tunneled)
-# beats wiring up a full CI pipeline for something this infrequent.
-# Real Nomad variable blocks instead of #{} Octopus tokens — one file
-# covers both environments via -var overrides at apply time, same
-# mental model as Terraform.
-#
-# GCE Persistent Disk CSI driver, controller half — talks to the GCE
-# API for CreateVolume/DeleteVolume/ControllerPublish, doesn't need to
-# run on every node the way the node plugin does. --run-node-service=false
-# disables the node-side gRPC service on this instance.
-#
-# Mirrors upstream kubernetes-sigs/gcp-compute-persistent-disk-csi-driver
-# into artifact_registry rather than pulling registry.k8s.io directly —
-# same "no images pulled from an external registry" policy the
-# architecture doc already states for Online Boutique (5.1).
-#
-# NOT YET VERIFIED: the GCE service account this runs under needs
-# compute.instances.get/attachDisk/detachDisk plus roles/compute.storageAdmin
-# and roles/iam.serviceAccountUser, per the driver's own install docs —
-# not yet added to the Nomad client service accounts.
-
 variable "environment" {
   type    = string
   default = "dev"

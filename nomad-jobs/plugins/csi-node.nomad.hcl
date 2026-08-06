@@ -1,22 +1,3 @@
-# nomad-jobs/plugins/csi-node.nomad.hcl
-#
-# Same deployment reasoning as csi-controller.nomad.hcl — not Octopus,
-# real Nomad variables instead of #{} tokens.
-#
-# Node half of the same driver — runs on every client node (system
-# job, both on-demand and Spot pools; any node might need to mount a
-# volume). --run-controller-service=false disables the controller-side
-# gRPC service here, mirroring csi-controller.nomad.hcl's split the
-# other way.
-#
-# Needs privileged + host /dev access to actually attach/mount block
-# devices — this is real elevated access, not boilerplate, and is
-# specific to the node plugin; csi-controller.nomad.hcl needs neither.
-#
-# Same id ("gce-pd") as csi-controller.nomad.hcl — a CSI volume's
-# plugin_id must match on both the controller and node plugin for
-# Nomad to treat them as the same driver.
-
 variable "environment" {
   type    = string
   default = "dev"

@@ -1,0 +1,19 @@
+# monitoring/grafana/provisioning/dashboards/dashboards.yaml
+#
+# Baked into the image now — adding a dashboard is "drop a JSON file
+# in provisioning/dashboards/json/, commit, let CI build and deploy
+# it," matching the original reason Grafana runs on this pipeline at
+# all: anyone should be able to add a dashboard via a PR.
+
+apiVersion: 1
+
+providers:
+  - name: default
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

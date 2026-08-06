@@ -5,11 +5,11 @@
 #
 # "frontend" is intentionally absent as a destination — its only real
 # callers are the edge proxy and a load-testing tool, neither of which
-# is a mesh member (see modules/nomad job specs), so it has no
-# legitimate mesh-internal caller and needs no intention entry.
+# is a mesh member, so it has no legitimate mesh-internal caller and needs no intention entry.
+
 locals {
   intentions = {
-    productcatalogservice  = ["frontend", "checkoutservice", "recommendationservice"]
+    productcatalogservice = ["frontend", "checkoutservice", "recommendationservice"]
     currencyservice        = ["frontend", "checkoutservice"]
     cartservice            = ["frontend", "checkoutservice"]
     recommendationservice  = ["frontend"]
@@ -18,7 +18,9 @@ locals {
     adservice              = ["frontend"]
     paymentservice         = ["checkoutservice"]
     emailservice           = ["checkoutservice"]
-    "redis-cart"           = ["cartservice"]
-    postgresql             = ["metrics-api", "nomad-sentinel"]
+    redis                  = ["cartservice"]
+    postgres               = ["metrics-api", "nomad-sentinel"]
+    loki                   = ["falco-webhook"]
+    "nomad-sentinel"       = ["falco-webhook"]
   }
 }

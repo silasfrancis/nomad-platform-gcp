@@ -35,6 +35,21 @@ locals {
       deny  = []
     }
 
+    # IAP tunnel access to traefik-internal's 5 HTTPS entrypoints —
+    # mgmt (8443), dev-internal (8444), prod-internal (8445), and the
+    # two dedicated "internal" entrypoints added for Grafana/falco-webhook
+    # access (8446/8447). Every scripts/open-tunnel.sh invocation
+    # tunnels through IAP to one of these — without this rule, none of
+    # them actually work, same as SSH needing its own rule above.
+    "iap-traefik-internal" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = ["35.235.240.0/20"]
+      destination_ranges  = [local.cidr["subnet-mgmt"]]
+      allow               = [{ protocol = "tcp", ports = ["8443-8447"] }]
+      deny                = []
+    }
+
     "deny-dev-to-prod" = {
       direction           = "INGRESS"
       priority            = 900
@@ -92,21 +107,15 @@ locals {
     }
 
     "vault-internal" = {
-      direction = "INGRESS"
-      priority  = 1000
-      source_ranges = [
-        local.cidr["subnet-dev-private"],
-        local.cidr["subnet-prod-private"],
-      ]
-      destination_ranges = [local.cidr["subnet-mgmt"]]
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-dev-private"], local.cidr["subnet-prod-private"]]
+      destination_ranges  = [local.cidr["subnet-mgmt"]]
       allow               = [{ protocol = "tcp", ports = ["8200"] }]
       deny                = []
     }
 
     "consul-connect-sidecars" = {
-      # Consul Connect Sidecar Data Plane
-      # Sidecar-to-sidecar mTLS traffic between client nodes in the same
-      # environment.
       direction = "INGRESS"
       priority  = 1000
       source_ranges = [
@@ -117,25 +126,100 @@ locals {
         local.cidr["subnet-dev-private"],
         local.cidr["subnet-prod-private"],
       ]
+      allow = [{ protocol = "tcp", ports = ["21000-21255"] }]
+      deny  = []
+    }
+
+    # Everything traefik-internal and mgmt-vm need from each other —
+    # one rule covers both directions since source and destination
+    # CIDRs are identical (same subnet). Vault (8200)/Octopus (8080)/
+    # Grafana (3000) for Traefik's own static routes to them; Traefik's
+    # 5 entrypoints (8443-8447) for anything on mgmt-vm calling back
+    # through Traefik; Vault's dedicated Postgres TCP passthrough
+    # ports (15432/15433).
+    "mgmt-internal" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-mgmt"]]
+      destination_ranges  = [local.cidr["subnet-mgmt"]]
       allow = [
-        { protocol = "tcp", ports = ["21000-21255"] },
+        { protocol = "tcp", ports = ["8200", "8080", "3000", "8443-8447", "15432", "15433"] },
       ]
       deny = []
     }
 
-    # Traefik (public) proxies only frontend:8080 into its own environment's
-    # private subnet (architecture doc section 4.3 — no other backend service
-    # is routed through Traefik).
-    "traefik-public" = {
+    # traefik-internal's dev-internal/prod-internal instances proxy
+    # Grafana's access to Prometheus (9090), Loki (3100), and
+    # falco-webhook (8080) — all three are Nomad-scheduled workloads
+    # inside dev-private/prod-private (discovered via consulCatalog),
+    # not fixed VMs, so this is genuinely a different flow from
+    # vault-internal above (which reaches a real fixed VM).
+    "mgmt-to-env-discovery" = {
       direction     = "INGRESS"
       priority      = 1000
-      source_ranges = ["0.0.0.0/0"]
+      source_ranges = [local.cidr["subnet-mgmt"]]
       destination_ranges = [
-        local.cidr["subnet-dev-public"],
-        local.cidr["subnet-prod-public"],
+        local.cidr["subnet-dev-private"],
+        local.cidr["subnet-prod-private"],
       ]
-      allow = [{ protocol = "tcp", ports = ["80", "443"] }]
+      allow = [{ protocol = "tcp", ports = ["9090", "3100", "8080"] }]
       deny  = []
+    }
+
+    # Prometheus is deliberately not Connect-meshed (it scrapes real
+    # ports directly — required for pull-based scraping), so this is
+    # every real port it needs within its own environment. Explicit
+    # list, matching this file's own CIDR-over-tags philosophy, at the
+    # real cost of needing an addition here whenever a new scraped
+    # service gets a genuinely new port — a broader same-subnet allow
+    # (same reasoning consul-connect-sidecars already uses for its
+    # 256-port range) is the alternative if that maintenance cost
+    # isn't worth it to you.
+    "prometheus-scrape-dev" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-dev-private"]]
+      destination_ranges  = [local.cidr["subnet-dev-private"]]
+      allow = [
+        {
+          protocol = "tcp"
+          ports = [
+            "9100",  # node-exporter
+            "8080",  # frontend, recommendationservice, emailservice, metrics-api
+            "7070",  # cartservice
+            "3550",  # productcatalogservice
+            "7000",  # currencyservice
+            "50051", # paymentservice, shippingservice
+            "5050",  # checkoutservice
+            "9555",  # adservice
+            "8090",  # nomad-sentinel
+          ]
+        },
+      ]
+      deny = []
+    }
+
+    "prometheus-scrape-prod" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-prod-private"]]
+      destination_ranges  = [local.cidr["subnet-prod-private"]]
+      allow = [
+        {
+          protocol = "tcp"
+          ports    = ["9100", "8080", "7070", "3550", "7000", "50051", "5050", "9555", "8090"]
+        },
+      ]
+      deny = []
+    }
+
+    "traefik-public" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = ["0.0.0.0/0"]
+      destination_ranges  = [local.cidr["subnet-dev-public"], local.cidr["subnet-prod-public"]]
+      allow               = [{ protocol = "tcp", ports = ["80", "443"] }]
+      deny                = []
     }
 
     "traefik-backend-dev" = {

@@ -1,0 +1,26 @@
+# {{ grafana_base_dir }}/docker-compose.yaml — Managed By Ansible
+#
+# No provisioning/dashboards volume mount anymore — both are baked
+# into {{ grafana_image }} at build time. Only the persistent data
+# volume (Grafana's own sqlite state) is mounted.
+#
+# Reached via traefik-mgmt's own static route
+# (grafana.platform.lefrancis.org -> mgmt-vm:3000, already in the
+# traefik role's defaults/main.yaml) — Grafana itself needs no TLS of
+# its own, Traefik terminates that.
+
+services:
+  grafana:
+    image: {{ grafana_image }}
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      # NOT 127.0.0.1 — traefik-internal is a separate VM from
+      # mgmt-vm, reaching this over the actual network, not loopback.
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "{{ grafana_admin_password }}"
+      GF_SERVER_ROOT_URL: "https://grafana.platform.lefrancis.org"
+    volumes:
+      - {{ grafana_base_dir }}/data:/var/lib/grafana
