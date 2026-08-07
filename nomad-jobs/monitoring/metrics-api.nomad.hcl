@@ -1,58 +1,17 @@
-# nomad-jobs/monitoring/metrics-api.nomad.hcl
-#
-# Blue-green via Nomad's own native mechanism — canary set equal to
-# count, not a separate job name. This resolves the ambiguity flagged
-# earlier (no Traefik route exists for this service, so a Traefik-side
-# blue/green pointer flip was never actually the right mechanism): the
-# new version runs fully alongside the old one under the SAME job/
-# service name, gets validated, and `nomad job promote` cuts over
-# atomically by tearing down every old allocation. No #{DeploymentSlot}
-# variable needed anywhere.
-#
-# Vault role is bare "metrics-api" — no environment suffix. Dev/prod
-# separation happens because they're registered under two entirely
-# separate JWT backends (jwt-nomad-dev vs jwt-nomad-prod), not because
-# the role name itself varies.
-#
-# #{VaultDbRole} is a new per-(project,environment) Octopus variable —
-# db_role in vault_consumers is "metrics-api", and the actual Vault
-# database role name follows an asymmetric convention: prod gets the
-# bare name ("metrics-api"), dev gets a "-dev" suffix ("metrics-api-dev").
-# That's not something Octopus's plain text substitution can compute
-# via a ternary, so it's a literal value set once per environment
-# rather than derived.
-#
-# Connect mesh: one upstream (postgres, no environment suffix — see
-# postgres.nomad.hcl for why). Using NOMAD_UPSTREAM_ADDR_postgres
-# rather than hardcoding localhost:5432 removes any chance of the
-# local_bind_port and the app's env var silently drifting out of sync.
-#
-# DATABASE_URL correctness fix: this template has NO env = true. Nomad
-# documents plainly that env = true + change_mode = "noop" is silently
-# a no-op for updates — the file gets rewritten with the new
-# credential when Vault rotates the lease, but a running container's
-# actual environment is fixed at exec time and never updates live.
-# Since we deliberately don't want a restart on every 1h rotation, the
-# app itself must read this file directly off disk on every new
-# connection attempt (not os.environ) — this is the "read fresh, never
-# cached" behavior the architecture doc describes, now actually wired
-# correctly rather than just described that way. PORT lives in its own
-# plain env {} block instead, since it never changes and doesn't need
-# any of this.
-
 job "metrics-api" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
+  # Roll allocations one at a time so each replacement can become healthy
+  # before the next allocation is restarted during Vault credential rotation.
   update {
-    canary            = #{ReplicaCount}
-    max_parallel      = #{ReplicaCount}
+    canary            = 0
+    max_parallel      = 1
     min_healthy_time  = "30s"
     healthy_deadline  = "5m"
     progress_deadline = "10m"
     auto_revert       = true
-    auto_promote      = false
   }
 
   group "metrics-api" {
@@ -128,17 +87,17 @@ job "metrics-api" {
         PORT = "8080"
       }
 
-      # File-only, deliberately no env = true — see header comment.
-      # The app must read this file directly on every connection
-      # attempt to actually pick up a rotated credential.
       template {
         data = <<EOF
-{{ with secret "database/creds/#{VaultDbRole}" }}
+{{ with secret "database/creds/metrics-api-#{Environment}" }}
 DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "NOMAD_UPSTREAM_ADDR_postgres" }}/metrics?sslmode=disable
 {{ end }}
 EOF
-        destination = "secrets/database-url.env"
-        change_mode = "noop"
+        destination = "secrets/metrics-api-config.env"
+        env         = true
+        # Vault dynamically rotates credentials, so restart the allocation when secrets
+        # change to ensure the replacement allocation picks up the new credentials.
+        change_mode = "restart"
       }
 
       resources {

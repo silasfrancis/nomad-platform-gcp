@@ -1,16 +1,3 @@
-# nomad-jobs/monitoring/loki.nomad.hcl
-#
-# One instance per environment — receives logs from that
-# environment's Grafana Alloy instances. Config is baked into its own
-# image (monitoring/loki/ source directory, own Dockerfile wrapping
-# the upstream grafana/loki image + a loki.yml) — same pattern as
-# every other job now, not templated at deploy time.
-#
-# Connect mesh retrofit (unrelated to the config-baking change above):
-# group-level service {}, receiving-only — falco-webhook reaches this
-# via its own upstream. Alloy also calls this, but see alloy.nomad.hcl
-# for why that side isn't actually wired up yet.
-
 job "loki" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

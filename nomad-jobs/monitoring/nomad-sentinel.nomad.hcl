@@ -1,54 +1,17 @@
-# nomad-jobs/monitoring/nomad-sentinel.nomad.hcl
-#
-# Same native blue-green mechanism as metrics-api.nomad.hcl — see that
-# file's header comment for the full reasoning. No #{DeploymentSlot}.
-#
-# REMEDIATION_MODE has no default anywhere in this file, on purpose —
-# per architecture doc 7.3, the agent crash-fails at startup if it's
-# invalid or unset. #{RemediationMode} must be "execute" in dev's
-# Octopus variable set and "propose" in prod's — never implicit. Lives
-# in its own plain env {} block along with PORT, since neither of
-# these ever rotates.
-#
-# KV path fixed to kv/data/{env}/nomad-sentinel/config — matches what
-# vault_consumers actually grants; the job previously read from
-# ai-agent/config, which doesn't match the granted path at all.
-#
-# #{VaultDbRole} — same pattern as metrics-api.nomad.hcl. db_role in
-# vault_consumers is "monitoring" for this consumer; prod resolves to
-# the bare name ("monitoring"), dev to "monitoring-dev". Set once per
-# environment as a literal Octopus variable, not computed.
-#
-# NOMAD_TOKEN no longer comes from this KV secret at all — the
-# platform uses Nomad Workload Identity by default (see
-# nomad_acl_policy.nomad_sentinel), so this job authenticates to
-# Nomad's own API using its own signed identity via identity { env = true }
-# below, not a static token stored anywhere in Vault. The KV secret's
-# actual shape needs updating to match (drop the nomad_token field —
-# only gemini_api_key/slack_webhook_url remain).
-#
-# Two separate template blocks, deliberately: the static KV secrets
-# (GEMINI_API_KEY, SLACK_WEBHOOK_URL) rarely change and are fine as
-# real env = true vars with the default restart behavior.
-# HISTORY_DATABASE_URL is the one dynamic, hourly-rotating value — its
-# own template, no env = true, change_mode = "noop" — same reasoning
-# as metrics-api.nomad.hcl's DATABASE_URL: the app must read this
-# specific file directly on every connection attempt, not os.environ,
-# or a rotated credential never actually reaches the running process.
-
 job "nomad-sentinel" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
   type        = "service"
 
+  # Roll allocations one at a time so each replacement can become healthy
+  # before the next allocation is restarted during Vault credential rotation.
   update {
-    canary            = #{ReplicaCount}
-    max_parallel      = #{ReplicaCount}
+    canary            = 0
+    max_parallel      = 1
     min_healthy_time  = "30s"
     healthy_deadline  = "5m"
     progress_deadline = "10m"
     auto_revert       = true
-    auto_promote      = false
   }
 
   group "nomad-sentinel" {
@@ -133,27 +96,24 @@ job "nomad-sentinel" {
         REMEDIATION_MODE = "#{RemediationMode}"
       }
 
-      template {
-        data = <<EOF
+    template {
+      data = <<EOF
 {{ with secret "kv/data/#{Environment}/nomad-sentinel/config" }}
 GEMINI_API_KEY={{ .Data.data.gemini_api_key }}
 SLACK_WEBHOOK_URL={{ .Data.data.slack_webhook_url }}
 {{ end }}
-EOF
-        destination = "secrets/nomad-sentinel-config.env"
-        env         = true
-      }
 
-      # File-only, deliberately no env = true — see header comment.
-      template {
-        data = <<EOF
-{{ with secret "database/creds/#{VaultDbRole}" }}
+{{ with secret "database/creds/monitoring-#{Environment}" }}
 HISTORY_DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "NOMAD_UPSTREAM_ADDR_postgres" }}/monitoring?sslmode=disable
 {{ end }}
 EOF
-        destination = "secrets/history-database-url.env"
-        change_mode = "noop"
-      }
+
+      destination = "secrets/nomad-sentinel-config.env"
+      env         = true
+      # Vault dynamically rotates credentials, so restart the allocation when secrets
+      # change to ensure the replacement allocation picks up the new credentials.
+      change_mode = "restart"
+    }
 
       resources {
         cpu    = #{Cpu}

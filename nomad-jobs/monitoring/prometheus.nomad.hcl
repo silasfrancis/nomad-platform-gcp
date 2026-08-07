@@ -1,10 +1,3 @@
-# Prometheus config is baked into its own image (monitoring/prometheus/
-# source directory).
-# Deliberately not Connect-meshed: Prometheus scrapes every target's
-# real port directly, it isn't
-# making the kind of app-to-app call Connect upstreams are for.
-
-
 job "prometheus" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
