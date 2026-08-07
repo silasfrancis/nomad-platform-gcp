@@ -18,7 +18,7 @@ job "node-exporter" {
   group "node-exporter" {
     network {
       port "http" {
-        to = 9100
+        static = 9100
       }
     }
 

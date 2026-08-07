@@ -210,17 +210,10 @@ locals {
       allow = [
         {
           protocol = "tcp"
-          ports = [
-            "9100",  # node-exporter
-            "8080",  # frontend, recommendationservice, emailservice, metrics-api
-            "7070",  # cartservice
-            "3550",  # productcatalogservice
-            "7000",  # currencyservice
-            "50051", # paymentservice, shippingservice
-            "5050",  # checkoutservice
-            "9555",  # adservice
-            "8090",  # nomad-sentinel
-          ]
+          ports =  [
+              "9100",          # node-exporter
+              "20000-32000",   # Nomad dynamic allocation ports
+            ]
         },
       ]
       deny = []
@@ -234,7 +227,10 @@ locals {
       allow = [
         {
           protocol = "tcp"
-          ports    = ["9100", "8080", "7070", "3550", "7000", "50051", "5050", "9555", "8090"]
+          ports =  [
+              "9100",          # node-exporter
+              "20000-32000",   # Nomad dynamic allocation ports
+            ]
         },
       ]
       deny = []
