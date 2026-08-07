@@ -1,0 +1,64 @@
+# Consul catalog SD for services running in each environemts nomad cluster 
+# and static configs for services running on static vms (traefik)
+
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Node Exporter is tagged with consul service name "node-exporter".
+  - job_name: node-exporter
+    consul_sd_configs:
+      - server: "localhost:8500"
+        token: "${CONSUL_PROMETHEUS_TOKEN}"
+        services: ["node-exporter"]
+
+  # traefik traefik targets with static configs pointing to the traefik vms
+  - job_name: traefik-public
+    static_configs:
+      - targets:
+          - "${TRAEFIK_PUBLIC_IP}:${TRAEFIK_PUBLIC_PORT}"
+    metrics_path: /metrics
+
+  - job_name: traefik-internal
+    static_configs:
+      - targets:
+          - "${TRAEFIK_INTERNAL_IP}:${TRAEFIK_INTERNAL_PORT}"
+    metrics_path: /metrics
+
+  # Every application service (Online Boutique + metrics-api +
+  # nomad-sentinel) shares the "metrics" Consul tag — one job here
+  # covers all of them rather than one entry per service, so a new
+  # boutique service never needs a Prometheus config change to start
+  # being scraped.
+  - job_name: application-services
+    consul_sd_configs:
+      - server: "localhost:8500"
+        token: "${CONSUL_PROMETHEUS_TOKEN}"
+        tags: ["metrics"]
+    relabel_configs:
+      - source_labels: [__meta_consul_service]
+        target_label: service
+
+  # Nomad's own /metrics endpoint, via Consul catalog SD against
+  # the "nomad" service. Nomad API is registered as a consul service
+  # on the nomad servers.
+  - job_name: nomad
+    consul_sd_configs:
+      - server: "localhost:8500"
+        token: "${CONSUL_PROMETHEUS_TOKEN}"
+        services: ["nomad"]
+    metrics_path: /v1/metrics
+    params:
+      format: ["prometheus"]
+
+  # Consul's own /v1/agent/metrics 
+  - job_name: consul
+    consul_sd_configs:
+      - server: "localhost:8500"
+        token: "${CONSUL_PROMETHEUS_TOKEN}"
+        services: ["consul"]
+    metrics_path: /v1/agent/metrics
+    params:
+      format: ["prometheus"]

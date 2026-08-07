@@ -47,6 +47,10 @@ job "recommendationservice" {
         timeout  = "2s"
       }
 
+      tags = [
+        "metrics"
+      ]
+
       connect {
         sidecar_service {
           proxy {

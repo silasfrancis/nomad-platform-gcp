@@ -31,6 +31,11 @@ entryPoints:
     address: ":{{ traefik_instance.internal_https_port }}"
 {% endif %}
 
+{% if traefik_instance.metrics_port %}
+  metrics:
+    address: ":{{ traefik_instance.metrics_port }}"
+{% endif %}
+
 providers:
 {% if traefik_instance.static_routes | length > 0 %}
   file:
@@ -67,3 +72,7 @@ certificatesResolvers:
 
 api:
   dashboard: false
+
+metrics:
+  prometheus:
+    entryPoint: metrics

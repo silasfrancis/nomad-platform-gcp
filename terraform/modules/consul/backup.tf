@@ -17,7 +17,7 @@ data "consul_acl_token_secret_id" "consul_snapshot" {
 
 resource "vault_kv_secret_v2" "consul_snapshot_token" {
   mount    = "kv"
-  name     = "backup/${var.environment}/consul-token"
+  name     = "${var.environment}/backup/consul-token"
   data_json = jsonencode({
     token = "${data.consul_acl_token_secret_id.consul_snapshot.secret_id}"
   })

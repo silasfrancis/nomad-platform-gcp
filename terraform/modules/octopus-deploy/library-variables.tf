@@ -32,6 +32,26 @@ locals {
     prod = var.nomad_address_prod
   }
 
+  traefik_public_ip_by_env = {
+    dev  = var.traefik_public_ip_dev
+    prod = var.traefik_public_ip_prod
+  }
+
+  traefik_public_port_by_env = {
+    dev  = var.traefik_public_port_dev
+    prod = var.traefik_public_port_prod
+  }
+
+  traefik_internal_ip_by_env = {
+    dev  = var.traefik_internal_ip_dev
+    prod = var.traefik_internal_ip_prod
+  }
+
+  traefik_internal_port_by_env = {
+    dev  = var.traefik_internal_port_dev
+    prod = var.traefik_internal_port_prod
+  }
+
   # Base image path — same registry regardless of environment, unlike
   # everything else that's split dev/prod. One repo, images promoted
   # through environments by tag, not rebuilt — per the architecture
@@ -69,6 +89,58 @@ resource "octopusdeploy_variable" "nomad_ca_cert" {
   type         = "Sensitive"
   is_sensitive = true
   value        = data.google_secret_manager_secret_version.ca_cert[each.key].secret_data
+  scope {
+    environments = [local.env_by_key[each.key]]
+  }
+}
+
+resource "octopusdeploy_variable" "traefik_public_ip" {
+  for_each = toset(["dev", "prod"])
+
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "TraefikPublicIp"
+  type     = "String"
+  value    = local.traefik_public_ip_by_env[each.key]
+
+  scope {
+    environments = [local.env_by_key[each.key]]
+  }
+}
+
+resource "octopusdeploy_variable" "traefik_public_port" {
+  for_each = toset(["dev", "prod"])
+
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "TraefikPublicPort"
+  type     = "String"
+  value    = local.traefik_public_port_by_env[each.key]
+
+  scope {
+    environments = [local.env_by_key[each.key]]
+  }
+}
+
+resource "octopusdeploy_variable" "traefik_internal_ip" {
+  for_each = toset(["dev", "prod"])
+
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "TraefikInternalIp"
+  type     = "String"
+  value    = local.traefik_internal_ip_by_env[each.key]
+
+  scope {
+    environments = [local.env_by_key[each.key]]
+  }
+}
+
+resource "octopusdeploy_variable" "traefik_internal_port" {
+  for_each = toset(["dev", "prod"])
+
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "TraefikInternalPort"
+  type     = "String"
+  value    = local.traefik_internal_port_by_env[each.key]
+
   scope {
     environments = [local.env_by_key[each.key]]
   }

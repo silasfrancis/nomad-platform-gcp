@@ -74,6 +74,8 @@ traefik_instance_catalog:
     catalog_exposed_by_default: false
     backend_instance_filter: "mgmt-vm"
     tcp_entrypoint: ~
+    internal_https_port: ~
+    metrics_port: ~
     static_routes:
       - { subdomain: vault, scheme: https, port: 8200 }
       - { subdomain: octopus, scheme: https, port: 8080 }
@@ -88,7 +90,8 @@ traefik_instance_catalog:
     catalog_exposed_by_default: false
     backend_instance_filter: "nomad-dev-server-"
     tcp_entrypoint: { name: postgres, port: 15432 }
-    internal_https_port: 15434
+    internal_https_port: 8446
+    metrics_port: 8082
     static_routes:
       - { subdomain: nomad-dev, scheme: http, port: 4646 }
       - { subdomain: consul-dev, scheme: http, port: 8500 }
@@ -102,7 +105,8 @@ traefik_instance_catalog:
     catalog_exposed_by_default: false
     backend_instance_filter: "nomad-prod-server-"
     tcp_entrypoint: { name: postgres, port: 15433 }
-    internal_https_port: 15435
+    internal_https_port: 8447
+    metrics_port: 8083
     static_routes:
       - { subdomain: nomad-prod, scheme: http, port: 4646 }
       - { subdomain: consul-prod, scheme: http, port: 8500 }
@@ -114,6 +118,7 @@ traefik_instance_catalog:
     domain: dev.boutique.lefrancis.org
     catalog_env: dev
     catalog_exposed_by_default: false
+    metrics_port: 8082
     static_routes: []
 
   - name: prod-public
@@ -123,6 +128,7 @@ traefik_instance_catalog:
     domain: boutique.lefrancis.org
     catalog_env: prod
     catalog_exposed_by_default: false
+    metrics_port: 8082
     static_routes: []
 
 # Set by the calling playbook — never left at this empty default. See

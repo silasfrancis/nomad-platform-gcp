@@ -31,6 +31,11 @@ locals {
       kv_paths  = ["nomad-sentinel/config"]
       db_role   = "monitoring"
     }
+    "prometheus" = {
+      namespace = "monitoring"
+      kv_paths  = ["prometheus/config"]
+      db_role   = null
+    }
     "consul-snapshot" = {
       namespace = "operations"
       kv_paths  = ["backup/consul-token"]

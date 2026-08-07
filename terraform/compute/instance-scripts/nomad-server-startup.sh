@@ -114,6 +114,26 @@ EOF
 chown consul:consul /etc/consul.d/99-instance.hcl
 chmod 0640 /etc/consul.d/99-instance.hcl
 
+# Register nomad api as a consul service
+cat > /etc/consul.d/nomad.hcl <<EOF
+service {
+  name    = "nomad"
+  id      = "nomad-${NODE_NAME}"
+  address = "${PRIVATE_IP}"
+  port    = 4646
+
+  check {
+    name     = "nomad-metrics"
+    http     = "http://127.0.0.1:4646/v1/metrics?format=prometheus"
+    interval = "10s"
+    timeout  = "5s"
+  }
+}
+EOF
+
+chown consul:consul /etc/consul.d/nomad.hcl
+chmod 0640 /etc/consul.d/nomad.hcl
+
 # --- Nomad Instance Config ---
 cat > /etc/nomad.d/99-instance.hcl <<EOF
 datacenter = "${DATACENTER}"
@@ -145,6 +165,7 @@ vault {
 EOF
 chown nomad:nomad /etc/nomad.d/99-instance.hcl
 chmod 0640 /etc/nomad.d/99-instance.hcl
+
 
 # --- Start Consul, Then Nomad ---
 systemctl restart consul

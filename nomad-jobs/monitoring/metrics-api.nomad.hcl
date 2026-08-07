@@ -84,6 +84,7 @@ job "metrics-api" {
       }
 
       tags = [
+        "metrics"
         "traefik.enable=true",
         "traefik.http.routers.metrics-api.rule=Host(`metrics-api-#{Environment}.platform.lefrancis.org`)",
         "traefik.http.routers.metrics-api.entrypoints=internal",

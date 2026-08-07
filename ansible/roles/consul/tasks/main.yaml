@@ -38,9 +38,53 @@
     - "{{ consul_log_dir }}"
     - "{{ consul_tls_dir }}"
 
-# (consul-data disk block unchanged — mgmt-vm's two agents are both
-# consul_mode: client, so this whole block is skipped for them, same
-# as any other client agent)
+# consul-data Persistent Disk (Server Mode Only)
+# Consul Servers Run Their Own Raft Log Here — Job Specs, Evaluations,
+# Allocations (Current + Historical), Deployment Tracking, ACL
+# Tokens/Policies. Consul Clients Don't Run Raft (No Persistent State Worth
+# Protecting), So This Only Applies When consul_mode == "server". Job Specs
+# Alone Are Recoverable From Git If Lost — Allocation History, Deployment
+# State, And ACLs Are Not.
+#
+# Assumes The Terraform Disk Resource Is Named "consul-data" — Confirm
+# This Matches Whatever Name You Actually Used.
+- name: Check If Consul Data Disk Is Already Formatted
+  ansible.builtin.command: blkid /dev/disk/by-id/google-consul-data
+  register: consul_disk_blkid
+  failed_when: false
+  changed_when: false
+  when: consul_mode == 'server'
+
+- name: Format Nomad Data Disk (Only If Unformatted)
+  community.general.filesystem:
+    fstype: ext4
+    dev: /dev/disk/by-id/google-nomad-data
+  when: nomad_mode == 'server' and nomad_disk_blkid.rc != 0
+
+- name: Ensure Nomad Data Mount Point Exists
+  ansible.builtin.file:
+    path: "{{ consul_data_dir }}"
+    state: directory
+    mode: "0750"
+  when: nomad_mode == 'server'
+
+- name: Mount Nomad Data Disk
+  ansible.posix.mount:
+    path: "{{ consul_data_dir }}"
+    src: /dev/disk/by-id/google-consul-data
+    fstype: ext4
+    opts: defaults,nofail
+    state: mounted
+  when: consul_mode == 'server'
+
+- name: Ensure Consul Data Directory Ownership After Mount
+  ansible.builtin.file:
+    path: "{{ consul_data_dir }}"
+    owner: "{{ consul_user }}"
+    group: "{{ consul_group }}"
+    mode: "0750"
+    state: directory
+  when: consul_mode == 'server'
 
 - name: Ensure Consul Data Directory Exists (Client Mode — No Persistent Disk)
   ansible.builtin.file:

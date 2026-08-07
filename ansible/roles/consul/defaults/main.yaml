@@ -3,12 +3,6 @@ consul_version: "2.0.2"
 
 consul_mode: "client"
 
-# Set explicitly per include_role call ("dev" or "prod") only when
-# running two parallel agents on one host (mgmt-vm). Left empty for
-# normal single-instance hosts (nomad-server, nomad-client-mig), where
-# nothing here changes.
-consul_instance_name: ""
-
 # true ONLY for mgmt-vm. Real Nomad server/client hosts get their TLS
 # materials, gossip key, and agent token from their own GCE startup
 # script at every boot (see nomad-client-mig's startup script) —
@@ -22,10 +16,10 @@ consul_user: consul
 consul_group: consul
 
 consul_bin_dir: /usr/local/bin
-consul_config_dir: "/etc/consul{{ '-' + consul_instance_name if consul_instance_name else '' }}.d"
+consul_config_dir: "/etc/consul.d"
 consul_tls_dir: "{{ consul_config_dir }}/tls"
-consul_data_dir: "/opt/consul{{ '-' + consul_instance_name if consul_instance_name else '' }}/data"
-consul_log_dir: "/var/log/consul{{ '-' + consul_instance_name if consul_instance_name else '' }}"
+consul_data_dir: "/opt/consul/data"
+consul_log_dir: "/var/log/consul"
 
 consul_download_url: "https://releases.hashicorp.com/consul/{{ consul_version }}/consul_{{ consul_version }}_linux_amd64.zip"
 

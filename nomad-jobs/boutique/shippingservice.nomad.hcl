@@ -45,6 +45,10 @@ job "shippingservice" {
         timeout  = "2s"
       }
 
+      tags = [
+        "metrics"
+      ]
+
       connect {
         sidecar_service {}
 

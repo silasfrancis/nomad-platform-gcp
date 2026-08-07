@@ -130,6 +130,33 @@ locals {
       deny  = []
     }
 
+    "traefik-public" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = ["0.0.0.0/0"]
+      destination_ranges  = [local.cidr["subnet-dev-public"], local.cidr["subnet-prod-public"]]
+      allow               = [{ protocol = "tcp", ports = ["80", "443"] }]
+      deny                = []
+    }
+
+    "traefik-backend-dev" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-dev-public"]]
+      destination_ranges  = [local.cidr["subnet-dev-private"]]
+      allow               = [{ protocol = "tcp", ports = ["8080"] }]
+      deny                = []
+    }
+
+    "traefik-backend-prod" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-prod-public"]]
+      destination_ranges  = [local.cidr["subnet-prod-private"]]
+      allow               = [{ protocol = "tcp", ports = ["8080"] }]
+      deny                = []
+    }
+
     # Everything traefik-internal and mgmt-vm need from each other —
     # one rule covers both directions since source and destination
     # CIDRs are identical (same subnet). Vault (8200)/Octopus (8080)/
@@ -213,31 +240,123 @@ locals {
       deny = []
     }
 
-    "traefik-public" = {
+    "prometheus-to-nomad-dev" = {
       direction           = "INGRESS"
       priority            = 1000
-      source_ranges       = ["0.0.0.0/0"]
-      destination_ranges  = [local.cidr["subnet-dev-public"], local.cidr["subnet-prod-public"]]
-      allow               = [{ protocol = "tcp", ports = ["80", "443"] }]
-      deny                = []
+      source_ranges      = [local.cidr["subnet-dev-private"]]
+      destination_ranges = [local.cidr["subnet-dev-private"]]
+
+      allow = [
+        {
+          protocol = "tcp"
+          ports    = ["4646"]
+        },
+      ]
+
+      deny = []
     }
 
-    "traefik-backend-dev" = {
+    "prometheus-to-nomad-prod" = {
       direction           = "INGRESS"
       priority            = 1000
-      source_ranges       = [local.cidr["subnet-dev-public"]]
-      destination_ranges  = [local.cidr["subnet-dev-private"]]
-      allow               = [{ protocol = "tcp", ports = ["8080"] }]
-      deny                = []
+      source_ranges      = [local.cidr["subnet-prod-private"]]
+      destination_ranges = [local.cidr["subnet-prod-private"]]
+
+      allow = [
+        {
+          protocol = "tcp"
+          ports    = ["4646"]
+        },
+      ]
+
+      deny = []
     }
 
-    "traefik-backend-prod" = {
+    "prometheus-to-consul-dev" = {
       direction           = "INGRESS"
       priority            = 1000
-      source_ranges       = [local.cidr["subnet-prod-public"]]
-      destination_ranges  = [local.cidr["subnet-prod-private"]]
-      allow               = [{ protocol = "tcp", ports = ["8080"] }]
-      deny                = []
+      source_ranges      = [local.cidr["subnet-dev-private"]]
+      destination_ranges = [local.cidr["subnet-dev-private"]]
+
+      allow = [
+        {
+          protocol = "tcp"
+          ports    = ["8500"]
+        },
+      ]
+
+      deny = []
+    }
+
+    "prometheus-to-consul-prod" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges      = [local.cidr["subnet-prod-private"]]
+      destination_ranges = [local.cidr["subnet-prod-private"]]
+
+      allow = [
+        {
+          protocol = "tcp"
+          ports    = ["8500"]
+        },
+      ]
+
+      deny = []
+    }
+
+      "prometheus-to-traefik-internal" = {
+        direction = "INGRESS"
+        priority  = 1000
+
+        source_ranges = [
+          local.cidr["subnet-dev-private"],
+          local.cidr["subnet-prod-private"],
+        ]
+
+        destination_ranges = [
+          local.cidr["subnet-mgmt"],
+        ]
+
+        allow = [
+          {
+            protocol = "tcp"
+            ports    = ["8082", "8083"]
+          },
+        ]
+
+        deny = []
+      }
+
+    "prometheus-to-traefik-public-dev" = {
+      direction          = "INGRESS"
+      priority           = 1000
+      source_ranges      = [local.cidr["subnet-dev-private"]]
+      destination_ranges = [local.cidr["subnet-dev-public"]]
+
+      allow = [
+        {
+          protocol = "tcp"
+          ports    = ["8082"]
+        },
+      ]
+
+      deny = []
+    }
+
+    "prometheus-to-traefik-public-prod" = {
+      direction          = "INGRESS"
+      priority           = 1000
+      source_ranges      = [local.cidr["subnet-prod-private"]]
+      destination_ranges = [local.cidr["subnet-prod-public"]]
+
+      allow = [
+        {
+          protocol = "tcp"
+          ports    = ["8082"]
+        },
+      ]
+
+      deny = []
     }
   }
 }

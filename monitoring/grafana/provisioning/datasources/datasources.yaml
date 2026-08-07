@@ -1,13 +1,3 @@
-# monitoring/grafana/provisioning/datasources/datasources.yaml
-#
-# Baked into the image at build time now, not Ansible-templated —
-# same "own folder, own Dockerfile, one shared CI pipeline" pattern as
-# every other monitoring tool. Nothing here varies by environment or
-# needs a secret, so there's nothing that actually required runtime
-# templating in the first place; the only genuine secret (the admin
-# password) is handled separately by the Ansible role at container
-# start, not baked in.
-#
 # All 4 reached through traefik-internal's dedicated "internal"
 # entrypoint (never the shared "websecure" one) — real Let's Encrypt
 # certs throughout, so no custom TLS config needed on any of them.
@@ -19,14 +9,14 @@ datasources:
     type: prometheus
     access: proxy
     url: "https://prometheus-dev.platform.lefrancis.org:8446"
-    isDefault: true
+    isDefault: false
     editable: false
 
   - name: "Prometheus (prod)"
     type: prometheus
     access: proxy
     url: "https://prometheus-prod.platform.lefrancis.org:8447"
-    isDefault: false
+    isDefault: true
     editable: false
 
   - name: "Loki (dev)"

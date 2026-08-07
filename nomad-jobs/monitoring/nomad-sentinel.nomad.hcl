@@ -81,6 +81,7 @@ job "nomad-sentinel" {
       }
 
       tags = [
+        "metrics"
         "traefik.enable=true",
         "traefik.http.routers.nomad-sentinel.rule=Host(`nomad-sentinel-#{Environment}.platform.lefrancis.org`)",
         "traefik.http.routers.nomad-sentinel.entrypoints=internal",
