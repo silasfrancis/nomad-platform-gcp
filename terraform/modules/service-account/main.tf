@@ -33,7 +33,8 @@ locals {
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
         "roles/compute.viewer",
-        "roles/compute.storageAdmin"
+        "roles/compute.storageAdmin",
+        "roles/iam.serviceAccountUser"
       ]
     }
     "nomad-client-sa-dev" = {
@@ -43,7 +44,8 @@ locals {
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
         "roles/compute.viewer",
-        "roles/compute.storageAdmin"
+        "roles/compute.storageAdmin",
+        "roles/iam.serviceAccountUser"
       ]
     }
     "management-vm-sa" = {

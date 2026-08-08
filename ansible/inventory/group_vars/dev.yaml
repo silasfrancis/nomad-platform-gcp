@@ -3,6 +3,7 @@
 # inventory/gcp.yaml's keyed_groups). Does NOT Apply To mgmt-vm, Which Has
 # No env Label Since It Serves Both Environments.
 
+environment: "dev"
 nomad_datacenter: "dc-dev"
 consul_datacenter: "dc-dev"
 vault_jwt_auth_backend_path: "jwt-nomad-dev"

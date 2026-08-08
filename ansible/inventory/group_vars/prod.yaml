@@ -1,8 +1,8 @@
 ---
 # Applies Automatically To Any Host Labeled env=prod In GCP (See
-# inventory/gcp.yaml's keyed_groups). Does NOT Apply To mgmt-vm, Which Has
-# No env Label Since It Serves Both Environments.
+# inventory/gcp.yaml's keyed_groups).
 
+environment: "prod"
 nomad_datacenter: "dc-prod"
 consul_datacenter: "dc-prod"
 vault_jwt_auth_backend_path: "jwt-nomad-prod"
