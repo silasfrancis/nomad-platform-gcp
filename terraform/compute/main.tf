@@ -51,6 +51,7 @@ locals {
       additional_disks = [
         { name = "vault-data", size_gb = 20 },
         { name = "sql-data",   size_gb = 30 },
+        { name = "mgmt-vm-docker-data",   size_gb = 50 },
       ]
     }
     "traefik-internal" = {

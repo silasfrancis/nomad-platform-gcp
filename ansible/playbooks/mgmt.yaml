@@ -16,6 +16,13 @@
     docker_extra_group_users: ["gh-runner"]
     traefik_mode: internal
     common_install_gcloud_cli: true
+  tasks:
+    - name: Mount Docker Data Disk On mgmt-vm
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: mount-docker-data-disk
+      vars:
+        docker_data_disk_name: mgmt-vm-docker-data
   roles:
     - common
     - vault

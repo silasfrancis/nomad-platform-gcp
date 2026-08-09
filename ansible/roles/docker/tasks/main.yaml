@@ -11,11 +11,29 @@
     dest: /etc/apt/keyrings/docker.asc
     mode: "0644"
 
-- name: Add Docker Apt Repository
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+- name: Ensure Prerequisite Packages For The Docker Apt Repo
+  ansible.builtin.apt:
+    name: "{{ docker_prereq_packages }}"
     state: present
-    filename: docker
+    update_cache: true
+
+- name: Detect Dpkg Architecture For The Docker Apt Repo
+  ansible.builtin.command: dpkg --print-architecture
+  register: dpkg_arch
+  changed_when: false
+
+- name: Remove Legacy One-Line Docker Apt Repo File (If Present From An Older Role Version)
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/docker.list
+    state: absent
+
+- name: Add Docker Apt Repository
+  ansible.builtin.template:
+    src: docker.sources.j2
+    dest: /etc/apt/sources.list.d/docker.sources
+    owner: root
+    group: root
+    mode: "0644"
 
 - name: Install Docker Packages
   ansible.builtin.apt:

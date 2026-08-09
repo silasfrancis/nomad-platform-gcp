@@ -1,0 +1,78 @@
+---
+# Mounts a dedicated persistent disk at Docker's data root.
+#
+# Not part of main.yaml. This role runs on every VM that needs Docker
+# (nomad clients, mgmt-vm), but only mgmt-vm currently needs a dedicated
+# disk under Docker — unbounded build-cache growth from CI across all
+# Octopus projects sharing a disk with Vault/Octopus/SQL Server Express is
+# a blast-radius risk the other VMs don't have. Call this explicitly from
+# the mgmt playbook with docker_data_disk_name set; nomad-clients.yaml
+# never calls it, so nothing changes there.
+#
+# Mounts at the default /var/lib/docker rather than a custom path plus a
+# daemon.json data-root override, so daemon.json stays identical across
+# every VM Docker runs on and never needs per-host templating.
+#
+# Order-independent by design — safe whether this runs before or after
+# the rest of the role (main.yaml). Docker is stopped first if it's
+# currently running, the disk is formatted only if unformatted, then
+# Docker is restarted only if it was running to begin with. On a brand
+# new VM where Docker isn't installed yet, both the stop and restart
+# steps are skipped — the disk just ends up mounted and empty, ready for
+# Docker's first install+start (via main.yaml) to populate it.
+
+- name: Require docker_data_disk_name To Be Set
+  ansible.builtin.assert:
+    that:
+      - docker_data_disk_name is defined
+      - docker_data_disk_name | length > 0
+    fail_msg: >-
+      docker_data_disk_name must be set by the caller (e.g.
+      "mgmt-vm-docker-data") — this task will not guess which disk to mount.
+
+- name: Gather Service Facts To Check Docker's Current State
+  ansible.builtin.service_facts:
+
+- name: Note Whether Docker Was Running Before This Task Touched Anything
+  ansible.builtin.set_fact:
+    docker_was_running: "{{ ((ansible_facts.services['docker.service'] is defined) and (ansible_facts.services['docker.service'].state == 'running')) | bool }}"
+
+- name: Stop Docker Before Remounting Its Data Root
+  ansible.builtin.systemd:
+    name: docker
+    state: stopped
+  when: docker_was_running
+
+- name: Check If Docker Data Disk Is Already Formatted
+  ansible.builtin.command: "blkid /dev/disk/by-id/google-{{ docker_data_disk_name }}"
+  register: docker_data_disk_blkid
+  failed_when: false
+  changed_when: false
+
+- name: Format Docker Data Disk (Only If Unformatted)
+  community.general.filesystem:
+    fstype: ext4
+    dev: "/dev/disk/by-id/google-{{ docker_data_disk_name }}"
+  when: docker_data_disk_blkid.rc != 0
+
+- name: Ensure Docker Data Mount Path Exists
+  ansible.builtin.file:
+    path: "{{ docker_data_mount_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0711"
+
+- name: Add Docker Data Disk Fstab Entry And Mount
+  ansible.posix.mount:
+    path: "{{ docker_data_mount_path }}"
+    src: "/dev/disk/by-id/google-{{ docker_data_disk_name }}"
+    fstype: ext4
+    opts: defaults,nofail
+    state: mounted
+
+- name: Restart Docker If It Was Running Before This Task Started
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+  when: docker_was_running

@@ -6,6 +6,13 @@ docker_packages:
   - docker-buildx-plugin
   - docker-compose-plugin
 
+# ca-certificates is kept as an explicit prerequisite to match Docker's own
+# install docs, even though Ansible's get_url module (used below to fetch
+# the gpg key) is native Python and doesn't need curl the way the upstream
+# shell instructions do.
+docker_prereq_packages:
+  - ca-certificates
+
 docker_log_max_size: "10m"
 docker_log_max_file: "3"
 docker_storage_driver: "overlay2"
@@ -19,3 +26,11 @@ docker_storage_driver: "overlay2"
 # own mssql step doesn't need this, since Ansible drives docker compose
 # as root at bootstrap time, not gh-runner).
 docker_extra_group_users: []
+
+# Only used by tasks/mount-docker-data-disk.yaml, which is never called
+# from main.yaml. Left blank so a caller must set it explicitly — see the
+# assert at the top of that task file. mgmt.yaml is currently the only
+# playbook that calls this task, passing docker_data_disk_name:
+# "mgmt-vm-docker-data".
+docker_data_disk_name: ""
+docker_data_mount_path: /var/lib/docker
