@@ -29,6 +29,16 @@ locals {
     "loadgenerator"           = { group = "boutique", namespace = "boutique" }
     "metrics-api"             = { group = "platform", namespace = "monitoring" }
     "nomad-sentinel"          = { group = "platform", namespace = "monitoring" }
+    "loki"                    = { group = "platform", namespace = "monitoring" }
+    "prometheus"             = { group = "platform", namespace = "monitoring" }
+    "alloy"                   = { group = "platform", namespace = "monitoring" }
+    "falco-webhook"           = { group = "platform", namespace = "security" }
+    "node-exporter"            = { group = "platform", namespace = "monitoring" }
+    "postgres"                 = { group = "platform", namespace = "datastore" }
+    "redis"                    = { group = "platform", namespace = "datastore" }
+    "consul-snapshot"          = { group = "platform", namespace = "operations" }
+    "postgres-backup"          = { group = "platform", namespace = "operations" }
+    "docker-cleanup"           = { group = "platform", namespace = "operations" }
   }
 }
 

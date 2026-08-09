@@ -1,0 +1,157 @@
+name: build-monitoring
+
+# Builds every tool under monitoring/ — grafana, prometheus, loki,
+# alloy, falco-webhook, and nomad-sentinel (moved here from the
+# app-services pipeline this session, per the same "monitoring/AI-ops
+# tooling belongs here" reasoning applied to Grafana). One shared
+# pipeline, as decided earlier — no per-tool CI, unlike the 12
+# services in build-services.yaml which each get their own project
+# but share this one build mechanism.
+#
+# nomad-sentinel gets an extra test job that runs BEFORE the matrix
+# build and gates it — a Nomad dev-mode agent, real collected cluster
+# data, and Gemini/Slack credentials from Vault, not mocks.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "monitoring/**"
+      # Explicit files, not nomad-jobs/monitoring/** — that folder also
+      # holds node-exporter.nomad.hcl (owned by deploy-platform-jobs.yaml,
+      # no build step at all) and metrics-api.nomad.hcl (owned by
+      # build-services.yaml, its own matrix entry). The old wildcard meant
+      # a node-exporter-only change would rebuild grafana/prometheus/loki/
+      # alloy/falco-webhook/nomad-sentinel for nothing.
+      - "nomad-jobs/monitoring/prometheus.nomad.hcl"
+      - "nomad-jobs/monitoring/loki.nomad.hcl"
+      - "nomad-jobs/monitoring/alloy.nomad.hcl"
+      - "nomad-jobs/monitoring/nomad-sentinel.nomad.hcl"
+      - "nomad-jobs/security/falco-webhook.nomad.hcl"
+
+permissions:
+  id-token: write # Cosign keyless signing + Vault OIDC
+  contents: read
+
+env:
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/REPLACE-PROJECT/platform-images
+
+jobs:
+  test-nomad-sentinel:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nomad
+        run: |
+          NOMAD_VERSION="1.11.0"
+          curl -fsSL "https://releases.hashicorp.com/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_linux_amd64.zip" -o nomad.zip
+          unzip -o nomad.zip -d /tmp/nomad-bin
+          echo "/tmp/nomad-bin" >> "$GITHUB_PATH"
+
+      - name: Start Nomad In Dev Mode
+        run: |
+          nohup nomad agent -dev > nomad-dev.log 2>&1 &
+          echo "NOMAD_ADDR=http://127.0.0.1:4646" >> "$GITHUB_ENV"
+          for i in $(seq 1 15); do
+            curl -sf http://127.0.0.1:4646/v1/status/leader > /dev/null && break
+            sleep 1
+          done
+
+      - name: Collect Nomad Fixture Data
+        run: |
+          ./scripts/collect-nomad-data.sh "${NOMAD_ADDR}" --stdout > monitoring/nomad-sentinel/tests/fixtures/nomad-dev-data.json
+
+      # NOT YET VERIFIED: exact secret paths (kv/cicd/nomad-sentinel-test/*)
+      # assume these test credentials get seeded separately from the
+      # real per-environment ones at kv/data/{env}/nomad-sentinel/config —
+      # they have to be, since vault_policy.github_actions only grants
+      # read on kv/data/cicd/*, nothing under kv/data/dev/ or
+      # kv/data/prod/ at all. CI should never have a path to real
+      # per-environment secrets in the first place; this is a genuine
+      # security boundary, not just a naming convention to fix later.
+      - name: Fetch Test Credentials From Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: https://vault.platform.lefrancis.org:8443
+          method: jwt
+          role: github-actions
+          secrets: |
+            kv/data/cicd/nomad-sentinel-test gemini_api_key | GEMINI_API_KEY ;
+            kv/data/cicd/nomad-sentinel-test slack_webhook_url | SLACK_WEBHOOK_URL
+
+      - name: Run Tests
+        working-directory: monitoring/nomad-sentinel
+        env:
+          GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_URL }}
+          NOMAD_ADDR: ${{ env.NOMAD_ADDR }}
+        run: |
+          pip install -r requirements.txt --break-system-packages
+          pytest tests/ -v
+
+  build:
+    needs: test-nomad-sentinel
+    # needs: only actually gates nomad-sentinel's own build in
+    # principle — grafana/prometheus/loki/alloy/falco-webhook have no
+    # real dependency on nomad-sentinel's tests passing. Kept as one
+    # shared gate anyway (simpler than splitting the matrix into two
+    # separate jobs) since this pipeline is described as "one shared
+    # workflow for all monitoring stuff" — a genuinely broken
+    # nomad-sentinel test run blocking an unrelated Loki config change
+    # for a few extra minutes is a small cost for that simplicity.
+    runs-on: self-hosted
+    strategy:
+      fail-fast: false
+      matrix:
+        tool:
+          - { name: grafana, path: monitoring/grafana, job_spec: "" }
+          - { name: prometheus, path: monitoring/prometheus, job_spec: nomad-jobs/monitoring/prometheus.nomad.hcl }
+          - { name: loki, path: monitoring/loki, job_spec: nomad-jobs/monitoring/loki.nomad.hcl }
+          - { name: alloy, path: monitoring/alloy, job_spec: nomad-jobs/monitoring/alloy.nomad.hcl }
+          - { name: falco-webhook, path: monitoring/falco-webhook, job_spec: nomad-jobs/security/falco-webhook.nomad.hcl }
+          - { name: nomad-sentinel, path: monitoring/nomad-sentinel, job_spec: nomad-jobs/monitoring/nomad-sentinel.nomad.hcl }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Image
+        run: |
+          docker build -t "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}" "${{ matrix.tool.path }}"
+
+      - name: Scan With Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}"
+          severity: CRITICAL
+          exit-code: "1"
+          trivyignores: "${{ matrix.tool.path }}/.trivyignore"
+
+      - name: Push Image
+        run: |
+          docker push "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}"
+
+      - name: Sign Image (Cosign, Keyless)
+        uses: sigstore/cosign-installer@v3
+      - run: |
+          cosign sign --yes "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}"
+
+      - name: Generate And Attest SBOM
+        run: |
+          trivy image --format cyclonedx --output sbom.json "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}"
+          cosign attest --yes --predicate sbom.json --type cyclonedx "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}"
+
+      # Grafana isn't an Octopus project at all — it's deployed by the
+      # grafana Ansible role directly pulling the new image tag, not
+      # through an Octopus release. Skip create-release for it, same
+      # reasoning as the plugins/ folder's own deploy.sh scripts.
+      - name: Create Octopus Release
+        if: matrix.tool.name != 'grafana'
+        run: |
+          mkdir -p release-package/scripts
+          cp octopus/deployment-scripts/*.sh release-package/scripts/
+          cp "${{ matrix.tool.job_spec }}" release-package/
+          octo create-release \
+            --project "${{ matrix.tool.name }}" \
+            --version "${{ github.sha }}" \
+            --package release-package/

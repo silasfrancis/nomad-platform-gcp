@@ -1,5 +1,4 @@
 #!/bin/bash
-# nomad-jobs/plugins/deploy.sh
 #
 # Deploys the 3 plugin jobs (csi-controller, csi-node, nomad-autoscaler)
 # against one environment's Nomad cluster. Not deployed via Octopus —

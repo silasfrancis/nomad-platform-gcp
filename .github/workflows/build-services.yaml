@@ -1,0 +1,97 @@
+name: build-services
+
+# Builds the 12 application-service Octopus projects — 11 Online
+# Boutique services + metrics-api. NOT nomad-sentinel — that's moved
+# under monitoring/ and builds via build-monitoring.yaml instead, per
+# this session's redesign (it's conceptually monitoring/AI-ops
+# tooling, not an application service, even though it's still one of
+# Octopus's per-project deployments).
+#
+# Matrix build, one job per service, per architecture doc 6.2: build,
+# Trivy scan, Cosign sign (keyless, GitHub OIDC), SBOM attest, push,
+# then one Octopus release per service — each service is its own
+# Octopus project with its own release cadence.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "apps/metrics-api/**"
+      - "nomad-jobs/boutique/**"
+      - "octopus/deployment-scripts/**"
+      # nomad-jobs/datastore/** deliberately NOT here — postgres.nomad.hcl
+      # and redis.nomad.hcl are owned by deploy-platform-jobs.yaml, not
+      # this workflow. Nothing in this matrix builds anything datastore-
+      # related; the old entry here just meant editing either file
+      # triggered a full rebuild of all 12 unrelated services for no
+      # reason.
+
+permissions:
+  id-token: write # required for Cosign keyless signing and Vault OIDC
+  contents: read
+
+env:
+  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/REPLACE-PROJECT/platform-images
+
+jobs:
+  build:
+    runs-on: self-hosted
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - { name: frontend, path: services/frontend, job_spec: nomad-jobs/boutique/frontend.nomad.hcl }
+          - { name: cartservice, path: services/cartservice, job_spec: nomad-jobs/boutique/cartservice.nomad.hcl }
+          - { name: productcatalogservice, path: services/productcatalogservice, job_spec: nomad-jobs/boutique/productcatalogservice.nomad.hcl }
+          - { name: checkoutservice, path: services/checkoutservice, job_spec: nomad-jobs/boutique/checkoutservice.nomad.hcl }
+          - { name: currencyservice, path: services/currencyservice, job_spec: nomad-jobs/boutique/currencyservice.nomad.hcl }
+          - { name: paymentservice, path: services/paymentservice, job_spec: nomad-jobs/boutique/paymentservice.nomad.hcl }
+          - { name: shippingservice, path: services/shippingservice, job_spec: nomad-jobs/boutique/shippingservice.nomad.hcl }
+          - { name: emailservice, path: services/emailservice, job_spec: nomad-jobs/boutique/emailservice.nomad.hcl }
+          - { name: recommendationservice, path: services/recommendationservice, job_spec: nomad-jobs/boutique/recommendationservice.nomad.hcl }
+          - { name: adservice, path: services/adservice, job_spec: nomad-jobs/boutique/adservice.nomad.hcl }
+          - { name: loadgenerator, path: services/loadgenerator, job_spec: nomad-jobs/boutique/loadgenerator.nomad.hcl }
+          - { name: metrics-api, path: apps/metrics-api, job_spec: nomad-jobs/monitoring/metrics-api.nomad.hcl }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Image
+        run: |
+          docker build -t "${ARTIFACT_REGISTRY}/${{ matrix.service.name }}:${{ github.sha }}" "${{ matrix.service.path }}"
+
+      - name: Scan With Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${ARTIFACT_REGISTRY}/${{ matrix.service.name }}:${{ github.sha }}"
+          severity: CRITICAL
+          exit-code: "1"
+          trivyignores: "${{ matrix.service.path }}/.trivyignore"
+
+      - name: Push Image
+        run: |
+          docker push "${ARTIFACT_REGISTRY}/${{ matrix.service.name }}:${{ github.sha }}"
+
+      - name: Sign Image (Cosign, Keyless)
+        uses: sigstore/cosign-installer@v3
+      - run: |
+          cosign sign --yes "${ARTIFACT_REGISTRY}/${{ matrix.service.name }}:${{ github.sha }}"
+
+      - name: Generate And Attest SBOM
+        run: |
+          trivy image --format cyclonedx --output sbom.json "${ARTIFACT_REGISTRY}/${{ matrix.service.name }}:${{ github.sha }}"
+          cosign attest --yes --predicate sbom.json --type cyclonedx "${ARTIFACT_REGISTRY}/${{ matrix.service.name }}:${{ github.sha }}"
+
+      - name: Package Deployment Scripts + Job Spec
+        run: |
+          mkdir -p release-package/scripts
+          cp octopus/deployment-scripts/*.sh release-package/scripts/
+          cp "${{ matrix.service.job_spec }}" release-package/
+
+      - name: Create Octopus Release
+        run: |
+          octo create-release \
+            --project "${{ matrix.service.name }}" \
+            --version "${{ github.sha }}" \
+            --package release-package/

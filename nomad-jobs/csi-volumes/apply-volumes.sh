@@ -1,6 +1,5 @@
 #!/bin/bash
-# nomad-jobs/csi-volumes/apply.sh
-#
+# 
 # Renders each *.hcl.tpl template with envsubst (substituting the
 # $VAR placeholders for one environment) and creates the result with
 # `nomad volume create`. Not deployed via Octopus — same reasoning as

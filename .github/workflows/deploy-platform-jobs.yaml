@@ -1,0 +1,75 @@
+name: deploy-platform-jobs
+
+# Deploys the job-spec-only projects: postgres, redis, node-exporter,
+# consul-snapshot, postgres-backup, docker-cleanup. No image build, no
+# Trivy/Cosign/SBOM steps — every one of these runs a pre-built or
+# third-party image (postgres, redis, prom/node-exporter, etc.), so
+# there's nothing this repo produces to build or scan. The only thing
+# that ever changes here is the job spec itself, so the "release" is just
+# that file plus the shared deployment scripts — Octopus's own deployment
+# process (validate -> deploy -> wait-for-healthy, skipped for the 3
+# periodic batch jobs; see the "type" field on each project in
+# platform-config/locals.projects) handles everything after the release
+# is created.
+#
+# Named "platform-jobs", not "operations" — it spans nomad-jobs/datastore/,
+# one file in nomad-jobs/monitoring/, and nomad-jobs/operations/, not
+# operations/ alone.
+#
+# NOT in this matrix:
+#   - loadgenerator — has a project via build-services.yaml (its image is
+#     actually built from source in this repo, like the other 10 Online
+#     Boutique services). Now lives under nomad-jobs/boutique/ too, for
+#     consistency — it only ever queries frontend, nothing datastore/
+#     operations-specific about it.
+#   - nomad-autoscaler — lives in nomad-jobs/plugins/ alongside
+#     csi-controller and csi-node, and deploys the same way they do:
+#     manually via scripts/deploy-plugins.sh, not through Octopus at all.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "nomad-jobs/datastore/postgres.nomad.hcl"
+      - "nomad-jobs/datastore/redis.nomad.hcl"
+      - "nomad-jobs/monitoring/node-exporter.nomad.hcl"
+      - "nomad-jobs/operations/consul-snapshot.nomad.hcl"
+      - "nomad-jobs/operations/postgres-backup.nomad.hcl"
+      - "nomad-jobs/operations/docker-cleanup.nomad.hcl"
+      - "octopus/deployment-scripts/**"
+
+permissions:
+  contents: read
+  # NOT id-token: write — that permission exists solely for Cosign keyless
+  # signing and Vault OIDC during image builds. Nothing here builds an
+  # image or talks to Vault, so it doesn't need it.
+
+jobs:
+  release:
+    runs-on: self-hosted
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - { name: postgres, job_spec: nomad-jobs/datastore/postgres.nomad.hcl }
+          - { name: redis, job_spec: nomad-jobs/datastore/redis.nomad.hcl }
+          - { name: node-exporter, job_spec: nomad-jobs/monitoring/node-exporter.nomad.hcl }
+          - { name: consul-snapshot, job_spec: nomad-jobs/operations/consul-snapshot.nomad.hcl }
+          - { name: postgres-backup, job_spec: nomad-jobs/operations/postgres-backup.nomad.hcl }
+          - { name: docker-cleanup, job_spec: nomad-jobs/operations/docker-cleanup.nomad.hcl }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package Deployment Scripts + Job Spec
+        run: |
+          mkdir -p release-package/scripts
+          cp octopus/deployment-scripts/*.sh release-package/scripts/
+          cp "${{ matrix.project.job_spec }}" release-package/
+
+      - name: Create Octopus Release
+        run: |
+          octo create-release \
+            --project "${{ matrix.project.name }}" \
+            --version "${{ github.sha }}" \
+            --package release-package/
