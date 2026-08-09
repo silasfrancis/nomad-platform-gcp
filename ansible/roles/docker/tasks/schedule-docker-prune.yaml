@@ -1,0 +1,38 @@
+---
+# Schedules periodic `docker system prune` via a systemd timer — the
+# mgmt-vm equivalent of the periodic Docker-prune Nomad system job already
+# running on the Nomad clients. mgmt-vm isn't a Nomad client and can't pick
+# up a Nomad job at all, so this is a systemd timer instead.
+#
+# Not part of main.yaml — same pattern as mount-docker-data-disk.yaml. Call
+# this explicitly wherever it's actually needed (currently just mgmt.yaml,
+# right after mount-docker-data-disk.yaml, so there's actually a dedicated
+# disk under /var/lib/docker for this to be keeping clear in the first
+# place).
+
+- name: Template Docker Prune Service Unit
+  ansible.builtin.template:
+    src: docker-prune.service.j2
+    dest: /etc/systemd/system/docker-prune.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Systemd Daemon For Docker Prune
+
+- name: Template Docker Prune Timer Unit
+  ansible.builtin.template:
+    src: docker-prune.timer.j2
+    dest: /etc/systemd/system/docker-prune.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload Systemd Daemon For Docker Prune
+    - Restart Docker Prune Timer
+
+- name: Enable And Start Docker Prune Timer
+  ansible.builtin.systemd:
+    name: docker-prune.timer
+    enabled: true
+    state: started
+    daemon_reload: true

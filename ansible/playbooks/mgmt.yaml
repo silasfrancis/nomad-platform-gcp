@@ -23,6 +23,11 @@
         tasks_from: mount-docker-data-disk
       vars:
         docker_data_disk_name: mgmt-vm-docker-data
+
+    - name: Schedule Docker Prune On mgmt-vm
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: schedule-docker-prune
   roles:
     - common
     - vault

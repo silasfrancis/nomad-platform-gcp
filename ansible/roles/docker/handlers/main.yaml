@@ -3,3 +3,12 @@
   ansible.builtin.systemd:
     name: docker
     state: restarted
+
+- name: Reload Systemd Daemon For Docker Prune
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart Docker Prune Timer
+  ansible.builtin.systemd:
+    name: docker-prune.timer
+    state: restarted

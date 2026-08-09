@@ -34,3 +34,12 @@ docker_extra_group_users: []
 # "mgmt-vm-docker-data".
 docker_data_disk_name: ""
 docker_data_mount_path: /var/lib/docker
+
+# Only used by tasks/schedule-docker-prune.yaml, also never called from
+# main.yaml. docker_prune_schedule takes any valid systemd OnCalendar
+# expression ("daily", "03:30", "Mon..Fri 02:00", etc). docker_prune_until
+# matches the age filter used by scripts/prune-docker-mgmt.sh, so the
+# manual and scheduled paths reclaim on the same criteria by default.
+docker_prune_schedule: "daily"
+docker_prune_until: "72h"
+docker_prune_include_volumes: false
