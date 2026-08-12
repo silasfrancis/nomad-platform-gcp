@@ -16,7 +16,7 @@
 *.pyc
 *.swp
 *.tfstate*
-*.tfvars
+*secrets.auto.tfvars
 *~
 .env
 bin/
@@ -30,8 +30,9 @@ vendor/
 __pycache__/
 .pytest_cache/
 scripts/output
-state.config
+state.conf
 secret*.tfvars
+tfplan
 pki-local/
 *.retry
 *.pkrvars.hcl

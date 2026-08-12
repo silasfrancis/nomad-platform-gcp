@@ -38,7 +38,7 @@ resource "octopusdeploy_process_step" "this" {
   execution_properties = {
     "Octopus.Action.RunOnServer"          = "True"
     "Octopus.Action.Script.ScriptSource"  = "Package"
-    "Octopus.Action.Script.ScriptFileName" = "${each.value.step}.sh"
+    "Octopus.Action.Script.ScriptFileName" = "scripts/${each.value.step}.sh"
     "Octopus.Action.Script.Syntax"        = "Bash"
   }
 }

@@ -1,47 +1,5 @@
 # Docker Compose — Online Boutique Application Services (Local Development Only)
-#
-# Contains only the Online Boutique microservices themselves. Infra
-# dependencies (Redis, PostgreSQL) and platform tooling (metrics-api,
-# ai-agent) live in docker-compose.yaml — see that file's header for why
-# they're split out, and the top-level README for the full rationale.
-#
-# NO HEALTHCHECKS ARE DEFINED IN THIS FILE, deliberately and consistently
-# across every service here. Most of these services use distroless or
-# chiseled base images upstream (gcr.io/distroless/static,
-# mcr.microsoft.com/dotnet/runtime-deps:...-chiseled) — no shell, no
-# curl/wget, by design, for a smaller attack surface. A few (currencyservice,
-# paymentservice on alpine+node; emailservice, recommendationservice on
-# python-alpine; adservice on eclipse-temurin-alpine) technically do have a
-# shell and COULD support a healthcheck, but we deliberately do not add one
-# selectively — mixing healthcheck and no-healthcheck services within the
-# same application tier is the inconsistency we're avoiding. Every service
-# here relies on Compose's `depends_on` startup ordering plus each
-# service's own internal retry/backoff logic instead.
-#
-# In the cloud architecture, proper health checks are configured using
-# Nomad's native check stanza (HTTP/TCP/gRPC checks performed externally
-# via Consul), which requires no tooling baked into the application image
-# at all — the same way a Kubernetes kubelet performs liveness/readiness
-# probes from outside the container. See nomad-jobs/ for that
-# configuration once it exists.
-#
-# Run together with the platform/infra file (this file alone will fail —
-# cartservice depends on redis-cart, metrics-api/ai-agent ports overlap
-# with nothing here but the network must be shared):
-#   docker compose -f docker-compose.yaml -f docker-compose.services.yaml up --build
-#
-# ============================================================================
-
 services:
-  # --------------------------------------------------------------------------
-  # REDIS (cartservice's backing store)
-  # K8s: Deployment "redis-cart" + Service "redis-cart" (ClusterIP)
-  # Compose translation: emptyDir{} volume -> Compose has no ephemeral-only
-  # volume concept by default; we intentionally do NOT declare a named
-  # volume here, which makes Compose use an anonymous container-local
-  # filesystem layer that disappears on `down` — the closest equivalent to
-  # K8s emptyDir's "exists for pod lifetime only" semantics.
-  # --------------------------------------------------------------------------
   redis-cart:
     image: redis:alpine
     container_name: redis-cart
@@ -57,16 +15,6 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # FRONTEND
-  # K8s: Deployment "frontend" + Service "frontend" (ClusterIP) +
-  #      Service "frontend-external" (LoadBalancer)
-  # Compose translation: LoadBalancer has no meaning outside a cloud provider;
-  # its only real job was exposing the Service externally. We replace it with
-  # a host port mapping (8080:8080) — the direct Compose equivalent of
-  # "external access to this container".
-  # Built from gcr.io/distroless/static.
-  # --------------------------------------------------------------------------
   frontend:
     build:
       context: ./services/frontend
@@ -96,10 +44,6 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # CURRENCY SERVICE
-  # K8s: Deployment "currencyservice" + Service "currencyservice" (ClusterIP)
-  # --------------------------------------------------------------------------
   currencyservice:
     build:
       context: ./services/currencyservice
@@ -114,11 +58,6 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # PRODUCT CATALOG SERVICE
-  # K8s: Deployment "productcatalogservice" + Service (ClusterIP)
-  # Built from gcr.io/distroless/static.
-  # --------------------------------------------------------------------------
   productcatalogservice:
     build:
       context: ./services/productcatalogservice
@@ -133,11 +72,6 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # CHECKOUT SERVICE
-  # K8s: Deployment "checkoutservice" + Service (ClusterIP)
-  # Built from gcr.io/distroless/static.
-  # --------------------------------------------------------------------------
   checkoutservice:
     build:
       context: ./services/checkoutservice
@@ -164,11 +98,6 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # SHIPPING SERVICE
-  # K8s: Deployment "shippingservice" + Service (ClusterIP)
-  # Built from gcr.io/distroless/static.
-  # --------------------------------------------------------------------------
   shippingservice:
     build:
       context: ./services/shippingservice
@@ -183,19 +112,6 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # CART SERVICE
-  # K8s: Deployment "cartservice" + Service (ClusterIP) + Deployment/Service
-  #      "redis-cart"
-  # Vault note: in the cloud architecture, REDIS_ADDR's password component
-  # comes from Vault at kv/data/{env}/cartservice/redis. Locally, Compose
-  # has no Vault, so the password is passed as a plain env var sourced from
-  # .env — this is the local stand-in for what Vault injects in Nomad.
-  # Built from mcr.microsoft.com/dotnet/runtime-deps:...-chiseled.
-  # redis-cart is defined in docker-compose.yaml (platform/infra file) —
-  # this works correctly across the two -f files because Compose merges
-  # them into a single project before resolving depends_on and networks.
-  # --------------------------------------------------------------------------
   cartservice:
     build:
       context: ./services/cartservice/src
@@ -212,14 +128,6 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # EMAIL SERVICE
-  # K8s: Deployment "emailservice" + Service (ClusterIP, port 5000 ->
-  #      targetPort 8080)
-  # Note: the real emailservice does not send actual email or read any SMTP
-  # credentials — it only logs a mock confirmation. PORT and
-  # DISABLE_PROFILER are its only env vars in the source manifest.
-  # --------------------------------------------------------------------------
   emailservice:
     build:
       context: ./services/emailservice
@@ -234,13 +142,6 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # PAYMENT SERVICE
-  # K8s: Deployment "paymentservice" + Service (ClusterIP)
-  # Note: the real paymentservice mocks credit card charging in-process —
-  # it does not call any external payment provider or read an API key.
-  # PORT and DISABLE_PROFILER are its only env vars in the source manifest.
-  # --------------------------------------------------------------------------
   paymentservice:
     build:
       context: ./services/paymentservice
@@ -255,10 +156,6 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # RECOMMENDATION SERVICE
-  # K8s: Deployment "recommendationservice" + Service (ClusterIP)
-  # --------------------------------------------------------------------------
   recommendationservice:
     build:
       context: ./services/recommendationservice
@@ -276,10 +173,6 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # AD SERVICE
-  # K8s: Deployment "adservice" + Service (ClusterIP)
-  # --------------------------------------------------------------------------
   adservice:
     build:
       context: ./services/adservice
@@ -293,19 +186,7 @@ services:
     networks:
       - boutique-net
 
-  # --------------------------------------------------------------------------
-  # LOAD GENERATOR
-  # K8s: Deployment "loadgenerator" with an initContainer "frontend-check"
-  #      that polls frontend:80/ until it returns HTTP 200, then exits 0,
-  #      allowing the main "main" container to start.
-  #
-  # Compose translation: Compose has no native initContainer concept. Since
-  # frontend has no Compose healthcheck (see policy above), we keep the
-  # init container's own retry/polling logic as a literal separate
-  # service — this preserves the K8s manifest's actual init behaviour
-  # (poll frontend's HTTP root, custom retry count/interval) rather than
-  # relying on a Compose healthcheck that doesn't exist for frontend.
-  # --------------------------------------------------------------------------
+
   loadgenerator-init:
     image: busybox:latest
     container_name: loadgenerator-init

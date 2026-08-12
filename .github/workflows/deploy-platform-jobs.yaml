@@ -3,28 +3,23 @@ name: deploy-platform-jobs
 # Deploys the job-spec-only projects: postgres, redis, node-exporter,
 # consul-snapshot, postgres-backup, docker-cleanup. No image build, no
 # Trivy/Cosign/SBOM steps — every one of these runs a pre-built or
-# third-party image (postgres, redis, prom/node-exporter, etc.), so
-# there's nothing this repo produces to build or scan. The only thing
-# that ever changes here is the job spec itself, so the "release" is just
-# that file plus the shared deployment scripts — Octopus's own deployment
-# process (validate -> deploy -> wait-for-healthy, skipped for the 3
-# periodic batch jobs; see the "type" field on each project in
-# platform-config/locals.projects) handles everything after the release
-# is created.
+# third-party image, so there's nothing this repo produces to build or
+# scan. Matrix is dynamic — get-matrix calls detect-changes.yaml against
+# .github/configs/platform-jobs.json.
 #
-# Named "platform-jobs", not "operations" — it spans nomad-jobs/datastore/,
-# one file in nomad-jobs/monitoring/, and nomad-jobs/operations/, not
-# operations/ alone.
-#
-# NOT in this matrix:
+# NOT in .github/configs/platform-jobs.json:
 #   - loadgenerator — has a project via build-services.yaml (its image is
-#     actually built from source in this repo, like the other 10 Online
-#     Boutique services). Now lives under nomad-jobs/boutique/ too, for
-#     consistency — it only ever queries frontend, nothing datastore/
-#     operations-specific about it.
+#     actually built from source in this repo). Lives under
+#     nomad-jobs/boutique/, not here.
 #   - nomad-autoscaler — lives in nomad-jobs/plugins/ alongside
-#     csi-controller and csi-node, and deploys the same way they do:
-#     manually via scripts/deploy-plugins.sh, not through Octopus at all.
+#     csi-controller and csi-node, deployed manually via
+#     scripts/deploy-plugins.sh, not through Octopus at all.
+#
+# Same action versions and CI conventions as build-services.yaml /
+# build-monitoring.yaml (SHA-pinned actions, vars.* for Vault/Octopus
+# config, SHORT_SHA-based release numbering, Slack-on-failure) — minus
+# the entire build/scan/sign/attest sequence, since there's no image for
+# any of these six to build.
 
 on:
   push:
@@ -40,36 +35,113 @@ on:
 
 permissions:
   contents: read
-  # NOT id-token: write — that permission exists solely for Cosign keyless
-  # signing and Vault OIDC during image builds. Nothing here builds an
-  # image or talks to Vault, so it doesn't need it.
+  id-token: write # Vault OIDC (fetching Octopus connection details) + Octopus's own OIDC login
 
 jobs:
+  get-matrix:
+    uses: ./.github/workflows/detect-changes.yaml
+    with:
+      config-file: ".github/configs/platform-jobs.json"
+
   release:
+    needs: get-matrix
+    if: fromJson(needs.get-matrix.outputs.matrix).items[0] != null
     runs-on: self-hosted
     strategy:
       fail-fast: false
-      matrix:
-        project:
-          - { name: postgres, job_spec: nomad-jobs/datastore/postgres.nomad.hcl }
-          - { name: redis, job_spec: nomad-jobs/datastore/redis.nomad.hcl }
-          - { name: node-exporter, job_spec: nomad-jobs/monitoring/node-exporter.nomad.hcl }
-          - { name: consul-snapshot, job_spec: nomad-jobs/operations/consul-snapshot.nomad.hcl }
-          - { name: postgres-backup, job_spec: nomad-jobs/operations/postgres-backup.nomad.hcl }
-          - { name: docker-cleanup, job_spec: nomad-jobs/operations/docker-cleanup.nomad.hcl }
+      matrix: ${{ fromJson(needs.get-matrix.outputs.matrix) }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
 
-      - name: Package Deployment Scripts + Job Spec
+      - name: Fetch Deployment Secrets From Vault
+        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc
+        with:
+          url: ${{ vars.VAULT_ADDRESS }}
+          method: jwt
+          role: ${{ vars.VAULT_CI_ROLE }}
+          secrets: |
+            kv/data/cicd/octopus service_account_id | OCTOPUS_SERVICE_ACCOUNT_ID ;
+            kv/data/cicd/octopus space | OCTOPUS_SPACE
+            kv/data/cicd/slack webhook | SLACK_WEBHOOK_URL
+
+      - name: Set short SHA
+        run: |
+          echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+
+      - name: Package Job Spec + Deployment Scripts
         run: |
           mkdir -p release-package/scripts
           cp octopus/deployment-scripts/*.sh release-package/scripts/
-          cp "${{ matrix.project.job_spec }}" release-package/
+          cp "${{ matrix.items.job_spec }}" release-package/
+
+      - name: Login To Octopus
+        uses: OctopusDeploy/login@e39e03d07630f363bdccd6c7ad4eb28e0ea8a184
+        with:
+          server: ${{ vars.OCTOPUS_DEPLOY_SERVER }}
+          service_account_id: ${{ env.OCTOPUS_SERVICE_ACCOUNT_ID }}
+
+      - name: Create Zip Package
+        id: zip
+        uses: OctopusDeploy/create-zip-package-action@18a23ace1d3d51bc21429a1628e50acc36080400
+        with:
+          package_id: "${{ matrix.items.name }}"
+          version: "${{ env.SHORT_SHA }}"
+          base_path: release-package
+          output_folder: packaged
+          files: |
+            **/*
+
+      - name: Push Package To Octopus
+        uses: OctopusDeploy/push-package-action@39ed2af62de5aeb10692eb62cae1e3a333f0c2f5
+        with:
+          packages: "${{ steps.zip.outputs.package_file_path }}"
 
       - name: Create Octopus Release
-        run: |
-          octo create-release \
-            --project "${{ matrix.project.name }}" \
-            --version "${{ github.sha }}" \
-            --package release-package/
+        uses: OctopusDeploy/create-release-action@4bd7d595da7f803e467d41c32fa0b5dbb9f222dc
+        with:
+          project: "${{ matrix.items.name }}"
+          release_number: "${{ env.SHORT_SHA }}"
+          packages: "${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
+        # No deploy step: Dev's lifecycle phase has
+        # automatic_deployment_targets = [dev], so release creation alone
+        # triggers an automatic deploy to Dev. Production is manual
+        # approval in the Octopus UI only. Applies even for the 3
+        # periodic batch jobs — autodeploy to Dev just means the job
+        # gets (re-)registered with Nomad's scheduler immediately rather
+        # than waiting for a human.
+
+      - name: Send Slack notification on release failure
+        if: failure()
+        uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95
+        with:
+          payload: |
+            {
+              "text": "❌ *${{ github.workflow }}* — `${{ matrix.items.name }}` failed on `${{ github.ref_name }}`",
+              "attachments": [{
+                "color": "danger",
+                "fields": [
+                  {
+                    "title": "Project",
+                    "value": "${{ matrix.items.name }}",
+                    "short": true
+                  },
+                  {
+                    "title": "SHA",
+                    "value": "${{ env.SHORT_SHA }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Actor",
+                    "value": "${{ github.actor }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Run",
+                    "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }]
+            }
+          webhook: ${{ env.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook

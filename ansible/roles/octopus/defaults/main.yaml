@@ -25,7 +25,6 @@ octopus_admin_email: "ops@lefrancis.org"
 # Means privileged Can Stay False; It's Only Required When DinD Is On.
 octopus_disable_dind: "Y"
 octopus_privileged: "false"
-octopus_run_as_user: "octopus"
 
 # Backup (Unchanged From Before)
 mssql_backup_gcs_bucket: "platform-artifacts"

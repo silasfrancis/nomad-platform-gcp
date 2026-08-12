@@ -1,11 +1,5 @@
 # Project-wide GCP infrastructure primitives.
 # Applied once — not per-environment. Dev and prod share these resources.
-#
-# Apply order:
-#   1. terraform apply (this file)
-#   2. gcloud storage buckets update gs://<tfstate_bucket> \
-#        --default-encryption-key=<gcs_storage key ID>
-#   3. Proceed to terraform/network
 
 # GCP APIs
 #
@@ -19,23 +13,28 @@
 
 locals {
   apis = [
-    "compute.googleapis.com",                # VMs, disks, networking, MIGs
-    "iam.googleapis.com",                    # service accounts, IAM bindings
-    "storage.googleapis.com",               # GCS buckets
-    "artifactregistry.googleapis.com",       # Docker image registry
-    "cloudkms.googleapis.com",              # KMS keyrings and keys
-    "secretmanager.googleapis.com",          # Vault root token + recovery keys storage
-    "oslogin.googleapis.com",               # OS Login for SSH via IAP
-    "iap.googleapis.com",                   # Identity-Aware Proxy (SSH + UI tunnels)
-    "logging.googleapis.com",               # Cloud Logging
-    "monitoring.googleapis.com",            # Cloud Monitoring
-    "securitycenter.googleapis.com",         # GCP Security Command Center (Standard tier)
-    "dns.googleapis.com",                   # Cloud DNS (public + private zones)
+    "compute.googleapis.com",              # VMs, disks, networking, MIGs
+    "iam.googleapis.com",                  # service accounts, IAM bindings
+    "storage.googleapis.com",              # GCS buckets
+    "artifactregistry.googleapis.com",     # Docker image registry
+    "cloudkms.googleapis.com",             # KMS keyrings and keys
+    "secretmanager.googleapis.com",        # Vault root token + recovery keys storage
+    "oslogin.googleapis.com",              # OS Login for SSH via IAP
+    "iap.googleapis.com",                  # Identity-Aware Proxy (SSH + UI tunnels)
+    "logging.googleapis.com",              # Cloud Logging
+    "monitoring.googleapis.com",           # Cloud Monitoring
+    "securitycenter.googleapis.com",       # GCP Security Command Center (Standard tier)
+    "dns.googleapis.com",                  # Cloud DNS (public + private zones)
+  ]
+
+  # Services that require Google-managed service identities for CMEK/IAM bindings
+  service_identities = [
+    "logging.googleapis.com",
+    "secretmanager.googleapis.com",
   ]
 
   project = "nomad-platform-gcp"
   labels = {
-    "environment" = "shared"
     "managed-by" = "terraform"
   }
 }
@@ -48,6 +47,15 @@ resource "google_project_service" "apis" {
   disable_on_destroy = false
 }
 
+resource "google_project_service_identity" "identities" {
+  for_each = toset(local.service_identities)
+
+  provider   = google-beta
+  project    = var.project_id
+  service    = each.value
+  depends_on = [google_project_service.apis]
+}
+
 # OS Login
 #
 # Project-wide: Replaces static SSH keys with Google-managed IAM authentication.
@@ -57,6 +65,8 @@ resource "google_compute_project_metadata_item" "os_login" {
   project = var.project_id
   key     = "enable-oslogin"
   value   = "TRUE"
+
+  depends_on = [ google_project_service.apis ]
 }
 
 # Service Accounts 
@@ -67,6 +77,8 @@ module "service_account" {
   source = "../modules/service-account"
 
   project_id = var.project_id
+
+  depends_on = [ google_project_service.apis ]
 }
 
 # KMS
@@ -74,17 +86,15 @@ module "service_account" {
 module "kms" {
   source = "../modules/kms"
 
-  project_id = var.project_id
+  project_id     = var.project_id
   project_number = var.project_number
-  region = var.region
+  location       = var.region
   crypto_key_members = {
     
     "platform/storage-cmek" = [
       "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com",
       "serviceAccount:service-${var.project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com",
-      "serviceAccount:service-${var.project_number}@gcp-sa-secretmanager.iam.gserviceaccount.com",
       "serviceAccount:service-${var.project_number}@gcp-sa-logging.iam.gserviceaccount.com",
-      "serviceAccount:cmek-${var.project_id}@gcp-sa-logging.iam.gserviceaccount.com",
     ]
 
     "platform/disk-cmek" = [
@@ -94,7 +104,16 @@ module "kms" {
     "vault-unseal/vault-unseal-cmek" = [
       module.service_account.service_accounts["management-vm-sa"].member
     ]
+
+    "secrets/secrets-cmek" = [
+      "serviceAccount:service-${var.project_number}@gcp-sa-secretmanager.iam.gserviceaccount.com",
+    ]
   }
+
+  depends_on = [ 
+    google_project_service.apis,
+    google_project_service_identity.identities
+  ]
 }
 
 # GCS Buckets
@@ -102,11 +121,11 @@ module "kms" {
 module "gcs_bucket" {
   source = "../modules/gcs"
 
-  project_id = var.project_id
-  region     = var.region
-  additional_labels = local.labels
-  environment = var.environment
-  storage_cmek = module.kms.kms_keys["storage-cmek"].id
+  project_id                         = var.project_id
+  region                             = var.region
+  additional_labels                  = local.labels
+  environment                        = var.environment
+  storage_cmek                       = module.kms.kms_keys["platform/storage-cmek"].id
   platform_artifacts_creator_members = [
     module.service_account.service_accounts["management-vm-sa"].member,
     module.service_account.service_accounts["nomad-client-sa-prod"].member,
@@ -124,6 +143,10 @@ module "gcs_bucket" {
     module.service_account.service_accounts["management-vm-sa"].member
   ]
 
+  depends_on = [ 
+    google_project_service.apis,
+    module.kms 
+  ]
 }
 
 # Artifact Registry
@@ -131,10 +154,10 @@ module "gcs_bucket" {
 module "artifact_registry" {
   source = "../modules/artifact-registry"
 
-  project_id = var.project_id
-  region     = var.region
-  artifact_registry_repo = local.project
-  storage_cmek = module.kms.kms_keys["storage-cmek"].id
+  project_id                       = var.project_id
+  region                           = var.region
+  artifact_registry_repo           = local.project
+  storage_cmek                     = module.kms.kms_keys["platform/storage-cmek"].id
   artifact_registry_writer_members = [
     module.service_account.service_accounts["management-vm-sa"].member
   ]
@@ -143,10 +166,14 @@ module "artifact_registry" {
     module.service_account.service_accounts["nomad-client-sa-prod"].member,
     module.service_account.service_accounts["nomad-client-sa-dev"].member,
   ]
-  additional_registry_iam = {}
-  immutable_tags = true
-  additional_labels = local.labels
+  additional_registry_iam          = {}
+  immutable_tags                   = true
+  additional_labels                = local.labels
 
+  depends_on = [ 
+    google_project_service.apis,
+    module.kms 
+  ]
 }
 
 # Secret Manager
@@ -165,14 +192,14 @@ module "artifact_registry" {
 #              explicit iam block in var.secrets below.
 
 locals {
-  nomad_server_dev_member  = module.service_account.service_accounts["nomad-server-sa-dev"].member
-  nomad_server_prod_member = module.service_account.service_accounts["nomad-server-sa-prod"].member
-  nomad_client_dev_member  = module.service_account.service_accounts["nomad-client-sa-dev"].member
-  nomad_client_prod_member = module.service_account.service_accounts["nomad-client-sa-prod"].member
-  management_vm_member     = module.service_account.service_accounts["management-vm-sa"].member
-  traefik_vm_prod_member   = module.service_account.service_accounts["traefik-vm-sa-prod"].member
-  traefik_vm_dev_member    = module.service_account.service_accounts["traefik-vm-sa-dev"].member
-  traefik_vm_internal_member = module.service_account.service_accounts["traefik-vm-sa-internal"].member
+  nomad_server_dev_member      = module.service_account.service_accounts["nomad-server-sa-dev"].member
+  nomad_server_prod_member     = module.service_account.service_accounts["nomad-server-sa-prod"].member
+  nomad_client_dev_member      = module.service_account.service_accounts["nomad-client-sa-dev"].member
+  nomad_client_prod_member     = module.service_account.service_accounts["nomad-client-sa-prod"].member
+  management_vm_member         = module.service_account.service_accounts["management-vm-sa"].member
+  traefik_vm_prod_member       = module.service_account.service_accounts["traefik-vm-sa-prod"].member
+  traefik_vm_dev_member        = module.service_account.service_accounts["traefik-vm-sa-dev"].member
+  traefik_vm_internal_member   = module.service_account.service_accounts["traefik-vm-sa-internal"].member
 
 
   dev_members = [
@@ -196,7 +223,7 @@ locals {
 module "secrets" {
   source       = "../modules/secret-manager"
   project_id   = var.project_id
-  storage_cmek = module.kms.kms_keys["storage-cmek"].id
+  storage_cmek = module.kms.kms_keys["secrets/secrets-cmek"].id
 
   labels = local.labels
 
@@ -498,7 +525,7 @@ module "secrets" {
         labels = { purpose = "consul", tier = "scoped", environment = "dev" } 
         iam = {
             "roles/secretmanager.secretAccessor" = {
-            members = concat(local.nomad_client_dev_member, local.management_members)
+            members = concat([local.nomad_client_dev_member], local.management_members)
             }
         }
     }
@@ -506,7 +533,7 @@ module "secrets" {
         labels = { purpose = "consul", tier = "scoped", environment = "prod" } 
         iam = {
             "roles/secretmanager.secretAccessor" = {
-            members = concat(local.nomad_client_prod_member, local.management_members)
+            members = concat([local.nomad_client_prod_member], local.management_members)
             }
         }
     }
@@ -561,4 +588,6 @@ module "secrets" {
       }
     }
   }
+  
+  depends_on = [ google_project_service.apis ]
 }

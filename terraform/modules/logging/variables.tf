@@ -18,7 +18,7 @@ variable "log_buckets" {
     location       = optional(string)
     retention_days = optional(number, 7)
     filter         = string
-    description = ""
+    description = string
     cmek_key       = optional(string)
   }))
   default = {

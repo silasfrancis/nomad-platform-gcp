@@ -1,50 +1,3 @@
-# Docker Compose — Platform / Infrastructure (Local Development Only)
-#
-# Contains everything that ISN'T an Online Boutique application service:
-# infrastructure dependencies (PostgreSQL) and custom platform tooling
-# we built ourselves (metrics-api, nomad-sentinel).
-#
-# Healthchecks ARE defined here, consistently, because every service in
-# this file either has native tooling to support one (PostgreSQL's
-# pg_isready) or is our own code built on a base image that includes a
-# shell and wget (metrics-api uses python:3.12-slim). This is the
-# deliberate counterpart to docker-compose.services.yaml, which
-# intentionally has NO healthchecks — see that file's header for why.
-#
-# ── Local dev modes ───────────────────────────────────────────────────────────
-#
-# metrics-api always runs as a container — it has no Nomad dependency and
-# connects only to platform-db on the shared Docker network.
-#
-# nomad-sentinel has two modes depending on your platform:
-#
-#   Linux / macOS
-#     nomad-sentinel runs as a container (uncomment the service block below).
-#     Nomad runs natively: nomad agent -dev -bind=0.0.0.0
-#     Set NOMAD_ADDR in .env to your host IP or host.docker.internal.
-#
-#   WSL2
-#     Docker Desktop networking prevents the sentinel container from
-#     reaching a native WSL2 Nomad agent due to cgroup and routing
-#     constraints. Run the sentinel natively instead:
-#       nomad agent -dev -bind=0.0.0.0
-#       docker compose up -d platform-db metrics-api
-#       ./scripts/run-sentinel-native.sh
-#     platform-db is exposed on localhost:5433 for the native sentinel.
-#     See scripts/run-sentinel-native.sh and .env.example for full setup.
-#
-# ── Production ────────────────────────────────────────────────────────────────
-#   This file is not used in production. On GCP, Nomad runs on dedicated
-#   VMs provisioned by Terraform, and all services are deployed as Nomad
-#   jobs. Credentials are injected by Vault at runtime.
-#   See terraform/ and monitoring/nomad-sentinel/nomad-sentinel.nomad.hcl.
-#
-# ── Usage ─────────────────────────────────────────────────────────────────────
-#   cp .env.example .env
-#   docker compose -f docker-compose.yaml -f docker-compose.services.yaml up --build
-#
-# =============================================================================
-
 services:
   platform-db:
     image: postgres:16-alpine
@@ -81,20 +34,6 @@ services:
     networks:
       - boutique-net
 
-  # ============================================================================
-  # METRICS-API
-  # Not part of Online Boutique. Custom platform-engineering demo service —
-  # see the top-level README section "Why metrics-api exists" for the full
-  # rationale. In short: Online Boutique has no real database dependency,
-  # so it can't demonstrate Vault's dynamic database secrets engine.
-  # metrics-api exists purely to consume short-lived, auto-rotated
-  # PostgreSQL credentials issued live by Vault, proving the full
-  # dynamic-secret lifecycle.
-  #
-  # Locally, Vault doesn't exist yet, so metrics-api connects with static
-  # credentials from .env — the local stand-in for what Vault will issue
-  # dynamically once this moves to Nomad.
-  # ============================================================================
   metrics-api:
     build:
       context: ./monitoring/metrics-api
@@ -117,65 +56,6 @@ services:
       start_period: 10s
     networks:
       - boutique-net
-
-  # ============================================================================
-  # NOMAD-SENTINEL — AI MONITORING AGENT
-  #
-  # WSL2 users: do NOT uncomment this block. Run the sentinel natively
-  # instead — see scripts/run-sentinel-native.sh and the header above.
-  # The WSL2 Docker Desktop networking stack cannot route traffic from
-  # this container to a native Nomad agent on localhost.
-  #
-  # Linux / macOS users: uncomment this block and set NOMAD_ADDR in .env.
-  # Nomad must be running natively with -bind=0.0.0.0.
-  #
-  # REMEDIATION_MODE=propose is the safe local default — no real Nomad
-  # cluster to mutate, and propose mode mirrors what prod will run.
-  #
-  # GET /health   — liveness probe      → localhost:8091/health
-  # GET /summary  — on-demand summary   → localhost:8091/summary
-  # ============================================================================
-  # nomad-sentinel:
-  #   build:
-  #     context: ./monitoring/nomad-sentinel
-  #     dockerfile: Dockerfile
-  #   image: local/nomad-sentinel:dev
-  #   container_name: nomad-sentinel
-  #   ports:
-  #     - "8091:8090"
-  #   environment:
-  #     NOMAD_ADDR: "${NOMAD_ADDR:-http://host.docker.internal:4646}"
-  #     NOMAD_TOKEN: "${NOMAD_TOKEN}"
-  #     GEMINI_API_KEY: "${GEMINI_API_KEY}"
-  #     GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
-  #     SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL}"
-  #     ENVIRONMENT: "local"
-  #     REMEDIATION_MODE: "${REMEDIATION_MODE:-propose}"
-  #     POLL_INTERVAL_SECONDS: "${POLL_INTERVAL_SECONDS:-30}"
-  #     RESTART_THRESHOLD: "${RESTART_THRESHOLD:-3}"
-  #     PENDING_THRESHOLD_SECONDS: "${PENDING_THRESHOLD_SECONDS:-120}"
-  #     STARTING_THRESHOLD_SECONDS: "${STARTING_THRESHOLD_SECONDS:-180}"
-  #     LOG_TAIL_LINES: "${LOG_TAIL_LINES:-200}"
-  #     REMEDIATION_CONFIDENCE_THRESHOLD: "${REMEDIATION_CONFIDENCE_THRESHOLD:-0.8}"
-  #     MAX_REMEDIATION_ATTEMPTS: "${MAX_REMEDIATION_ATTEMPTS:-3}"
-  #     COOLDOWN_SECONDS: "${COOLDOWN_SECONDS:-300}"
-  #     HTTP_PORT: "${HTTP_PORT:-8090}"
-  #     SUMMARY_INTERVAL_HOURS: "${SUMMARY_INTERVAL_HOURS:-6}"
-  #     HISTORY_DATABASE_URL: "postgresql://${NOMAD_SENTINEL_DB_USER}:${NOMAD_SENTINEL_DB_PASSWORD}@platform-db:5432/${NOMAD_SENTINEL_DB_NAME}"
-  #   depends_on:
-  #     platform-db:
-  #       condition: service_healthy
-  #   extra_hosts:
-  #     - "host.docker.internal:host-gateway"
-  #   healthcheck:
-  #     test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8090/health"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #     start_period: 10s
-  #   networks:
-  #     - boutique-net
-  #   restart: unless-stopped
 
 networks:
   boutique-net:

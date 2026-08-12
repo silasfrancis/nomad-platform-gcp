@@ -303,7 +303,6 @@ resource "google_storage_bucket" "buckets" {
     }
   }
 
-  depends_on = [google_kms_crypto_key_iam_member.keys]
 }
 
 # ── GCS Bucket IAM ────────────────────────────────────────────────────────────

@@ -1,0 +1,59 @@
+{
+  "items": [
+    {
+      "name": "frontend",
+      "path": "services/frontend",
+      "job_spec": "nomad-jobs/boutique/frontend.nomad.hcl"
+    },
+    {
+      "name": "cartservice",
+      "path": "services/cartservice",
+      "job_spec": "nomad-jobs/boutique/cartservice.nomad.hcl"
+    },
+    {
+      "name": "productcatalogservice",
+      "path": "services/productcatalogservice",
+      "job_spec": "nomad-jobs/boutique/productcatalogservice.nomad.hcl"
+    },
+    {
+      "name": "checkoutservice",
+      "path": "services/checkoutservice",
+      "job_spec": "nomad-jobs/boutique/checkoutservice.nomad.hcl"
+    },
+    {
+      "name": "currencyservice",
+      "path": "services/currencyservice",
+      "job_spec": "nomad-jobs/boutique/currencyservice.nomad.hcl"
+    },
+    {
+      "name": "paymentservice",
+      "path": "services/paymentservice",
+      "job_spec": "nomad-jobs/boutique/paymentservice.nomad.hcl"
+    },
+    {
+      "name": "shippingservice",
+      "path": "services/shippingservice",
+      "job_spec": "nomad-jobs/boutique/shippingservice.nomad.hcl"
+    },
+    {
+      "name": "emailservice",
+      "path": "services/emailservice",
+      "job_spec": "nomad-jobs/boutique/emailservice.nomad.hcl"
+    },
+    {
+      "name": "recommendationservice",
+      "path": "services/recommendationservice",
+      "job_spec": "nomad-jobs/boutique/recommendationservice.nomad.hcl"
+    },
+    {
+      "name": "adservice",
+      "path": "services/adservice",
+      "job_spec": "nomad-jobs/boutique/adservice.nomad.hcl"
+    },
+    {
+      "name": "loadgenerator",
+      "path": "services/loadgenerator",
+      "job_spec": "nomad-jobs/boutique/loadgenerator.nomad.hcl"
+    }
+  ]
+}

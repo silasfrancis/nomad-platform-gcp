@@ -79,7 +79,7 @@ resource "google_secret_manager_secret" "secret" {
 
 resource "google_secret_manager_secret_iam_member" "member" {
   for_each = {
-    for binding in local.secret_iam_members :
+    for binding in distinct(local.secret_iam_members) :
     "${binding.secret}-${binding.role}-${binding.member}" => binding
   }
 

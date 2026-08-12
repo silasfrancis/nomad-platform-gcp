@@ -1,0 +1,109 @@
+name: Detect Changes & Build Matrix
+
+# Generic across every matrix-based pipeline in this repo — the config
+# file passed in via `config-file` is the only thing that varies.
+# Consumers: build-services.yaml (boutique-services.json),
+# build-monitoring.yaml (monitoring-tools.json), deploy-platform-jobs.yaml
+# (platform-jobs.json). Adding a new matrix-based pipeline later just
+# means adding a new config file under .github/configs/ — nothing here
+# needs to change.
+#
+# runs-on: ubuntu-latest, not self-hosted — this job only needs git
+# history and jq, no private network access, no Docker, nothing that
+# requires the self-hosted runner on mgmt-vm. There's exactly one
+# self-hosted runner registered; using ubuntu-latest here means this
+# doesn't queue behind (or ahead of) actual build/deploy work for a job
+# that's pure bookkeeping.
+
+on:
+  workflow_call:
+    inputs:
+      config-file:
+        description: "Path to the service configuration JSON file"
+        required: true
+        type: string
+    outputs:
+      matrix:
+        description: "Filtered JSON matrix ({\"items\": [...]}) containing only changed items"
+        value: ${{ jobs.filter-matrix.outputs.matrix }}
+
+jobs:
+  filter-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history — BASE_SHA/BEFORE may not be reachable with a shallow clone
+
+      - name: Generate Filtered Matrix
+        id: set-matrix
+        run: |
+          CONFIG_FILE="${{ inputs.config-file }}"
+
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Error: Configuration file $CONFIG_FILE not found!"
+            exit 1
+          fi
+
+          # Determine the correct git diff boundary based on the event type,
+          # so this filters against THIS push/PR's own changes — not
+          # against whatever the last run on this branch happened to be,
+          # which matters the moment two people push around the same time.
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # Exact PR base SHA vs head SHA from the webhook payload.
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            DIFF_COMMAND="git diff --name-only $BASE_SHA $HEAD_SHA"
+
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            # Exact commit range from the push payload — handles multiple
+            # commits in one push correctly, unlike diffing only the
+            # single most recent commit.
+            BEFORE="${{ github.event.before }}"
+            AFTER="${{ github.event.after }}"
+            if [ "$BEFORE" == "0000000000000000000000000000000000000000" ]; then
+              # New branch with no prior commit to diff against.
+              DIFF_COMMAND="git diff --name-only HEAD~1 HEAD"
+            else
+              DIFF_COMMAND="git diff --name-only $BEFORE $AFTER"
+            fi
+
+          else
+            # workflow_dispatch or any other manually-triggered event.
+            DIFF_COMMAND="git diff --name-only HEAD~1 HEAD"
+          fi
+
+          echo "Running diff command: $DIFF_COMMAND"
+          CHANGED_FILES=$($DIFF_COMMAND || git diff --name-only HEAD~1 HEAD)
+
+          LENGTH=$(jq '.items | length' "$CONFIG_FILE")
+          CHANGED_ITEMS="[]"
+
+          for ((i=0; i<LENGTH; i++)); do
+            NAME=$(jq -r ".items[$i].name" "$CONFIG_FILE")
+            PATH_VAL=$(jq -r ".items[$i].path" "$CONFIG_FILE")
+            JOB_SPEC=$(jq -r ".items[$i].job_spec" "$CONFIG_FILE")
+
+            # Check if any changed file starts with this item's path.
+            if echo "$CHANGED_FILES" | grep -q "^$PATH_VAL"; then
+              echo "Changes detected for $NAME in path $PATH_VAL"
+
+              ITEM=$(jq -n \
+                --arg name "$NAME" \
+                --arg path "$PATH_VAL" \
+                --arg job_spec "$JOB_SPEC" \
+                '{name: $name, path: $path, job_spec: $job_spec}')
+
+              CHANGED_ITEMS=$(echo "$CHANGED_ITEMS" | jq --argjson item "$ITEM" '. + [$item]')
+            else
+              echo "No changes for $NAME ($PATH_VAL), skipping."
+            fi
+          done
+
+          FINAL_MATRIX=$(jq -n --argjson items "$CHANGED_ITEMS" '{items: $items}')
+
+          echo "Generated Matrix: $FINAL_MATRIX"
+          echo "matrix=$FINAL_MATRIX" >> "$GITHUB_OUTPUT"

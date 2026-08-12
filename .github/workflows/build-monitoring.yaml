@@ -1,16 +1,40 @@
 name: build-monitoring
 
-# Builds every tool under monitoring/ — grafana, prometheus, loki,
-# alloy, falco-webhook, and nomad-sentinel (moved here from the
-# app-services pipeline this session, per the same "monitoring/AI-ops
-# tooling belongs here" reasoning applied to Grafana). One shared
-# pipeline, as decided earlier — no per-tool CI, unlike the 12
-# services in build-services.yaml which each get their own project
-# but share this one build mechanism.
+# Builds every tool under monitoring/ — grafana, prometheus, loki, alloy,
+# falco-webhook, metrics-api, and nomad-sentinel. Grafana isn't an
+# Octopus project at all (deployed by the grafana Ansible role pulling
+# the new image tag directly, not through a release) — every Octopus
+# step below is skipped for it.
 #
-# nomad-sentinel gets an extra test job that runs BEFORE the matrix
-# build and gates it — a Nomad dev-mode agent, real collected cluster
-# data, and Gemini/Slack credentials from Vault, not mocks.
+# metrics-api lives here, not in build-services.yaml, even though it's
+# conceptually an application-level service — it physically sits under
+# monitoring/metrics-api/, and the split between the two workflows is
+# strictly by folder (services/ vs monitoring/), not by category.
+#
+# Matrix is dynamic — get-matrix calls the shared detect-changes.yaml
+# reusable workflow against .github/configs/monitoring-tools.json, which
+# diffs the actual push and only includes the tools that changed.
+#
+# nomad-sentinel is split out of that filtered set locally, in
+# split-nomad-sentinel — this is monitoring-specific business logic
+# (nomad-sentinel needs its test suite to pass before it builds; nothing
+# else does), so it stays in this file rather than in the generic
+# reusable workflow. test-nomad-sentinel and build-nomad-sentinel only
+# run when split-nomad-sentinel says nomad-sentinel was actually in the
+# filtered matrix; build runs on whatever's left, with no dependency on
+# nomad-sentinel's tests at all.
+#
+# Same build/scan/sign/attest/release shape as build-services.yaml:
+# build locally (docker/build-push-action, push: false, load: true),
+# Trivy scan to JSON (uploaded as an artifact either way, displayed as a
+# table only on failure so the log stays readable), push, resolve the
+# real digest via `gcloud artifacts docker images describe` (sign by
+# digest, never by mutable tag), Cosign sign + verify (retried — Rekor
+# transparency-log propagation isn't always instant), Cosign attest the
+# Trivy results as a vuln predicate + verify that too, then package/
+# release through Octopus. publish-build-manifest collects every tool's
+# scan results and metadata into one manifest in GCS, regardless of
+# which of build / build-nomad-sentinel actually ran this time.
 
 on:
   push:
@@ -19,28 +43,51 @@ on:
       - "monitoring/**"
       # Explicit files, not nomad-jobs/monitoring/** — that folder also
       # holds node-exporter.nomad.hcl (owned by deploy-platform-jobs.yaml,
-      # no build step at all) and metrics-api.nomad.hcl (owned by
-      # build-services.yaml, its own matrix entry). The old wildcard meant
-      # a node-exporter-only change would rebuild grafana/prometheus/loki/
-      # alloy/falco-webhook/nomad-sentinel for nothing.
+      # no build step at all).
       - "nomad-jobs/monitoring/prometheus.nomad.hcl"
       - "nomad-jobs/monitoring/loki.nomad.hcl"
       - "nomad-jobs/monitoring/alloy.nomad.hcl"
+      - "nomad-jobs/monitoring/metrics-api.nomad.hcl"
       - "nomad-jobs/monitoring/nomad-sentinel.nomad.hcl"
       - "nomad-jobs/security/falco-webhook.nomad.hcl"
+      - "octopus/deployment-scripts/**"
 
 permissions:
-  id-token: write # Cosign keyless signing + Vault OIDC
+  id-token: write # Cosign keyless signing + Vault OIDC + Octopus OIDC login
   contents: read
 
 env:
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/REPLACE-PROJECT/platform-images
+  CICD_BUCKET: ${{ vars.CICD_ARTIFACT_BUCKET }}
 
 jobs:
+  get-matrix:
+    uses: ./.github/workflows/detect-changes.yaml
+    with:
+      config-file: ".github/configs/monitoring-tools.json"
+
+  split-nomad-sentinel:
+    needs: get-matrix
+    runs-on: ubuntu-latest
+    outputs:
+      other_tools: ${{ steps.split.outputs.other_tools }}
+      nomad_sentinel_changed: ${{ steps.split.outputs.nomad_sentinel_changed }}
+    steps:
+      - name: Split nomad-sentinel Out Of The Filtered Matrix
+        id: split
+        run: |
+          MATRIX='${{ needs.get-matrix.outputs.matrix }}'
+          OTHER=$(echo "$MATRIX" | jq -c '{items: (.items | map(select(.name != "nomad-sentinel")))}')
+          NS_PRESENT=$(echo "$MATRIX" | jq -r '(.items | map(select(.name == "nomad-sentinel")) | length) > 0')
+          echo "other_tools=$OTHER" >> "$GITHUB_OUTPUT"
+          echo "nomad_sentinel_changed=$NS_PRESENT" >> "$GITHUB_OUTPUT"
+
   test-nomad-sentinel:
+    needs: split-nomad-sentinel
+    if: needs.split-nomad-sentinel.outputs.nomad_sentinel_changed == 'true'
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
 
       - name: Install Nomad
         run: |
@@ -67,15 +114,13 @@ jobs:
       # real per-environment ones at kv/data/{env}/nomad-sentinel/config —
       # they have to be, since vault_policy.github_actions only grants
       # read on kv/data/cicd/*, nothing under kv/data/dev/ or
-      # kv/data/prod/ at all. CI should never have a path to real
-      # per-environment secrets in the first place; this is a genuine
-      # security boundary, not just a naming convention to fix later.
+      # kv/data/prod/ at all.
       - name: Fetch Test Credentials From Vault
-        uses: hashicorp/vault-action@v3
+        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc
         with:
-          url: https://vault.platform.lefrancis.org:8443
+          url: ${{ vars.VAULT_ADDRESS }}
           method: jwt
-          role: github-actions
+          role: ${{ vars.VAULT_CI_ROLE }}
           secrets: |
             kv/data/cicd/nomad-sentinel-test gemini_api_key | GEMINI_API_KEY ;
             kv/data/cicd/nomad-sentinel-test slack_webhook_url | SLACK_WEBHOOK_URL
@@ -91,67 +136,546 @@ jobs:
           pytest tests/ -v
 
   build:
-    needs: test-nomad-sentinel
-    # needs: only actually gates nomad-sentinel's own build in
-    # principle — grafana/prometheus/loki/alloy/falco-webhook have no
-    # real dependency on nomad-sentinel's tests passing. Kept as one
-    # shared gate anyway (simpler than splitting the matrix into two
-    # separate jobs) since this pipeline is described as "one shared
-    # workflow for all monitoring stuff" — a genuinely broken
-    # nomad-sentinel test run blocking an unrelated Loki config change
-    # for a few extra minutes is a small cost for that simplicity.
+    needs: split-nomad-sentinel
+    if: fromJson(needs.split-nomad-sentinel.outputs.other_tools).items[0] != null
     runs-on: self-hosted
     strategy:
       fail-fast: false
-      matrix:
-        tool:
-          - { name: grafana, path: monitoring/grafana, job_spec: "" }
-          - { name: prometheus, path: monitoring/prometheus, job_spec: nomad-jobs/monitoring/prometheus.nomad.hcl }
-          - { name: loki, path: monitoring/loki, job_spec: nomad-jobs/monitoring/loki.nomad.hcl }
-          - { name: alloy, path: monitoring/alloy, job_spec: nomad-jobs/monitoring/alloy.nomad.hcl }
-          - { name: falco-webhook, path: monitoring/falco-webhook, job_spec: nomad-jobs/security/falco-webhook.nomad.hcl }
-          - { name: nomad-sentinel, path: monitoring/nomad-sentinel, job_spec: nomad-jobs/monitoring/nomad-sentinel.nomad.hcl }
+      matrix: ${{ fromJson(needs.split-nomad-sentinel.outputs.other_tools) }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22
+
+      - name: Verify Cosign install
+        run: cosign version
+
+      - name: Fetch Deployment Secrets From Vault
+        if: matrix.items.name != 'grafana'
+        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc
+        with:
+          url: ${{ vars.VAULT_ADDRESS }}
+          method: jwt
+          role: ${{ vars.VAULT_CI_ROLE }}
+          secrets: |
+            kv/data/cicd/octopus service_account_id | OCTOPUS_SERVICE_ACCOUNT_ID ;
+            kv/data/cicd/octopus space | OCTOPUS_SPACE
+            kv/data/cicd/slack webhook | SLACK_WEBHOOK_URL
+
+      - name: Fetch Slack Webhook Only (grafana)
+        if: matrix.items.name == 'grafana'
+        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc
+        with:
+          url: ${{ vars.VAULT_ADDRESS }}
+          method: jwt
+          role: ${{ vars.VAULT_CI_ROLE }}
+          secrets: |
+            kv/data/cicd/slack webhook | SLACK_WEBHOOK_URL
+
+      - name: Set short SHA and Build ID
+        run: |
+          echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+          echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
 
       - name: Build Image
-        run: |
-          docker build -t "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}" "${{ matrix.tool.path }}"
-
-      - name: Scan With Trivy
-        uses: aquasecurity/trivy-action@master
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
         with:
-          image-ref: "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}"
-          severity: CRITICAL
-          exit-code: "1"
-          trivyignores: "${{ matrix.tool.path }}/.trivyignore"
+          context: "${{ matrix.items.path }}"
+          file: "Dockerfile"
+          push: false
+          load: true
+          tags: "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy vulnerability scan
+        id: trivy-scan
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
+          format: 'json'
+          output: '${{ matrix.items.name }}-trivy-results.json'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
+          trivyignores: .trivyignore
+          cache: true
+
+      - name: Display Trivy vulnerabilities
+        if: failure() && steps.trivy-scan.outcome == 'failure'
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
+          trivyignores: .trivyignore
+          cache: true
+
+      - name: Upload Trivy results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: '${{ matrix.items.name }}-trivy-results'
+          path: '${{ matrix.items.name }}-trivy-results.json'
 
       - name: Push Image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: "${{ matrix.items.path }}"
+          file: "Dockerfile"
+          push: true
+          tags: "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Get image digest
+        id: get_digest
         run: |
-          docker push "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}"
+          DIGEST=$(gcloud artifacts docker images describe \
+            "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}" \
+            --format='value(image_summary.digest)')
 
-      - name: Sign Image (Cosign, Keyless)
-        uses: sigstore/cosign-installer@v3
-      - run: |
-          cosign sign --yes "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}"
+          echo "IMAGE_DIGEST=$DIGEST" >> "$GITHUB_OUTPUT"
 
-      - name: Generate And Attest SBOM
+      - name: Sign image with Cosign
+        run: cosign sign --yes "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
+
+      - name: Verify Image Signature
         run: |
-          trivy image --format cyclonedx --output sbom.json "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}"
-          cosign attest --yes --predicate sbom.json --type cyclonedx "${ARTIFACT_REGISTRY}/${{ matrix.tool.name }}:${{ github.sha }}"
+            for i in 1 2 3 4 5; do
+              if cosign verify "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
+                --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
+                --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
+                exit 0
+              fi
+              echo "Attempt $i failed, retrying in 5s..."
+              sleep 5
+            done
+            echo "All verification attempts failed"
+            exit 1
 
-      # Grafana isn't an Octopus project at all — it's deployed by the
-      # grafana Ansible role directly pulling the new image tag, not
-      # through an Octopus release. Skip create-release for it, same
-      # reasoning as the plugins/ folder's own deploy.sh scripts.
-      - name: Create Octopus Release
-        if: matrix.tool.name != 'grafana'
+      - name: Attest scan results with Cosign
+        run: |
+              cosign attest --yes \
+              --predicate '${{ matrix.items.name }}-trivy-results.json' \
+              --type vuln \
+              "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
+
+      - name: Verify scan attestation
+        run: |
+          for i in 1 2 3 4 5; do
+            if cosign verify-attestation "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
+              --type vuln \
+              --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+          echo "All verification attempts failed"
+          exit 1
+
+      - name: Save build metadata
+        run: |
+          mkdir -p /tmp/build-metadata
+          cat > /tmp/build-metadata/${{ matrix.items.name }}-metadata.json << EOF
+          {
+            "service": "${{ matrix.items.name }}",
+            "image_repo": "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}",
+            "image_tag": "${{ env.SHORT_SHA }}",
+            "image_digest": "${{ steps.get_digest.outputs.IMAGE_DIGEST }}",
+            "scan_report": "gs://${{ env.CICD_BUCKET }}/cicd/trivy-scans/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ matrix.items.name }}-trivy-results.json"
+          }
+          EOF
+
+      - name: Upload build metadata artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: ${{ matrix.items.name }}-build-metadata
+          path: /tmp/build-metadata/${{ matrix.items.name }}-metadata.json
+
+      - name: Package Job Spec + Deployment Scripts
+        if: matrix.items.name != 'grafana'
         run: |
           mkdir -p release-package/scripts
           cp octopus/deployment-scripts/*.sh release-package/scripts/
-          cp "${{ matrix.tool.job_spec }}" release-package/
-          octo create-release \
-            --project "${{ matrix.tool.name }}" \
-            --version "${{ github.sha }}" \
-            --package release-package/
+          cp "${{ matrix.items.job_spec }}" release-package/
+
+      - name: Login To Octopus
+        if: matrix.items.name != 'grafana'
+        uses: OctopusDeploy/login@e39e03d07630f363bdccd6c7ad4eb28e0ea8a184
+        with:
+          server: ${{ vars.OCTOPUS_DEPLOY_SERVER }}
+          service_account_id: ${{ env.OCTOPUS_SERVICE_ACCOUNT_ID }}
+
+      - name: Create Zip Package
+        if: matrix.items.name != 'grafana'
+        id: zip
+        uses: OctopusDeploy/create-zip-package-action@18a23ace1d3d51bc21429a1628e50acc36080400
+        with:
+          package_id: "${{ matrix.items.name }}"
+          version: "${{ env.SHORT_SHA }}"
+          base_path: release-package
+          output_folder: packaged
+          files: |
+            **/*
+
+      - name: Push Package To Octopus
+        if: matrix.items.name != 'grafana'
+        uses: OctopusDeploy/push-package-action@39ed2af62de5aeb10692eb62cae1e3a333f0c2f5
+        with:
+          packages: "${{ steps.zip.outputs.package_file_path }}"
+
+      - name: Create Octopus Release
+        if: matrix.items.name != 'grafana'
+        uses: OctopusDeploy/create-release-action@4bd7d595da7f803e467d41c32fa0b5dbb9f222dc
+        with:
+          project: "${{ matrix.items.name }}"
+          release_number: "${{ env.SHORT_SHA }}"
+          packages: "${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
+        # No deploy step here on purpose. Dev's lifecycle phase has
+        # automatic_deployment_targets = [dev], so creating the release
+        # alone already triggers an automatic deploy to Dev. Production
+        # is manual-approval-only in the Octopus UI.
+
+      - name: Send Slack notification on build failure
+        if: failure()
+        uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95
+        with:
+          payload: |
+            {
+              "text": "❌ *${{ github.workflow }}* — `${{ matrix.items.name }}` failed on `${{ github.ref_name }}`",
+              "attachments": [{
+                "color": "danger",
+                "fields": [
+                  {
+                    "title": "Tool",
+                    "value": "${{ matrix.items.name }}",
+                    "short": true
+                  },
+                  {
+                    "title": "SHA",
+                    "value": "${{ env.SHORT_SHA }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Actor",
+                    "value": "${{ github.actor }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Run",
+                    "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }]
+            }
+          webhook: ${{ env.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+
+  build-nomad-sentinel:
+    needs: [split-nomad-sentinel, test-nomad-sentinel]
+    if: |
+      needs.split-nomad-sentinel.outputs.nomad_sentinel_changed == 'true' &&
+      needs.test-nomad-sentinel.result == 'success'
+    runs-on: self-hosted
+    env:
+      TOOL_NAME: nomad-sentinel
+      TOOL_PATH: monitoring/nomad-sentinel
+      JOB_SPEC: nomad-jobs/monitoring/nomad-sentinel.nomad.hcl
+    steps:
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22
+
+      - name: Verify Cosign install
+        run: cosign version
+
+      - name: Fetch Deployment Secrets From Vault
+        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc
+        with:
+          url: ${{ vars.VAULT_ADDRESS }}
+          method: jwt
+          role: ${{ vars.VAULT_CI_ROLE }}
+          secrets: |
+            kv/data/cicd/octopus service_account_id | OCTOPUS_SERVICE_ACCOUNT_ID ;
+            kv/data/cicd/octopus space | OCTOPUS_SPACE
+            kv/data/cicd/slack webhook | SLACK_WEBHOOK_URL
+
+      - name: Set short SHA and Build ID
+        run: |
+          echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+          echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
+
+      - name: Build Image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: "${{ env.TOOL_PATH }}"
+          file: "Dockerfile"
+          push: false
+          load: true
+          tags: "${ARTIFACT_REGISTRY}/${{ env.TOOL_NAME }}:${{ env.SHORT_SHA }}"
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy vulnerability scan
+        id: trivy-scan
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: "${ARTIFACT_REGISTRY}/${{ env.TOOL_NAME }}:${{ env.SHORT_SHA }}"
+          format: 'json'
+          output: '${{ env.TOOL_NAME }}-trivy-results.json'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
+          trivyignores: .trivyignore
+          cache: true
+
+      - name: Display Trivy vulnerabilities
+        if: failure() && steps.trivy-scan.outcome == 'failure'
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: "${ARTIFACT_REGISTRY}/${{ env.TOOL_NAME }}:${{ env.SHORT_SHA }}"
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
+          trivyignores: .trivyignore
+          cache: true
+
+      - name: Upload Trivy results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: '${{ env.TOOL_NAME }}-trivy-results'
+          path: '${{ env.TOOL_NAME }}-trivy-results.json'
+
+      - name: Push Image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: "${{ env.TOOL_PATH }}"
+          file: "Dockerfile"
+          push: true
+          tags: "${ARTIFACT_REGISTRY}/${{ env.TOOL_NAME }}:${{ env.SHORT_SHA }}"
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Get image digest
+        id: get_digest
+        run: |
+          DIGEST=$(gcloud artifacts docker images describe \
+            "${{ env.ARTIFACT_REGISTRY }}/${{ env.TOOL_NAME }}:${{ env.SHORT_SHA }}" \
+            --format='value(image_summary.digest)')
+
+          echo "IMAGE_DIGEST=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Sign image with Cosign
+        run: cosign sign --yes "${ARTIFACT_REGISTRY}/${{ env.TOOL_NAME }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
+
+      - name: Verify Image Signature
+        run: |
+            for i in 1 2 3 4 5; do
+              if cosign verify "${ARTIFACT_REGISTRY}/${{ env.TOOL_NAME }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
+                --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
+                --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
+                exit 0
+              fi
+              echo "Attempt $i failed, retrying in 5s..."
+              sleep 5
+            done
+            echo "All verification attempts failed"
+            exit 1
+
+      - name: Attest scan results with Cosign
+        run: |
+              cosign attest --yes \
+              --predicate '${{ env.TOOL_NAME }}-trivy-results.json' \
+              --type vuln \
+              "${ARTIFACT_REGISTRY}/${{ env.TOOL_NAME }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
+
+      - name: Verify scan attestation
+        run: |
+          for i in 1 2 3 4 5; do
+            if cosign verify-attestation "${ARTIFACT_REGISTRY}/${{ env.TOOL_NAME }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
+              --type vuln \
+              --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+          echo "All verification attempts failed"
+          exit 1
+
+      - name: Save build metadata
+        run: |
+          mkdir -p /tmp/build-metadata
+          cat > /tmp/build-metadata/${{ env.TOOL_NAME }}-metadata.json << EOF
+          {
+            "service": "${{ env.TOOL_NAME }}",
+            "image_repo": "${ARTIFACT_REGISTRY}/${{ env.TOOL_NAME }}",
+            "image_tag": "${{ env.SHORT_SHA }}",
+            "image_digest": "${{ steps.get_digest.outputs.IMAGE_DIGEST }}",
+            "scan_report": "gs://${{ env.CICD_BUCKET }}/cicd/trivy-scans/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ env.TOOL_NAME }}-trivy-results.json"
+          }
+          EOF
+
+      - name: Upload build metadata artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: ${{ env.TOOL_NAME }}-build-metadata
+          path: /tmp/build-metadata/${{ env.TOOL_NAME }}-metadata.json
+
+      - name: Package Job Spec + Deployment Scripts
+        run: |
+          mkdir -p release-package/scripts
+          cp octopus/deployment-scripts/*.sh release-package/scripts/
+          cp "${JOB_SPEC}" release-package/
+
+      - name: Login To Octopus
+        uses: OctopusDeploy/login@e39e03d07630f363bdccd6c7ad4eb28e0ea8a184
+        with:
+          server: ${{ vars.OCTOPUS_DEPLOY_SERVER }}
+          service_account_id: ${{ env.OCTOPUS_SERVICE_ACCOUNT_ID }}
+
+      - name: Create Zip Package
+        id: zip
+        uses: OctopusDeploy/create-zip-package-action@18a23ace1d3d51bc21429a1628e50acc36080400
+        with:
+          package_id: nomad-sentinel
+          version: "${{ env.SHORT_SHA }}"
+          base_path: release-package
+          output_folder: packaged
+          files: |
+            **/*
+
+      - name: Push Package To Octopus
+        uses: OctopusDeploy/push-package-action@39ed2af62de5aeb10692eb62cae1e3a333f0c2f5
+        with:
+          packages: "${{ steps.zip.outputs.package_file_path }}"
+
+      - name: Create Octopus Release
+        uses: OctopusDeploy/create-release-action@4bd7d595da7f803e467d41c32fa0b5dbb9f222dc
+        with:
+          project: nomad-sentinel
+          release_number: "${{ env.SHORT_SHA }}"
+          packages: "nomad-sentinel:${{ env.SHORT_SHA }}"
+        # Same no-deploy-step reasoning as the build job above.
+
+      - name: Send Slack notification on build failure
+        if: failure()
+        uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95
+        with:
+          payload: |
+            {
+              "text": "❌ *${{ github.workflow }}* — `nomad-sentinel` failed on `${{ github.ref_name }}`",
+              "attachments": [{
+                "color": "danger",
+                "fields": [
+                  {
+                    "title": "Tool",
+                    "value": "nomad-sentinel",
+                    "short": true
+                  },
+                  {
+                    "title": "SHA",
+                    "value": "${{ env.SHORT_SHA }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Actor",
+                    "value": "${{ github.actor }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Run",
+                    "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }]
+            }
+          webhook: ${{ env.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+
+  publish-build-manifest:
+    needs: [build, build-nomad-sentinel]
+    if: |
+      always() &&
+      (contains(fromJson('["success", "failure"]'), needs.build.result) ||
+       contains(fromJson('["success", "failure"]'), needs.build-nomad-sentinel.result))
+    runs-on: self-hosted
+    env:
+      CICD_BUCKET: ${{ vars.CICD_ARTIFACT_BUCKET }}
+    steps:
+      - name: Set short SHA and Build ID
+        run: |
+          echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+          echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
+
+      - name: Download trivy scan artifacts
+        if: always()
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: "*-trivy-results"
+          path: /tmp/trivy-scan
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Download build metadata artifacts
+        if: always()
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: "*-build-metadata"
+          path: /tmp/build-metadata
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Combine build metadata into single manifest
+        if: always()
+        run: |
+          if ls /tmp/build-metadata/*.json 1>/dev/null 2>&1; then
+            IMAGE_DETAILS=$(ls /tmp/build-metadata/*.json | xargs jq -s '.')
+          else
+            IMAGE_DETAILS="[]"
+          fi
+          cat > build-manifest.json << EOF
+          {
+            "build_id": "${{ github.sha }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "branch": "${{ github.ref_name }}",
+            "triggered_by": "${{ github.actor }}",
+            "image_details": $IMAGE_DETAILS
+          }
+          EOF
+          cat build-manifest.json
+
+      - name: Push trivy scan results to GCS
+        if: always()
+        run: |
+          if [ -d /tmp/trivy_scan ] && [ "$(ls -A /tmp/trivy_scan)" ]; then
+            gsutil -m cp -z json -h "Content-Type:application/json" \
+              /tmp/trivy_scan/* "gs://${{ env.CICD_BUCKET }}/security-scans/trivy/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/"
+          else
+            echo "No trivy scan results to upload"
+          fi
+
+      - name: Publish build manifest to GCS
+        if: always()
+        run: |
+          gsutil cp build-manifest.json \
+            "gs://${{ env.CICD_BUCKET }}/manifests/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/build-manifest.json"

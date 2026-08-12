@@ -32,13 +32,13 @@ STATE_BUCKET="${3:-}"
 
 if [[ -z "$PROJECT_ID" || -z "$STATE_BUCKET" ]]; then
   echo "Usage: $0 <project_id> [region] <state_bucket_name> "
-  echo "Example: $0 nomad-platform-gcp europe-west1 nomad-platform-gcp-tfstate"
+  echo "Example: $0 nomad-platform-gcp europe-west1 tfstate"
   exit 1
 fi
 
 echo "==> Project:      $PROJECT_ID"
 echo "==> Region:       $REGION"
-echo "==> State bucket: gs://$STATE_BUCKET"
+echo "==> State bucket: gs://$PROJECT_ID-$REGION-$STATE_BUCKET"
 echo ""
 
 # ── Step 1: Set active project ────────────────────────────────────────────────
@@ -56,11 +56,10 @@ gcloud services enable cloudresourcemanager.googleapis.com
 echo "    Done."
 
 # ── Step 3: Create state bucket ───────────────────────────────────────────────
-# Created with production-grade settings from the start — state files are
-# written on the very first terraform init, so the bucket must be correctly
+# State files are written on the very first terraform init, so the bucket must be correctly
 # configured before Terraform ever touches it.
 #
-# Notable differences from platform-artifacts bucket:
+# Notable differences from platform-artifacts bucket used for applications:
 #   - NO lifecycle deletion rule — state files are never automatically deleted
 #   - Versioning enabled — critical for state rollback on failed applies
 #   - Soft delete 7 days — recovery window for accidental state deletion
@@ -101,16 +100,12 @@ gcloud storage buckets update "gs://$PROJECT_ID-$REGION-$STATE_BUCKET" \
 
 # Labels — consistent with Terraform-managed resources.
 # environment=shared: state bucket serves all environments (dev + prod workspaces)
-gcloud storage buckets update "gs://$STATE_BUCKET" \
+gcloud storage buckets update "gs://$PROJECT_ID-$REGION-$STATE_BUCKET" \
   --update-labels=managed-by=terraform,team=platform,environment=shared,purpose=terraform-state
 
 # Lifecycle rule — clean up noncurrent (old) state versions after 90 days.
-# Current versions (live state) are NEVER deleted — no age-based delete rule.
-# Noncurrent versions older than 90 days are deleted to control storage costs
-# while keeping plenty of rollback history (90 days of state history is generous).
-#
-# Applied via a JSON policy file piped to gcloud.
-LIFECYCLE_JSON=$(cat <<'EOF'
+LIFECYCLE_FILE=$(mktemp)
+cat <<'EOF' > "$LIFECYCLE_FILE"
 {
   "rule": [
     {
@@ -133,10 +128,11 @@ LIFECYCLE_JSON=$(cat <<'EOF'
   ]
 }
 EOF
-)
 
-echo "$LIFECYCLE_JSON" | gcloud storage buckets update "gs://$PROJECT_ID-$REGION-$STATE_BUCKET" \
-  --lifecycle-file=/dev/stdin
+gcloud storage buckets update "gs://$PROJECT_ID-$REGION-$STATE_BUCKET" \
+  --lifecycle-file="$LIFECYCLE_FILE"
+
+rm -f "$LIFECYCLE_FILE"
 
 echo "    Configuration complete."
 echo ""
@@ -144,7 +140,8 @@ echo "============================================================"
 echo "Prerequisites complete. Next steps:"
 echo ""
 echo "  1. cd terraform/bootstrap"
-echo "  2. terraform init"
-echo "  3. terraform apply -var-file=dev.tfvars"
-echo "  4. ./scripts/apply-cmek-to-state-bucket.sh $PROJECT_ID $REGION $STATE_BUCKET"
+echo "  2. terraform init -backend-config="state.conf" -reconfigure"
+echo "  3. terraform plan -out=tfplan"
+echo "  4. terraform apply tfplan"
+echo "  5. ./scripts/apply-cmek-to-state-bucket.sh $PROJECT_ID $REGION $STATE_BUCKET"
 echo "============================================================"
