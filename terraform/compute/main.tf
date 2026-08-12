@@ -63,7 +63,7 @@ locals {
       service_account_email    = local.traefik_vm_sa_member_internal
       boot_disk_size_gb        = 20
       tags                     = ["traefik"]
-      labels                   = { role = "traefik" }
+      labels                   = { role = "traefik-internal" }
     }
   }
 
