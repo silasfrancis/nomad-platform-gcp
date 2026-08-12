@@ -5,5 +5,5 @@ falco_apt_repo: "deb https://download.falco.org/packages/deb stable main"
 falco_engine_kind: "modern_ebpf"
 falco_config_dir: /etc/falco
 
-falco_webhook_url: "https://falco-webhook-{{ environment }}.platform.lefrancis.org"
+falco_webhook_url: ""
 falco_alert_severity_threshold: "warning"

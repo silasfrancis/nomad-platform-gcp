@@ -43,7 +43,7 @@ job "falco-webhook" {
       tags = [
         "traefik.enable=true",
         "traefik.http.routers.falco-webhook.rule=Host(`falco-webhook-#{Environment}.platform.lefrancis.org`)",
-        "traefik.http.routers.falco-webhook.entrypoints=internal",
+        "traefik.http.routers.falco-webhook.entrypoints=internal", 
         "traefik.http.routers.falco-webhook.tls.certresolver=letsencrypt",
       ]
 

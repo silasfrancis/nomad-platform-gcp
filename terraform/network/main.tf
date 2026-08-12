@@ -66,7 +66,7 @@ module "logging" {
   project_id = var.project_id
   region     = var.region
 
-  default_cmek_key            = local.bootstrap.kms_keys["storage-cmek"].id
+  default_cmek_key            = local.bootstrap.kms_keys["platform/storage-cmek"].id
 
     # Add more here as new logging needs come up, e.g.:
     # "secret-access" = {
@@ -76,4 +76,11 @@ module "logging" {
     #   description = ""
     #   cmek_key       = optional(string)
     # }
+}
+
+module "internal_dns" {
+  source            = "../modules/dns"
+  project_id        = var.project_id
+  network_self_link = module.vpc.network_self_link
+
 }

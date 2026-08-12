@@ -10,6 +10,11 @@ output "subnets" {
   value = module.vpc.subnets
 }
 
-output "dns_zone_name" {
-  value = module.dns.zone_name
+output "internal_dns_zone_name" {
+  value = module.internal_dns.zone_name
+}
+
+
+output "internal_dns_suffix" {
+  value = module.internal_dns.dns_name
 }

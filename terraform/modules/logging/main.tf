@@ -27,7 +27,6 @@ resource "google_logging_project_bucket_config" "this" {
     kms_key_name = each.value.cmek_key
   }
 
-  depends_on = [google_kms_crypto_key_iam_member.logging_cmek]
 }
 
 

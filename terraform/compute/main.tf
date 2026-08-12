@@ -257,12 +257,8 @@ module "mig" {
   migs          = local.active_migs
 }
 
-module "traefik_internal_dns" {
-  source            = "../modules/dns"
-  project_id        = var.project_id
-  network_self_link = local.network.network_self_link
-  dns_suffix        = "platform.lefrancis.org."
 
+locals {
   records = {
     vault       = module.instances.instances["traefik-internal"].internal_ip
     octopus     = module.instances.instances["traefik-internal"].internal_ip
@@ -284,4 +280,13 @@ module "traefik_internal_dns" {
     loki-dev = module.instances.instances["traefik-internal"].internal_ip
     lokie-prod = module.instances.instances["traefik-internal"].internal_ip
   }
+}
+
+resource "google_dns_record_set" "this" {
+  for_each     = locals.records
+  name         = "${each.key}.${local.network.internal_dns_suffix}"
+  managed_zone = local.network.internal_dns_zone_name
+  type         = "A"
+  ttl          = 300
+  rrdatas      = [each.value]
 }

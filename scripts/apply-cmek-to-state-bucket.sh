@@ -16,7 +16,7 @@
 #   ./scripts/apply-cmek-to-state-bucket.sh <project_id> <state_bucket_name>
 #
 # Example:
-#   ./scripts/apply-cmek-to-state-bucket.sh nomad-platform-gcp nomad-platform-gcp-tfstate
+#   ./scripts/apply-cmek-to-state-bucket.sh nomad-platform-gcp europe-west1 tfstate
 
 set -euo pipefail
 
@@ -31,17 +31,17 @@ fi
 
 echo "==> Project:      $PROJECT_ID"
 echo "==> Region:       $REGION"
-echo "==> State bucket: gs://$STATE_BUCKET"
+echo "==> State bucket: gs://$PROJECT_ID-$REGION-$STATE_BUCKET"
 echo ""
 
 echo "==> Reading gcs-storage key ID from Terraform bootstrap outputs"
 cd terraform/bootstrap
 
-KEY_ID=$(terraform output -raw kms_keys["storage-cmek"].id 2>/dev/null || echo "")
+KEY_ID=$(terraform output -json kms_keys | jq -r '."platform/storage-cmek".id' 2>/dev/null || echo "")
 
 if [[ -z "$KEY_ID" ]]; then
   echo "ERROR: storage_cmek_id output is empty."
-  echo "       Run: cd terraform/bootstrap && terraform apply -var-file=bootstrap.tfvars"
+  echo "       Run: cd terraform/bootstrap && terraform apply"
   exit 1
 fi
 

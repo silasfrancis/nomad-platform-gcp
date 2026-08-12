@@ -1,11 +1,11 @@
 # Copy This To nomad-client.pkrvars.hcl (Gitignored) And Fill In Real
 # Values Before Running `packer build`.
 
-project_id             = "CHANGEME-project-id"
-disk_cmek_key_id       = "CHANGEME-full-self-link-from-bootstrap-outputs"
-service_account_email  = "CHANGEME-packer-builder-sa-email-from-bootstrap-outputs"
+project_id             = ""
+disk_cmek_key_id       = ""
+service_account_email  = ""
 
 # Defaults Below Are Usually Fine As-Is — Only Override If Needed.
-# zone         = "us-central1-a"
+# zone         = "europe-west1-a"
 # subnetwork   = "subnet-mgmt"
 # ssh_username = "packer"

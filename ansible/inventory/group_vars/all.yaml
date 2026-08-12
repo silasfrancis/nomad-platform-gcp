@@ -2,7 +2,7 @@
 # IAP Tunnel — %h Resolves To ansible_host, Which inventory/gcp.yaml Sets
 # To The GCE Instance Name (Not An IP), Which Is What
 # `gcloud compute start-iap-tunnel` Expects.
-ansible_user: "CHANGEME_your_oslogin_username"
+ansible_user: "ansible_user"
 ansible_ssh_common_args: >-
   -o ProxyCommand="gcloud compute start-iap-tunnel %h %p
   --listen-on-stdin --zone=us-central1-a --project={{ gcp_project_id }}"

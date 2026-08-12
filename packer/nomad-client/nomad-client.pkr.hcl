@@ -30,7 +30,7 @@ locals {
 source "googlecompute" "nomad_client" {
   project_id   = var.project_id
   zone         = var.zone
-  machine_type = "e2-medium" # Build VM Only — Unrelated To The Real Client Machine Type
+  machine_type = "e2-medium" # Build VM Only
 
   source_image_family = "debian-12"
   image_name           = local.image_name

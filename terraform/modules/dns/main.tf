@@ -1,14 +1,11 @@
 # Cloud DNS — Private Zone
 #
 # Public zones (boutique.lefrancis.org, dev.boutique.lefrancis.org) are
-# managed in Cloudflare, NOT here — out of scope for this Terraform layer.
-#
+# managed in Cloudflare.
 # This creates the platform.lefrancis.org private zone only, resolvable
 # inside the VPC. Record sets (grafana., vault., nomad., consul., octopus.)
 # are deliberately NOT created here: their target is the internal Traefik
-# IP on the mgmt VM, which doesn't exist until compute/ applies. Add the
-# recordsets in compute/ once the mgmt VM's internal IP is known, referencing
-# this zone's name via remote state / output.
+# VM IP. They are created during apply in compute/
 
 resource "google_dns_managed_zone" "platform_private" {
   project     = var.project_id
@@ -24,13 +21,4 @@ resource "google_dns_managed_zone" "platform_private" {
   }
 
   labels = var.labels
-}
-
-resource "google_dns_record_set" "this" {
-  for_each     = var.records
-  name         = "${each.key}.${var.dns_suffix}"
-  managed_zone = google_dns_managed_zone.platform_private.name
-  type         = "A"
-  ttl          = 300
-  rrdatas      = [each.value]
 }
