@@ -33,6 +33,9 @@ scripts/output
 state.conf
 secret*.tfvars
 .terraform/
+*.tfstate
+*.tfstate.*
+crash.log
 tfplan
 pki-local/
 *.retry
