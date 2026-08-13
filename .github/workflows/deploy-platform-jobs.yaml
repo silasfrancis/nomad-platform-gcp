@@ -31,7 +31,6 @@ on:
       - "nomad-jobs/operations/consul-snapshot.nomad.hcl"
       - "nomad-jobs/operations/postgres-backup.nomad.hcl"
       - "nomad-jobs/operations/docker-cleanup.nomad.hcl"
-      - "octopus/deployment-scripts/**"
 
 permissions:
   contents: read
@@ -100,7 +99,7 @@ jobs:
       - name: Create Octopus Release
         uses: OctopusDeploy/create-release-action@4bd7d595da7f803e467d41c32fa0b5dbb9f222dc
         with:
-          project: "${{ matrix.items.name }}"
+          project: "${{ matrix.items.octopus_project }}"
           release_number: "${{ env.SHORT_SHA }}"
           packages: "${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
         # No deploy step: Dev's lifecycle phase has

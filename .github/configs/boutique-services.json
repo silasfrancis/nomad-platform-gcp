@@ -3,57 +3,68 @@
     {
       "name": "frontend",
       "path": "services/frontend",
-      "job_spec": "nomad-jobs/boutique/frontend.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/frontend.nomad.hcl",
+      "octopus_project": "boutique"
     },
     {
       "name": "cartservice",
       "path": "services/cartservice",
-      "job_spec": "nomad-jobs/boutique/cartservice.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/cartservice.nomad.hcl",
+      "octopus_project": "boutique"
     },
     {
       "name": "productcatalogservice",
       "path": "services/productcatalogservice",
-      "job_spec": "nomad-jobs/boutique/productcatalogservice.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/productcatalogservice.nomad.hcl",
+      "octopus_project": "boutique"
     },
     {
       "name": "checkoutservice",
       "path": "services/checkoutservice",
-      "job_spec": "nomad-jobs/boutique/checkoutservice.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/checkoutservice.nomad.hcl",
+      "octopus_project": "boutique"
     },
     {
       "name": "currencyservice",
       "path": "services/currencyservice",
-      "job_spec": "nomad-jobs/boutique/currencyservice.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/currencyservice.nomad.hcl",
+      "octopus_project": "boutique"
     },
     {
       "name": "paymentservice",
       "path": "services/paymentservice",
-      "job_spec": "nomad-jobs/boutique/paymentservice.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/paymentservice.nomad.hcl",
+      "octopus_project": "boutique"
     },
     {
       "name": "shippingservice",
       "path": "services/shippingservice",
-      "job_spec": "nomad-jobs/boutique/shippingservice.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/shippingservice.nomad.hcl",
+      "octopus_project": "boutique"
     },
     {
       "name": "emailservice",
       "path": "services/emailservice",
-      "job_spec": "nomad-jobs/boutique/emailservice.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/emailservice.nomad.hcl",
+      "octopus_project": "boutique"
     },
     {
       "name": "recommendationservice",
       "path": "services/recommendationservice",
-      "job_spec": "nomad-jobs/boutique/recommendationservice.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/recommendationservice.nomad.hcl",
+      "octopus_project": "boutique"
     },
     {
       "name": "adservice",
       "path": "services/adservice",
-      "job_spec": "nomad-jobs/boutique/adservice.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/adservice.nomad.hcl",
+      "octopus_project": "boutique"
     },
     {
       "name": "loadgenerator",
       "path": "services/loadgenerator",
-      "job_spec": "nomad-jobs/boutique/loadgenerator.nomad.hcl"
+      "job_spec": "nomad-jobs/boutique/loadgenerator.nomad.hcl",
+      "octopus_project": "boutique"
     }
   ]
 }

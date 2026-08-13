@@ -184,17 +184,6 @@ resource "octopusdeploy_variable" "datacenter" {
   }
 }
 
-resource "octopusdeploy_variable" "environment" {
-  for_each = toset(["dev", "prod"])
-  owner_id = octopusdeploy_library_variable_set.platform_shared.id
-  name     = "Environment"
-  type     = "String"
-  value    = each.key
-  scope {
-    environments = [local.env_by_key[each.key]]
-  }
-}
-
 resource "octopusdeploy_variable" "artifact_registry" {
   owner_id = octopusdeploy_library_variable_set.platform_shared.id
   name     = "ArtifactRegistry"

@@ -115,7 +115,7 @@
 - name: Template Consul Systemd Unit
   ansible.builtin.template:
     src: consul.service.j2
-    dest: "/etc/systemd/system/{{ consul_service_name }}.service"
+    dest: "/etc/systemd/system/consul.service"
     owner: root
     group: root
     mode: "0644"
@@ -128,19 +128,19 @@
 
 - name: Enable Consul service
   ansible.builtin.systemd:
-    name: "{{ consul_service_name }}"
+    name: "consul"
     enabled: true
     daemon_reload: true
 
 - name: Start Consul (only when running directly against a real host)
   ansible.builtin.systemd:
-    name: "{{ consul_service_name }}"
+    name: "consul"
     state: started
   when: consul_datacenter is defined
 
 - name: Restart Consul if config changed (only when already started)
   ansible.builtin.systemd:
-    name: "{{ consul_service_name }}"
+    name: "consul"
     state: restarted
   when:
     - consul_datacenter is defined

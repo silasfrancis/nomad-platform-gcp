@@ -174,4 +174,18 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
+# Set Falco Webhook URL config based on environment
+if [ "${ENVIRONMENT}" = "prod" ]; then
+    TRAEFIK_INTERNAL_ENNTRY_PORT="8447"
+else
+    TRAEFIK_INTERNAL_ENNTRY_PORT="8446"
+fi
+
+FALCO_WEBHOOK_URL="https://falco-webhook-${ENVIRONMENT}.platform.lefrancis.org:${TRAEFIK_INTERNAL_ENNTRY_PORT}"
+
+# Replace the placeholder simply and cleanly
+sed -i "s|__FALCO_WEBHOOK_URL__|${FALCO_WEBHOOK_URL}|g" /etc/falco/falco.yaml
+
+systemctl restart falco
+
 echo "[nomad-client-startup] Done."

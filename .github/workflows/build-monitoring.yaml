@@ -50,14 +50,13 @@ on:
       - "nomad-jobs/monitoring/metrics-api.nomad.hcl"
       - "nomad-jobs/monitoring/nomad-sentinel.nomad.hcl"
       - "nomad-jobs/security/falco-webhook.nomad.hcl"
-      - "octopus/deployment-scripts/**"
 
 permissions:
   id-token: write # Cosign keyless signing + Vault OIDC + Octopus OIDC login
   contents: read
 
 env:
-  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/REPLACE-PROJECT/platform-images
+  ARTIFACT_REGISTRY: ${{ vars.ARTIFACT_REGISTRY }}
   CICD_BUCKET: ${{ vars.CICD_ARTIFACT_BUCKET }}
 
 jobs:
@@ -293,7 +292,7 @@ jobs:
             "image_repo": "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}",
             "image_tag": "${{ env.SHORT_SHA }}",
             "image_digest": "${{ steps.get_digest.outputs.IMAGE_DIGEST }}",
-            "scan_report": "gs://${{ env.CICD_BUCKET }}/cicd/trivy-scans/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ matrix.items.name }}-trivy-results.json"
+            "scan_report": "gs://${{ env.CICD_BUCKET }}/security-scans/trivy/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ matrix.items.name }}-trivy-results.json"
           }
           EOF
 
@@ -339,7 +338,7 @@ jobs:
         if: matrix.items.name != 'grafana'
         uses: OctopusDeploy/create-release-action@4bd7d595da7f803e467d41c32fa0b5dbb9f222dc
         with:
-          project: "${{ matrix.items.name }}"
+          project: "${{ matrix.items.octopus_project }}"
           release_number: "${{ env.SHORT_SHA }}"
           packages: "${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
         # No deploy step here on purpose. Dev's lifecycle phase has
@@ -392,6 +391,7 @@ jobs:
       TOOL_NAME: nomad-sentinel
       TOOL_PATH: monitoring/nomad-sentinel
       JOB_SPEC: nomad-jobs/monitoring/nomad-sentinel.nomad.hcl
+      TOOL_OCTOPUS_PROJECT: monitoring
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
 
@@ -531,7 +531,7 @@ jobs:
             "image_repo": "${ARTIFACT_REGISTRY}/${{ env.TOOL_NAME }}",
             "image_tag": "${{ env.SHORT_SHA }}",
             "image_digest": "${{ steps.get_digest.outputs.IMAGE_DIGEST }}",
-            "scan_report": "gs://${{ env.CICD_BUCKET }}/cicd/trivy-scans/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ env.TOOL_NAME }}-trivy-results.json"
+            "scan_report": "gs://${{ env.CICD_BUCKET }}/security-scans/trivy/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ env.TOOL_NAME }}-trivy-results.json"
           }
           EOF
 
@@ -572,7 +572,7 @@ jobs:
       - name: Create Octopus Release
         uses: OctopusDeploy/create-release-action@4bd7d595da7f803e467d41c32fa0b5dbb9f222dc
         with:
-          project: nomad-sentinel
+          project: ${{ env.TOOL_OCTOPUS_PROJECT }}
           release_number: "${{ env.SHORT_SHA }}"
           packages: "nomad-sentinel:${{ env.SHORT_SHA }}"
         # Same no-deploy-step reasoning as the build job above.

@@ -3,32 +3,38 @@
     {
       "name": "postgres",
       "path": "nomad-jobs/datastore/postgres.nomad.hcl",
-      "job_spec": "nomad-jobs/datastore/postgres.nomad.hcl"
+      "job_spec": "nomad-jobs/datastore/postgres.nomad.hcl",
+      "octopus_project": "datastore"
     },
     {
       "name": "redis",
       "path": "nomad-jobs/datastore/redis.nomad.hcl",
-      "job_spec": "nomad-jobs/datastore/redis.nomad.hcl"
+      "job_spec": "nomad-jobs/datastore/redis.nomad.hcl",
+      "octopus_project": "datastore"
     },
     {
       "name": "node-exporter",
       "path": "nomad-jobs/monitoring/node-exporter.nomad.hcl",
-      "job_spec": "nomad-jobs/monitoring/node-exporter.nomad.hcl"
+      "job_spec": "nomad-jobs/monitoring/node-exporter.nomad.hcl",
+      "octopus_project": "monitoring"
     },
     {
       "name": "consul-snapshot",
       "path": "nomad-jobs/operations/consul-snapshot.nomad.hcl",
-      "job_spec": "nomad-jobs/operations/consul-snapshot.nomad.hcl"
+      "job_spec": "nomad-jobs/operations/consul-snapshot.nomad.hcl",
+      "octopus_project": "operations"
     },
     {
       "name": "postgres-backup",
       "path": "nomad-jobs/operations/postgres-backup.nomad.hcl",
-      "job_spec": "nomad-jobs/operations/postgres-backup.nomad.hcl"
+      "job_spec": "nomad-jobs/operations/postgres-backup.nomad.hcl",
+      "octopus_project": "operations"
     },
     {
       "name": "docker-cleanup",
       "path": "nomad-jobs/operations/docker-cleanup.nomad.hcl",
-      "job_spec": "nomad-jobs/operations/docker-cleanup.nomad.hcl"
+      "job_spec": "nomad-jobs/operations/docker-cleanup.nomad.hcl",
+      "octopus_project": "operations"
     }
   ]
 }

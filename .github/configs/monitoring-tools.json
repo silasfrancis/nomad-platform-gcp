@@ -3,37 +3,44 @@
     {
       "name": "grafana",
       "path": "monitoring/grafana",
-      "job_spec": ""
+      "job_spec": "",
+      "octopus_project": ""
     },
     {
       "name": "prometheus",
       "path": "monitoring/prometheus",
-      "job_spec": "nomad-jobs/monitoring/prometheus.nomad.hcl"
+      "job_spec": "nomad-jobs/monitoring/prometheus.nomad.hcl",
+      "octopus_project": "monitoring"
     },
     {
       "name": "loki",
       "path": "monitoring/loki",
-      "job_spec": "nomad-jobs/monitoring/loki.nomad.hcl"
+      "job_spec": "nomad-jobs/monitoring/loki.nomad.hcl",
+      "octopus_project": "monitoring"
     },
     {
       "name": "alloy",
       "path": "monitoring/alloy",
-      "job_spec": "nomad-jobs/monitoring/alloy.nomad.hcl"
+      "job_spec": "nomad-jobs/monitoring/alloy.nomad.hcl",
+      "octopus_project": "monitoring"
     },
     {
       "name": "falco-webhook",
       "path": "monitoring/falco-webhook",
-      "job_spec": "nomad-jobs/security/falco-webhook.nomad.hcl"
+      "job_spec": "nomad-jobs/security/falco-webhook.nomad.hcl",
+      "octopus_project": "security"
     },
     {
       "name": "metrics-api",
       "path": "monitoring/metrics-api",
-      "job_spec": "nomad-jobs/monitoring/metrics-api.nomad.hcl"
+      "job_spec": "nomad-jobs/monitoring/metrics-api.nomad.hcl",
+      "octopus_project": "monitoring"
     },
     {
       "name": "nomad-sentinel",
       "path": "monitoring/nomad-sentinel",
-      "job_spec": "nomad-jobs/monitoring/nomad-sentinel.nomad.hcl"
+      "job_spec": "nomad-jobs/monitoring/nomad-sentinel.nomad.hcl",
+      "octopus_project": "monitoring"
     }
   ]
 }

@@ -34,9 +34,9 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
         with:
-          fetch-depth: 0 # full history — BASE_SHA/BEFORE may not be reachable with a shallow clone
+          fetch-depth: 0
 
       - name: Generate Filtered Matrix
         id: set-matrix
@@ -87,9 +87,14 @@ jobs:
             PATH_VAL=$(jq -r ".items[$i].path" "$CONFIG_FILE")
             JOB_SPEC=$(jq -r ".items[$i].job_spec" "$CONFIG_FILE")
 
-            # Check if any changed file starts with this item's path.
-            if echo "$CHANGED_FILES" | grep -q "^$PATH_VAL"; then
-              echo "Changes detected for $NAME in path $PATH_VAL"
+            # Check if any changed file starts with this item's path OR
+            # matches its job spec exactly. Path-only matching missed a
+            # real case: editing only the job spec (e.g. a CPU/memory
+            # value now living directly in the .nomad.hcl file) never
+            # touches anything under `path`, so it silently wouldn't
+            # have been detected as a change at all.
+            if echo "$CHANGED_FILES" | grep -q "^$PATH_VAL" || echo "$CHANGED_FILES" | grep -qxF "$JOB_SPEC"; then
+              echo "Changes detected for $NAME (path: $PATH_VAL, job_spec: $JOB_SPEC)"
 
               ITEM=$(jq -n \
                 --arg name "$NAME" \

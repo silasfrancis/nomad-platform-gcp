@@ -6,14 +6,13 @@ on:
     paths:
       - "services/**"
       - "nomad-jobs/boutique/**"
-      - "octopus-deploy/deployment-scripts/**"
 
 permissions:
   id-token: write
   contents: read
 
 env:
-  ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/REPLACE-PROJECT/platform-images
+  ARTIFACT_REGISTRY: ${{ vars.ARTIFACT_REGISTRY }}
   CICD_BUCKET: ${{ vars.CICD_ARTIFACT_BUCKET }}
 
 jobs:
@@ -72,12 +71,12 @@ jobs:
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
-          format: 'json'
-          output: '${{ matrix.items.name }}-trivy-results.json'
-          exit-code: '1'
+          format: "json"
+          output: "${{ matrix.items.name }}-trivy-results.json"
+          exit-code: "1"
           ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL'
+          vuln-type: "os,library"
+          severity: "CRITICAL"
           trivyignores: .trivyignore
           cache: true
 
@@ -86,11 +85,11 @@ jobs:
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
-          format: 'table'
-          exit-code: '0'
+          format: "table"
+          exit-code: "0"
           ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL'
+          vuln-type: "os,library"
+          severity: "CRITICAL"
           trivyignores: .trivyignore
           cache: true
 
@@ -98,8 +97,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
-          name: '${{ matrix.items.name }}-trivy-results'
-          path: '${{ matrix.items.name }}-trivy-results.json'
+          name: "${{ matrix.items.name }}-trivy-results"
+          path: "${{ matrix.items.name }}-trivy-results.json"
 
       - name: Push Image
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
@@ -126,24 +125,24 @@ jobs:
 
       - name: Verify Image Signature
         run: |
-            for i in 1 2 3 4 5; do
-              if cosign verify "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
-                --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
-                --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
-                exit 0
-              fi
-              echo "Attempt $i failed, retrying in 5s..."
-              sleep 5
-            done
-            echo "All verification attempts failed"
-            exit 1
+          for i in 1 2 3 4 5; do
+            if cosign verify "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
+              --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+          echo "All verification attempts failed"
+          exit 1
 
       - name: Attest scan results with Cosign
         run: |
-              cosign attest --yes \
-              --predicate '${{ matrix.items.name }}-trivy-results.json' \
-              --type vuln \
-              "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
+          cosign attest --yes \
+          --predicate '${{ matrix.items.name }}-trivy-results.json' \
+          --type vuln \
+          "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
 
       - name: Verify scan attestation
         run: |
@@ -169,7 +168,7 @@ jobs:
             "image_repo": "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}",
             "image_tag": "${{ env.SHORT_SHA }}",
             "image_digest": "${{ steps.get_digest.outputs.IMAGE_DIGEST }}",
-            "scan_report": "gs://${{ env.CICD_BUCKET }}/cicd/trivy-scans/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ matrix.items.name }}-trivy-results.json"
+            "scan_report": "gs://${{ env.CICD_BUCKET }}/security-scans/trivy/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ matrix.items.name }}-trivy-results.json"
           }
           EOF
 
@@ -215,7 +214,7 @@ jobs:
       - name: Create Octopus Release
         uses: OctopusDeploy/create-release-action@4bd7d595da7f803e467d41c32fa0b5dbb9f222dc
         with:
-          project: "${{ matrix.items.name }}"
+          project: "${{ matrix.items.octopus_project }}"
           release_number: "${{ env.SHORT_SHA }}"
           packages: "${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
         # No deploy step: Dev's lifecycle phase has

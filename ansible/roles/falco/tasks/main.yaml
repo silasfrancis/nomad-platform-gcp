@@ -1,17 +1,27 @@
 ---
-- name: Add Falco Apt GPG Key
+- name: Download Falco Apt GPG Key
   ansible.builtin.get_url:
     url: "{{ falco_apt_key_url }}"
-    dest: /etc/apt/keyrings/falco.asc
+    dest: /tmp/falco-archive-keyring.asc
     mode: "0644"
 
-- name: Add Falco Apt Repository
-  ansible.builtin.apt_repository:
-    repo: "{{ falco_apt_repo }}"
-    state: present
-    filename: falcosecurity
+- name: Dearmor Falco Apt GPG Key Into Keyring
+  ansible.builtin.command:
+    cmd: gpg --dearmor -o /usr/share/keyrings/falco-archive-keyring.gpg /tmp/falco-archive-keyring.asc
+    creates: /usr/share/keyrings/falco-archive-keyring.gpg
 
-- name: Install Falco Package (Includes Modern eBPF Driver)
+- name: Add Falco Apt Repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/falcosecurity.list
+    content: "deb [signed-by=/usr/share/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Update Apt Cache
+  ansible.builtin.apt:
+    update_cache: true
+- name: Install Falco Package
   ansible.builtin.apt:
     name: falco
     state: present

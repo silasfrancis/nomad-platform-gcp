@@ -5,48 +5,42 @@ resource "octopusdeploy_project_group" "online_boutique" {
 
 resource "octopusdeploy_project_group" "platform" {
   name        = "Platform"
-  description = "Internal platform services: the metrics API and the AI monitoring agent."
+  description = "Internal platform services: datastore, monitoring, operations, and security."
 }
 
 # Project Catalog — Single Source Of Truth
 #
-# Maps every Octopus project to the Nomad namespace it deploys into.
-# Both the deployment-process resources and the shared variable
-# resources read from this map, so adding a project means adding one
-# entry here rather than touching multiple files.
+# Five projects, not one per service — Octopus's free self-hosted
+# license caps out at 10 projects (confirmed via the License Usage
+# dashboard), and the original one-project-per-service model was
+# already at 23. Projects now map to Nomad namespaces 1:1 instead of to
+# individual services: boutique, datastore, monitoring, operations,
+# security. Every service that used to have its own project now shares
+# its namespace's project instead — which project a given CI-built item
+# releases against is explicit in that item's config entry
+# (octopus_project field in .github/configs/*.json), not implicit from
+# a project-name-equals-service-name mapping anymore.
+#
+# What does NOT change: CI still creates one release per changed
+# service, still with that service's own distinct PackageID + SHA
+# version (see .github/workflows/*.yaml) — release creation is what
+# binds a specific package to a specific release, same mechanism as
+# before. Only which Octopus PROJECT that release belongs to changes.
 locals {
   projects = {
-    "frontend"               = { group = "boutique", namespace = "boutique" }
-    "cartservice"             = { group = "boutique", namespace = "boutique" }
-    "checkoutservice"         = { group = "boutique", namespace = "boutique" }
-    "productcatalogservice"   = { group = "boutique", namespace = "boutique" }
-    "currencyservice"         = { group = "boutique", namespace = "boutique" }
-    "paymentservice"          = { group = "boutique", namespace = "boutique" }
-    "shippingservice"         = { group = "boutique", namespace = "boutique" }
-    "emailservice"            = { group = "boutique", namespace = "boutique" }
-    "recommendationservice"   = { group = "boutique", namespace = "boutique" }
-    "adservice"               = { group = "boutique", namespace = "boutique" }
-    "loadgenerator"           = { group = "boutique", namespace = "boutique" }
-    "metrics-api"             = { group = "platform", namespace = "monitoring" }
-    "nomad-sentinel"          = { group = "platform", namespace = "monitoring" }
-    "loki"                    = { group = "platform", namespace = "monitoring" }
-    "prometheus"             = { group = "platform", namespace = "monitoring" }
-    "alloy"                   = { group = "platform", namespace = "monitoring" }
-    "falco-webhook"           = { group = "platform", namespace = "security" }
-    "node-exporter"            = { group = "platform", namespace = "monitoring" }
-    "postgres"                 = { group = "platform", namespace = "datastore" }
-    "redis"                    = { group = "platform", namespace = "datastore" }
-    "consul-snapshot"          = { group = "platform", namespace = "operations" }
-    "postgres-backup"          = { group = "platform", namespace = "operations" }
-    "docker-cleanup"           = { group = "platform", namespace = "operations" }
+    "boutique"   = { group = "boutique", namespace = "boutique" }
+    "datastore"  = { group = "platform", namespace = "datastore" }
+    "monitoring" = { group = "platform", namespace = "monitoring" }
+    "operations" = { group = "platform", namespace = "operations" }
+    "security"   = { group = "platform", namespace = "security" }
   }
 }
 
 resource "octopusdeploy_project" "this" {
   for_each = local.projects
 
-  name             = each.key
-  project_group_id = each.value.group == "boutique" ? octopusdeploy_project_group.online_boutique.id : octopusdeploy_project_group.platform.id
-  lifecycle_id     = octopusdeploy_lifecycle.main.id
-  description      = "Deploys ${each.key} to the ${each.value.namespace} Nomad namespace."
+  name              = each.key
+  project_group_id  = each.value.group == "boutique" ? octopusdeploy_project_group.online_boutique.id : octopusdeploy_project_group.platform.id
+  lifecycle_id      = octopusdeploy_lifecycle.main.id
+  description       = "Deploys every service/tool routed here (via octopus_project in .github/configs/*.json) to the ${each.value.namespace} Nomad namespace."
 }
