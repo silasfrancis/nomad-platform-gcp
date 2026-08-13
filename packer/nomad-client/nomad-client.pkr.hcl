@@ -14,6 +14,10 @@ packer {
 locals {
   # Version-Controlled Naming
   image_name = "nomad-client-image-${formatdate("YYYYMMDD-hhmmss", timestamp())}"
+
+  # Paths Assume `packer build` Is Invoked From Inside This Directory
+  # (packer/nomad-client/), Adjust it If You Invoke It From
+  # Elsewhere.
   ansible_dir = "../../ansible"
 }
 
@@ -35,14 +39,9 @@ source "googlecompute" "nomad_client" {
   use_iap          = true
   use_internal_ip  = true
   omit_external_ip = true
-
-  # terraform/bootstrap Enforces OS Login Project-Wide (enable-oslogin = TRUE). 
-  # Without This Explicit Flag, Packer Falls Back To Its Default Instance-Metadata SSH 
-  # Key Injection, Which OS-Login-Enabled Instances Silently Ignore Entirely
-  use_os_login = true
-
+  use_os_login = false
   ssh_username = var.ssh_username
-
+  
   disk_size = 20
   disk_type = "pd-balanced"
 
@@ -65,8 +64,9 @@ build {
   # target_hosts=all Overrides nomad-clients.yaml's Default hosts: role_worker
   provisioner "ansible" {
     playbook_file = "${local.ansible_dir}/playbooks/nomad-clients.yaml"
-    user          = var.ssh_username
+    user          = build.User
     use_proxy     = false
+    keep_inventory_file  = true
 
     ansible_env_vars = [
       "ANSIBLE_CONFIG=${local.ansible_dir}/ansible.cfg",
@@ -76,6 +76,9 @@ build {
     extra_arguments = [
       "-e", "target_hosts=all",
       "-e", "@${local.ansible_dir}/inventory/group_vars/all.yaml",
+      "-e", "ansible_ssh_common_args=",
+      "-e", "ansible_user=${build.User}",
+      "-vvvv"
     ]
   }
 }

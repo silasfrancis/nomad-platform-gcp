@@ -6,6 +6,6 @@ disk_cmek_key_id       = ""
 service_account_email  = ""
 
 # Defaults Below Are Usually Fine As-Is — Only Override If Needed.
-# zone         = "europe-west1-a"
+# zone         = "europe-west1-b"
 # subnetwork   = "subnet-mgmt"
 # ssh_username = "packer"

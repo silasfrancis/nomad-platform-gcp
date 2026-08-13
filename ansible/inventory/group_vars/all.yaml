@@ -7,7 +7,7 @@ ansible_ssh_common_args: >-
   -o ProxyCommand="gcloud compute start-iap-tunnel %h %p
   --listen-on-stdin --zone=us-central1-a --project={{ gcp_project_id }}"
 
-gcp_project_id: "CHANGEME-project-id"
+gcp_project_id: "nomad-platform-gcp"
 
 # Secret Manager Secret IDs — Must Already Exist (Created By
 # terraform/bootstrap's secret-manager Module, default_secrets). These

@@ -39,3 +39,4 @@ pki-local/
 *.pkrvars.hcl
 !*.pkrvars.hcl.example
 packer_cache/
+packer.log

@@ -21,42 +21,18 @@ unattended during autoscale/Spot replacement with no laptop in the loop.
    and network (the subnet); `compute/` is where the resulting image
    later gets *consumed* (the MIG's `source_image`), not a prerequisite
    for producing it.
-3. `scripts/generate-and-push-pki.sh` must have been run at least once —
-   the bake fetches `consul-ca-cert`, `nomad-ca-cert`, `nomad-client-cert`,
-   `nomad-client-key`, and `vault-cert` directly from Secret Manager
-   (running as `packer-builder-sa`), so all of these must already exist
-   as secret *versions* (the script only adds versions into containers
-   bootstrap already created — see step 1).
-4. `packer-builder-sa` needs `secretAccessor` on those five secrets
-   specifically (via each secret's own `iam` block in
-   `terraform/bootstrap`'s `secrets` map, not a broad tier grant).
-5. `gcloud` SDK must be installed on the machine running `packer build`
-   (your laptop) — required by `use_iap = true` per Packer's own docs,
+3. `gcloud` SDK must be installed on the machine running `packer build`
+    — required by `use_iap = true` per Packer's own docs,
    separate from any Ansible-side gcloud usage.
-6. Install required plugins once: `packer init nomad-client.pkr.hcl`
-7. Copy `nomad-client.pkrvars.hcl.example` to `nomad-client.pkrvars.hcl`
+4. Install required plugins once: `packer init nomad-client.pkr.hcl`
+5. Copy `nomad-client.pkrvars.hcl.example` to `nomad-client.pkrvars.hcl`
    (gitignored) and fill in real values.
-
-## A Note On Correctness
-
-This template was cross-checked directly against Packer's own
-`googlecompute`/`ansible` documentation after an earlier draft got a few
-things wrong: `kms_key_self_link` isn't a real field (it's `kmsKeyName`),
-the build VM's default scopes don't include Secret Manager (added
-`scopes = ["...cloud-platform"]` explicitly, or every `gcloud secrets
-versions access` call the Ansible roles run *on* the build VM would fail
-with a scope error despite correct IAM), and `playbook_dir` isn't a real
-`ansible` provisioner parameter (replaced with explicit
-`ANSIBLE_CONFIG`/`ANSIBLE_ROLES_PATH` env vars). Still unverified: the
-exact username OS Login actually connects as — flagged in both
-`variables.pkr.hcl` and the `ansible` provisioner's `user` field; confirm
-in a real test run before relying on the default.
 
 ## Build
 
 ```bash
 cd packer/nomad-client
-packer build -var-file="nomad-client.pkrvars.hcl" nomad-client.pkr.hcl
+packer build -var-file="nomad-client.pkrvars.hcl" .
 ```
 
 This runs the `common`, `consul`, `nomad`, `docker`, `falco` roles against
