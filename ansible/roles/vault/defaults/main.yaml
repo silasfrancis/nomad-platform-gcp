@@ -20,13 +20,13 @@ vault_gcp_kms_region: "us-central1"
 vault_gcp_kms_key_ring: "vault-unseal"
 vault_gcp_kms_crypto_key: "vault-unseal-key"
 secret_management_ca_cert: ""
-secret_vault_snapshot_token: ""
+secret_vault_snapshot_token: "vault-snapshot-token"
 secret_vault_operator_token: "vault-operator-token"
 
 vault_listener_address: "0.0.0.0:8200"
 vault_ui_enabled: true
 
 # Backup
-vault_snapshot_gcs_bucket: "platform-artifacts"
+vault_snapshot_gcs_bucket: " nomad-platform-gcp-europe-west1-platform-artifacts"
 vault_snapshot_gcs_prefix: "vault-snapshots"
 vault_snapshot_schedule: "*-*-* 02:00:00"

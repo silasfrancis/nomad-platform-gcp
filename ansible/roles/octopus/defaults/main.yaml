@@ -11,7 +11,7 @@ octopus_data_dir: /opt/octopus/data
 mssql_image: "mcr.microsoft.com/mssql/server:2022-latest"
 mssql_container_name: "octopus-mssql"
 
-octopus_server_tag: "latest"
+octopus_server_tag: "2026.2"
 octopus_container_name: "octopus-server"
 octopus_web_port: 8080
 octopus_tentacle_port: 10943
@@ -26,7 +26,7 @@ octopus_admin_email: "ops@lefrancis.org"
 octopus_disable_dind: "Y"
 octopus_privileged: "false"
 
-# Backup (Unchanged From Before)
-mssql_backup_gcs_bucket: "platform-artifacts"
+# Backup
+mssql_backup_gcs_bucket: " nomad-platform-gcp-europe-west1-platform-artifacts"
 mssql_backup_gcs_prefix: "sql-backups"
 mssql_backup_schedule: "*-*-* 03:00:00"

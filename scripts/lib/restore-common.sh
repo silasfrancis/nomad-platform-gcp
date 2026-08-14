@@ -22,7 +22,7 @@ die()  { echo "${C_RED}[restore] ERROR:${C_RST} $*" >&2; exit 1; }
 # GCS bucket that holds all snapshot/backup artifacts (see docs/ARCHITECTURE.md
 # §10 for the retention table). Overridable for testing against a scratch
 # bucket.
-ARTIFACTS_BUCKET="${ARTIFACTS_BUCKET:-gs://platform-artifacts}"
+ARTIFACTS_BUCKET="${ARTIFACTS_BUCKET:-gs://nomad-platform-gcp-europe-west1-platform-artifacts}"
 
 # --restore-common: require an explicit --env argument everywhere.
 require_env() {
