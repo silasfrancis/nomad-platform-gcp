@@ -1,5 +1,6 @@
 data "google_compute_zones" "available" {
   region = var.region
+  project = var.project_id
   status = "UP"
 }
 
@@ -36,6 +37,7 @@ locals {
   shared_instances = {
     "mgmt-vm" = {
       machine_type            = "e2-standard-2"
+      environment              = "shared"
       zone                     = local.zones[0]
       subnetwork               = local.network.subnets["subnet-mgmt"].self_link
       external_ip              = false
@@ -49,13 +51,14 @@ locals {
       # resized/snapshotted independently and survives a boot disk rebuild.
       # Sizes are placeholders; adjust once real data volume is known.
       additional_disks = [
-        { name = "vault-data", size_gb = 20 },
-        { name = "sql-data",   size_gb = 30 },
-        { name = "mgmt-vm-docker-data",   size_gb = 50 },
+        { name = "vault-data", size_gb = 20, disk_type = "pd-balanced" },
+        { name = "sql-data",    size_gb = 30, disk_type = "pd-balanced" },
+        { name = "mgmt-vm-docker-data",   size_gb = 50, disk_type = "pd-balanced" },
       ]
     }
     "traefik-internal" = {
       machine_type            = "e2-small"
+      environment              = "shared"
       zone                     = local.zones[0]
       subnetwork               = local.network.subnets["subnet-mgmt"].self_link
       static_external_ip       = false
@@ -105,7 +108,7 @@ locals {
         service_account_email = local.traefik_vm_sa_member_dev
         boot_disk_size_gb     = 20
         tags                  = ["traefik"]
-        labels                = { role = "traefik", environment = "dev" }
+        labels                = { role = "traefik-public", environment = "dev" }
       }
     }
   )
@@ -141,7 +144,7 @@ locals {
         service_account_email = local.traefik_vm_sa_member_prod
         boot_disk_size_gb     = 20
         tags                  = ["traefik"]
-        labels                = { role = "traefik", environment = "prod" }
+        labels                = { role = "traefik-public", environment = "prod" }
       }
     }
   )
@@ -242,7 +245,7 @@ resource "google_project_iam_member" "operator_os_login" {
 module "instances" {
   source        = "../modules/instances"
   project_id    = var.project_id
-  disk_cmek_key = local.bootstrap.disk_cmek_key_id
+  disk_cmek_key = local.bootstrap.kms_keys["platform/disk-cmek"].id
   instances     = local.instances
 }
 
@@ -252,7 +255,7 @@ module "mig" {
   source        = "../modules/mig"
   project_id    = var.project_id
   region        = var.region
-  disk_cmek_key = local.bootstrap.disk_cmek_key_id
+  disk_cmek_key = local.bootstrap.kms_keys["platform/disk-cmek"].id
   zones         = local.zones
   migs          = local.active_migs
 }
@@ -278,13 +281,14 @@ locals {
     prometheus-dev = module.instances.instances["traefik-internal"].internal_ip
     prometheus-prod = module.instances.instances["traefik-internal"].internal_ip
     loki-dev = module.instances.instances["traefik-internal"].internal_ip
-    lokie-prod = module.instances.instances["traefik-internal"].internal_ip
+    loki-prod = module.instances.instances["traefik-internal"].internal_ip
   }
 }
 
 resource "google_dns_record_set" "this" {
-  for_each     = locals.records
+  for_each     = local.records
   name         = "${each.key}.${local.network.internal_dns_suffix}"
+  project      = var.project_id
   managed_zone = local.network.internal_dns_zone_name
   type         = "A"
   ttl          = 300

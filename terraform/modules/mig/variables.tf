@@ -12,7 +12,7 @@ variable "disk_cmek_key" {
 
 variable "boot_disk_image" {
   type    = string
-  default = "debian-cloud/debian-12"
+  default = "nomad-client-image-20260813-104710" 
 }
 
 variable "zones" {

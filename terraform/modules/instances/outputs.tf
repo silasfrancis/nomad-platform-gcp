@@ -9,3 +9,7 @@ output "instances" {
     }
   }
 }
+
+output "persistent_disks" {
+  value = local.disks_flat
+}

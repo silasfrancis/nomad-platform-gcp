@@ -1,29 +1,25 @@
 # Static VMs (Non-Autoscaled)
 #
 # Covers control-plane and fixed infrastructure: Nomad servers, the mgmt
-# VM, and the two Traefik edge VMs. Nomad client workload nodes are NOT
+# VM, and the three Traefik edge VMs. Nomad client workload nodes are NOT
 # here — those are autoscaled MIGs, a separate module (nomad-client-mig),
 # since MIGs need an instance template + region MIG + autoscaler rather
 # than a plain google_compute_instance.
-#
-# None of these are ever Spot (per architecture doc 1.3 — server quorum
-# and public ingress can't tolerate preemption), so scheduling is left at
-# GCP's standard defaults (on_host_maintenance = MIGRATE, automatic
-# restart) rather than configured explicitly.
 
 locals {
-  disks_flat = merge([
+disks_flat = merge([
     for inst_key, inst in var.instances : {
-      for disk in inst.additional_disks : "${inst_key}-${disk.name}" => merge(disk, {
+      for disk in try(inst.additional_disks, []) : "${inst_key}-${disk.name}" => merge(disk, {
         instance_key = inst_key
         zone         = inst.zone
       })
     }
   ]...)
-
+  
   # Filter instances that need a static external IP reserved
   static_ips = {
-    for k, v in var.instances : k => v if v.external_ip && v.static_external_ip
+    for k, v in var.instances : k => v 
+    if try(v.external_ip, false) && try(v.static_external_ip, false)
   }
 }
 
@@ -34,7 +30,7 @@ resource "google_compute_disk" "additional" {
   name    = each.key
   zone    = each.value.zone
   size    = each.value.size_gb
-  type    = each.value.disk_type
+  type    = try(each.value.disk_type, "pd-balanced")
 
   disk_encryption_key {
     kms_key_self_link = var.disk_cmek_key
@@ -71,15 +67,6 @@ resource "google_compute_instance" "this" {
     kms_key_self_link = var.disk_cmek_key
   }
 
-  dynamic "attached_disk" {
-    for_each = {
-      for k, v in local.disks_flat : k => v if v.instance_key == each.key
-    }
-    content {
-      source = google_compute_disk.additional[attached_disk.key].id
-    }
-  }
-
   network_interface {
     subnetwork = each.value.subnetwork
 
@@ -97,17 +84,31 @@ resource "google_compute_instance" "this" {
     scopes = each.value.service_account_scopes
   }
 
-  metadata = merge({
-    env            = each.value.environment
-    datacenter     = each.value.environment == "dev" ? "dc-dev" : "dc-prod"
-    bootstrap_expect = lookup({
-      dev  = 1
-      prod = 3
-    }, try(each.value.environment, null), null)
-  },
+  metadata = merge(
+    each.value.environment != null ? {
+          env = each.value.environment
+        } : {},
+
+    contains(["dev", "prod"], try(each.value.environment, "")) ? {
+      datacenter       = each.value.environment == "dev" ? "dc-dev" : "dc-prod"
+      bootstrap_expect = each.value.environment == "prod" ? 3 : 1
+    } : {},
+
     each.value.startup_script != "" ? { startup-script = each.value.startup_script } : {},
     each.value.spot && each.value.shutdown_script != "" ? { shutdown-script = each.value.shutdown_script } : {},
   )
 
   allow_stopping_for_update = true
+
+  lifecycle {
+    ignore_changes = [attached_disk]
+  }
+}
+
+resource "google_compute_attached_disk" "additional_attachments" {
+  for_each = local.disks_flat
+
+  project  = var.project_id
+  disk     = google_compute_disk.additional[each.key].id
+  instance = google_compute_instance.this[each.value.instance_key].id
 }

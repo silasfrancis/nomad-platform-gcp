@@ -1,8 +1,6 @@
 ---
-# Runs Against traefik-prod Only (Public-Subnet VM, boutique.lefrancis.org).
-
-- name: Configure traefik-prod (Public)
-  hosts: traefik_prod_public
+- name: Configure traefik
+  hosts: traefik_public
   become: true
   roles:
     - traefik
