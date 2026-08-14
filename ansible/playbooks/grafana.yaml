@@ -5,7 +5,7 @@
 # isn't per-environment (see meta/main.yaml).
 
 - name: Configure Grafana
-  hosts: mgmt_vm
+  hosts: role_mgmt
   become: true
   roles:
     - grafana

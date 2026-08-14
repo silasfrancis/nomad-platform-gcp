@@ -1,0 +1,158 @@
+version: '3'
+
+# Run `task --list` to see every step with its description. Run `task
+# bootstrap-all` for the full first-time sequence, or run individual
+# steps one at a time in the order they're numbered below — that's the
+# order the playbooks' own header comments actually require (site.yaml
+# only chains 3 of these itself; vault-init, both ACL bootstraps,
+# traefik-internal, and grafana are all separate, deliberately not
+# folded into site.yaml).
+#
+# REQUIRED before anything below: export GCP_PROJECT_ID=your-real-project-id
+# One env var covers both the dynamic inventory plugin's own lookup
+# (inventory/gcp.yaml) and the gcp_project_id Ansible variable
+# (group_vars/all.yaml — currently a literal "CHANGEME-project-id"
+# placeholder). Every task passes it through explicitly via -e, so you
+# never have to hand-edit that placeholder.
+#
+# Also required, once, before first use:
+#   - `task` itself: https://taskfile.dev/installation
+#   - gcloud auth application-default login  (dynamic inventory auth)
+#   - task install   (ansible collections + control-node Python deps)
+#
+# Extra ansible-playbook flags (e.g. --check for a dry run, -vvv for
+# debug output) can be appended after `--`, e.g.:
+#   task mgmt -- --check
+
+vars:
+  PLAYBOOK_DIR: playbooks
+
+tasks:
+
+  check-env:
+    desc: "Internal — confirms GCP_PROJECT_ID is set before anything else runs"
+    internal: true
+    silent: true
+    cmds:
+      - |
+        if [ -z "$GCP_PROJECT_ID" ]; then
+          echo "GCP_PROJECT_ID is not set. Run: export GCP_PROJECT_ID=your-real-project-id"
+          exit 1
+        fi
+
+  install:
+    desc: "Step 0 — install required Ansible collections + control-node Python deps"
+    cmds:
+      - ansible-galaxy collection install -r requirements.yaml
+      - pip install requests google-auth --break-system-packages
+
+  inventory-check:
+    desc: "Step 0.5 — confirms the dynamic inventory actually resolves hosts into every group the playbooks expect (role_mgmt, role_control_plane, role_worker, traefik_internal, traefik_dev_public, traefik_prod_public, dev, prod)"
+    deps: [check-env]
+    cmds:
+      - ansible-inventory --graph
+
+  pki-reminder:
+    desc: "Step 1 — REMINDER ONLY, not runnable from here: scripts/generate-and-push-pki.sh (outside this ansible/ directory) must have been run at least once before anything below — every role fetches its TLS material directly from Secret Manager and has nothing to fall back to if it doesn't exist yet"
+    silent: true
+    cmds:
+      - echo "Confirm scripts/generate-and-push-pki.sh has been run at least once before continuing."
+
+  mgmt:
+    desc: "Step 2 — configure mgmt-vm: Vault, Octopus, the GitHub runner, Docker data disk + prune timer"
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/mgmt.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  vault-init:
+    desc: "Step 3 — ONE-TIME Vault operator init. Run only after 'mgmt' has succeeded at least once. Safe to re-run (guards on Vault's own initialized status)."
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/vault-init.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  nomad-servers:
+    desc: "Step 4 — configure Nomad + Consul server nodes (dev and prod together in one run)"
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/nomad-servers.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  consul-acl-bootstrap-dev:
+    desc: "Step 5a — bootstrap Consul ACLs for dev (ONCE). Must run before terraform/platform-config."
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/consul-acl-bootstrap.yaml --limit dev -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  consul-acl-bootstrap-prod:
+    desc: "Step 5b — bootstrap Consul ACLs for prod (ONCE). Must run before terraform/platform-config."
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/consul-acl-bootstrap.yaml --limit prod -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  nomad-acl-bootstrap-dev:
+    desc: "Step 6a — bootstrap Nomad ACLs for dev (ONCE). Must run before terraform/platform-config."
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/nomad-acl-bootstrap.yaml --limit dev -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  nomad-acl-bootstrap-prod:
+    desc: "Step 6b — bootstrap Nomad ACLs for prod (ONCE). Must run before terraform/platform-config."
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/nomad-acl-bootstrap.yaml --limit prod -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  nomad-clients:
+    desc: "Step 7 — reconfigure LIVE Nomad client nodes directly (not the Packer MIG image bake — see nomad-clients.yaml's own header comment for that separate path)"
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/nomad-clients.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  traefik-internal:
+    desc: "Step 8 — configure traefik-internal (mgmt/dev-internal/prod-internal instances, one pass)"
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/traefik-internal.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  traefik-public-dev:
+    desc: "Step 9a — configure public Traefik for dev"
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/traefik-public.yaml --limit dev -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  traefik-public-prod:
+    desc: "Step 9b — configure public Traefik for prod"
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/traefik-public.yaml --limit prod -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  grafana:
+    desc: "Step 10 — configure Grafana on mgmt-vm"
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/grafana.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  site:
+    desc: "Convenience — runs exactly what playbooks/site.yaml chains: mgmt + nomad-servers + nomad-clients + traefik-public (both dev and prod, in one pass — site.yaml itself doesn't split by --limit). Does NOT include vault-init, either ACL bootstrap, traefik-internal, or grafana — those are deliberately separate, run them individually."
+    deps: [check-env]
+    cmds:
+      - ansible-playbook {{.PLAYBOOK_DIR}}/site.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+
+  bootstrap-all:
+    desc: "Everything, in the one safe first-time order"
+    deps: [check-env]
+    cmds:
+      - task: install
+      - task: inventory-check
+      - task: pki-reminder
+      - task: mgmt
+      - task: vault-init
+      - task: nomad-servers
+      - task: consul-acl-bootstrap-dev
+      - task: consul-acl-bootstrap-prod
+      - task: nomad-acl-bootstrap-dev
+      - task: nomad-acl-bootstrap-prod
+      - task: nomad-clients
+      - task: traefik-internal
+      - task: traefik-public-dev
+      - task: traefik-public-prod
+      - task: grafana
+      - echo "Bootstrap complete. Next -> apply terraform/platform-config."

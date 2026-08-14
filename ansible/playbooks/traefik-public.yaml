@@ -1,6 +1,6 @@
 ---
 - name: Configure traefik
-  hosts: traefik_public
+  hosts: role_traefik_public
   become: true
   roles:
     - traefik

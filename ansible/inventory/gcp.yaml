@@ -5,11 +5,23 @@
 # Service Account Key File Needed As Long As `gcloud auth
 # application-default login` Has Been Run.
 #
-# DEPENDS ON: compute/main.tf Setting labels = { role = "mgmt" |
-# "nomad-server" | "nomad-client", env = "dev" | "prod" } On Every Instance
-# Resource. mgmt-vm Has No env Label (It Serves Both), So It Will Only Be
-# Grouped Under role_mgmt, Not Under "dev" Or "prod" — group_vars/dev.yaml
-# And prod.yaml Deliberately Don't Apply To It.
+# DEPENDS ON: compute/main.tf's actual label scheme, confirmed against
+# the real file (not guessed):
+#   mgmt-vm            -> role=mgmt                          (no environment label)
+#   traefik-internal    -> role=traefik-internal               (no environment label)
+#   nomad-{dev,prod}-server-N -> role=control-plane, environment=dev|prod
+#   traefik-dev          -> role=traefik-public, environment=dev
+#   traefik-prod          -> role=traefik-public, environment=prod
+#   nomad client MIGs    -> role=worker, environment=dev|prod, pool=on-demand|spot
+#
+# The label key for environment is "environment", NOT "env" — this
+# matters: keyed_groups below used to key on labels.env, which never
+# matched anything, meaning group_vars/dev.yaml and prod.yaml silently
+# never auto-loaded for ANY host. Fixed below.
+#
+# mgmt-vm and traefik-internal have no environment label at all — they
+# correctly stay out of the dev/prod groups (they serve both), which is
+# why group_vars/dev.yaml/prod.yaml deliberately don't apply to them.
 
 plugin: google.cloud.gcp_compute
 projects:
@@ -23,14 +35,15 @@ zones:
 hostnames:
   - name
 
-# Produces Groups: role_mgmt, role_nomad_server, role_nomad_client, And
-# (Since prefix Is Empty For The env Key) Groups Named Exactly "dev" /
-# "prod" — Matching Ansible's Standard group_vars/<groupname>.yaml
-# Auto-Loading Convention.
+# keyed_groups alone now directly produces role_mgmt, role_control_plane,
+# role_traefik_internal, role_traefik_public, and role_worker (from the
+# real label values above) — plus bare "dev"/"prod" from the environment
+# label fix. Most playbooks' hosts: targets already match one of these
+# directly; only the aliases below are still needed.
 keyed_groups:
   - key: labels.role
     prefix: role
-  - key: labels.env
+  - key: labels.environment
     prefix: ""
 
 compose:

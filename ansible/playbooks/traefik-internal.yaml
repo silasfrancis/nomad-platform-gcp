@@ -4,7 +4,7 @@
 # Independent Processes (See traefik/defaults/main.yaml).
 
 - name: Configure traefik-internal
-  hosts: traefik_internal
+  hosts: role_traefik_internal
   become: true
   vars:
     traefik_active_instances:
