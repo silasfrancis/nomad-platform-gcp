@@ -1,9 +1,4 @@
-# Dynamic Inventory — google.cloud.gcp_compute Plugin. Requires The
-# google.cloud Collection (ansible-galaxy collection install google.cloud)
-# And requests+google-auth Python Packages On The Control Node (Your
-# Laptop). Authenticates Using Your Own gcloud/ADC Credentials — No
-# Service Account Key File Needed As Long As `gcloud auth
-# application-default login` Has Been Run.
+# Dynamic Inventory — google.cloud.gcp_compute Plugin
 #
 # DEPENDS ON: compute/main.tf's actual label scheme, confirmed against
 # the real file (not guessed):
@@ -28,9 +23,9 @@ projects:
   - "{{ lookup('env', 'GCP_PROJECT_ID') }}"
 auth_kind: application
 zones:
-  - us-central1-a
-  - us-central1-b
-  - us-central1-c
+  - europe-west1-b
+  - europe-west1-c
+  - europe-west1-d
 
 hostnames:
   - name

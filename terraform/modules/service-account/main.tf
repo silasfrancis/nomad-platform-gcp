@@ -57,18 +57,13 @@ locals {
       ]
     }
     "traefik-vm-sa-prod" = {
-      display_name  = "Traefik VM SA"
+      display_name  = "Traefik VM SA (Prod)"
       description   = "Attached to mgmt VM. Covers Vault, GitHub runner, Octopus, Grafana, internal Traefik."
       project_roles = []
     }
     "traefik-vm-sa-dev" = {
-      display_name  = "Traefik VM SA (Prod)"
-      description   = "Attached to Prod Traefik VM."
-      project_roles = []
-    }
-    "traefik-vm-sa-dev" = {
       display_name  = "Traefik VM SA (Dev)"
-      description   = "Attached to Dev Traefik VM."
+      description   = "Attached to Prod Traefik VM."
       project_roles = []
     }
     "traefik-vm-sa-internal" = {
@@ -107,6 +102,24 @@ resource "google_service_account" "this" {
   account_id   = each.key
   display_name = each.value.display_name
   description  = each.value.description
+}
+
+resource "google_service_account_iam_member" "this" {
+  for_each = {
+    for item in flatten([
+      for sa_name, sa_config in local.service_accounts : [
+        for member in var.service_account_iam_members : {
+          key    = "${sa_name}/${member}"
+          sa_name = sa_name
+          member = member
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  service_account_id = google_service_account.this[each.value.sa_name].id
+  role               = "roles/iam.serviceAccountUser"
+  member             = each.value.member
 }
 
 resource "google_project_iam_member" "roles" {

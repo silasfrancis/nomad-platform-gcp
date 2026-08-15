@@ -32,7 +32,7 @@ docker_extra_group_users: []
 # assert at the top of that task file. mgmt.yaml is currently the only
 # playbook that calls this task, passing docker_data_disk_name:
 # "mgmt-vm-docker-data".
-docker_data_disk_name: ""
+docker_data_disk_name: "mgmt-vm-docker-data"
 docker_data_mount_path: /var/lib/docker
 
 # Only used by tasks/schedule-docker-prune.yaml, also never called from

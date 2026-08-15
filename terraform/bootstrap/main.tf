@@ -77,6 +77,9 @@ module "service_account" {
   source = "../modules/service-account"
 
   project_id = var.project_id
+  service_account_iam_members = [
+    "user:${var.platform_admin_email}",
+  ]
 
   depends_on = [ google_project_service.apis ]
 }

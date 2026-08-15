@@ -1,29 +1,4 @@
 version: '3'
-
-# Run `task --list` to see every step with its description. Run `task
-# bootstrap-all` for the full first-time sequence, or run individual
-# steps one at a time in the order they're numbered below — that's the
-# order the playbooks' own header comments actually require (site.yaml
-# only chains 3 of these itself; vault-init, both ACL bootstraps,
-# traefik-internal, and grafana are all separate, deliberately not
-# folded into site.yaml).
-#
-# REQUIRED before anything below: export GCP_PROJECT_ID=your-real-project-id
-# One env var covers both the dynamic inventory plugin's own lookup
-# (inventory/gcp.yaml) and the gcp_project_id Ansible variable
-# (group_vars/all.yaml — currently a literal "CHANGEME-project-id"
-# placeholder). Every task passes it through explicitly via -e, so you
-# never have to hand-edit that placeholder.
-#
-# Also required, once, before first use:
-#   - `task` itself: https://taskfile.dev/installation
-#   - gcloud auth application-default login  (dynamic inventory auth)
-#   - task install   (ansible collections + control-node Python deps)
-#
-# Extra ansible-playbook flags (e.g. --check for a dry run, -vvv for
-# debug output) can be appended after `--`, e.g.:
-#   task mgmt -- --check
-
 vars:
   PLAYBOOK_DIR: playbooks
 
@@ -40,6 +15,17 @@ tasks:
           exit 1
         fi
 
+  check-target-env:
+    desc: "Internal — confirms ENV=dev or ENV=prod was passed to a task that requires it"
+    internal: true
+    silent: true
+    cmds:
+      - |
+        if [ "{{.ENV}}" != "dev" ] && [ "{{.ENV}}" != "prod" ]; then
+          echo "ENV must be 'dev' or 'prod' — pass it like: task {{.TARGET_TASK_NAME}} ENV=dev"
+          exit 1
+        fi
+
   install:
     desc: "Step 0 — install required Ansible collections + control-node Python deps"
     cmds:
@@ -47,7 +33,7 @@ tasks:
       - pip install requests google-auth --break-system-packages
 
   inventory-check:
-    desc: "Step 0.5 — confirms the dynamic inventory actually resolves hosts into every group the playbooks expect (role_mgmt, role_control_plane, role_worker, traefik_internal, traefik_dev_public, traefik_prod_public, dev, prod)"
+    desc: "Step 0.5 — confirms the dynamic inventory actually resolves hosts into every group the playbooks expect"
     deps: [check-env]
     cmds:
       - ansible-inventory --graph
@@ -71,34 +57,28 @@ tasks:
       - ansible-playbook {{.PLAYBOOK_DIR}}/vault-init.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
 
   nomad-servers:
-    desc: "Step 4 — configure Nomad + Consul server nodes (dev and prod together in one run)"
+    desc: "Step 4 — configure Nomad + Consul server nodes for ONE environment (ENV=dev or ENV=prod required, e.g. task nomad-servers ENV=dev)"
     deps: [check-env]
     cmds:
-      - ansible-playbook {{.PLAYBOOK_DIR}}/nomad-servers.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+      - task: check-target-env
+        vars: { TARGET_TASK_NAME: nomad-servers, ENV: '{{.ENV}}' }
+      - ansible-playbook {{.PLAYBOOK_DIR}}/nomad-servers.yaml --limit {{.ENV}} -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
 
-  consul-acl-bootstrap-dev:
-    desc: "Step 5a — bootstrap Consul ACLs for dev (ONCE). Must run before terraform/platform-config."
+  consul-acl-bootstrap:
+    desc: "Step 5 — bootstrap Consul ACLs for ONE environment, ONCE (ENV=dev or ENV=prod required). Must run before terraform/platform-config."
     deps: [check-env]
     cmds:
-      - ansible-playbook {{.PLAYBOOK_DIR}}/consul-acl-bootstrap.yaml --limit dev -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+      - task: check-target-env
+        vars: { TARGET_TASK_NAME: consul-acl-bootstrap, ENV: '{{.ENV}}' }
+      - ansible-playbook {{.PLAYBOOK_DIR}}/consul-acl-bootstrap.yaml --limit {{.ENV}} -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
 
-  consul-acl-bootstrap-prod:
-    desc: "Step 5b — bootstrap Consul ACLs for prod (ONCE). Must run before terraform/platform-config."
+  nomad-acl-bootstrap:
+    desc: "Step 6 — bootstrap Nomad ACLs for ONE environment, ONCE (ENV=dev or ENV=prod required). Must run before terraform/platform-config."
     deps: [check-env]
     cmds:
-      - ansible-playbook {{.PLAYBOOK_DIR}}/consul-acl-bootstrap.yaml --limit prod -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
-
-  nomad-acl-bootstrap-dev:
-    desc: "Step 6a — bootstrap Nomad ACLs for dev (ONCE). Must run before terraform/platform-config."
-    deps: [check-env]
-    cmds:
-      - ansible-playbook {{.PLAYBOOK_DIR}}/nomad-acl-bootstrap.yaml --limit dev -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
-
-  nomad-acl-bootstrap-prod:
-    desc: "Step 6b — bootstrap Nomad ACLs for prod (ONCE). Must run before terraform/platform-config."
-    deps: [check-env]
-    cmds:
-      - ansible-playbook {{.PLAYBOOK_DIR}}/nomad-acl-bootstrap.yaml --limit prod -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+      - task: check-target-env
+        vars: { TARGET_TASK_NAME: nomad-acl-bootstrap, ENV: '{{.ENV}}' }
+      - ansible-playbook {{.PLAYBOOK_DIR}}/nomad-acl-bootstrap.yaml --limit {{.ENV}} -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
 
   nomad-clients:
     desc: "Step 7 — reconfigure LIVE Nomad client nodes directly (not the Packer MIG image bake — see nomad-clients.yaml's own header comment for that separate path)"
@@ -112,17 +92,13 @@ tasks:
     cmds:
       - ansible-playbook {{.PLAYBOOK_DIR}}/traefik-internal.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
 
-  traefik-public-dev:
-    desc: "Step 9a — configure public Traefik for dev"
+  traefik-public:
+    desc: "Step 9 — configure public Traefik for ONE environment (ENV=dev or ENV=prod required)"
     deps: [check-env]
     cmds:
-      - ansible-playbook {{.PLAYBOOK_DIR}}/traefik-public.yaml --limit dev -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
-
-  traefik-public-prod:
-    desc: "Step 9b — configure public Traefik for prod"
-    deps: [check-env]
-    cmds:
-      - ansible-playbook {{.PLAYBOOK_DIR}}/traefik-public.yaml --limit prod -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
+      - task: check-target-env
+        vars: { TARGET_TASK_NAME: traefik-public, ENV: '{{.ENV}}' }
+      - ansible-playbook {{.PLAYBOOK_DIR}}/traefik-public.yaml --limit {{.ENV}} -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
 
   grafana:
     desc: "Step 10 — configure Grafana on mgmt-vm"
@@ -131,13 +107,13 @@ tasks:
       - ansible-playbook {{.PLAYBOOK_DIR}}/grafana.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
 
   site:
-    desc: "Convenience — runs exactly what playbooks/site.yaml chains: mgmt + nomad-servers + nomad-clients + traefik-public (both dev and prod, in one pass — site.yaml itself doesn't split by --limit). Does NOT include vault-init, either ACL bootstrap, traefik-internal, or grafana — those are deliberately separate, run them individually."
+    desc: "Convenience — runs exactly what playbooks/site.yaml chains: mgmt + nomad-servers + nomad-clients + traefik-public (both dev and prod together, in one pass — site.yaml itself doesn't split by --limit at all). Does NOT include vault-init, either ACL bootstrap, traefik-internal, or grafana — those are deliberately separate, run them individually."
     deps: [check-env]
     cmds:
       - ansible-playbook {{.PLAYBOOK_DIR}}/site.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
 
   bootstrap-all:
-    desc: "Everything, in the one safe first-time order"
+    desc: "Everything, in the one safe first-time order — runs each ENV-parameterized step for dev, then prod, separately"
     deps: [check-env]
     cmds:
       - task: install
@@ -146,13 +122,22 @@ tasks:
       - task: mgmt
       - task: vault-init
       - task: nomad-servers
-      - task: consul-acl-bootstrap-dev
-      - task: consul-acl-bootstrap-prod
-      - task: nomad-acl-bootstrap-dev
-      - task: nomad-acl-bootstrap-prod
+        vars: { ENV: dev }
+      - task: nomad-servers
+        vars: { ENV: prod }
+      - task: consul-acl-bootstrap
+        vars: { ENV: dev }
+      - task: consul-acl-bootstrap
+        vars: { ENV: prod }
+      - task: nomad-acl-bootstrap
+        vars: { ENV: dev }
+      - task: nomad-acl-bootstrap
+        vars: { ENV: prod }
       - task: nomad-clients
       - task: traefik-internal
-      - task: traefik-public-dev
-      - task: traefik-public-prod
+      - task: traefik-public
+        vars: { ENV: dev }
+      - task: traefik-public
+        vars: { ENV: prod }
       - task: grafana
       - echo "Bootstrap complete. Next -> apply terraform/platform-config."

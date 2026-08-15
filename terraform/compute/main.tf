@@ -53,7 +53,7 @@ locals {
       additional_disks = [
         { name = "vault-data", size_gb = 20, disk_type = "pd-balanced" },
         { name = "sql-data",    size_gb = 30, disk_type = "pd-balanced" },
-        { name = "mgmt-vm-docker-data",   size_gb = 50, disk_type = "pd-balanced" },
+        { name = "docker-data",   size_gb = 50, disk_type = "pd-balanced" },
       ]
     }
     "traefik-internal" = {
@@ -92,8 +92,8 @@ locals {
         labels                = { role = "control-plane", environment = "dev" }
         startup_script        = local.nomad_server_startup_script
         additional_disks = [
-          { name = "nomad-data", size_gb = 20 },
-          { name = "consul-data",  size_gb = 20 },
+          { name = "nomad-data", size_gb = 20, disk_type = "pd-balanced" },
+          { name = "consul-data",  size_gb = 20, disk_type = "pd-balanced" },
         ]
       }
     },
@@ -128,8 +128,8 @@ locals {
         labels                = { role = "control-plane", environment = "prod" }
         startup_script        = local.nomad_server_startup_script
         additional_disks = [
-          { name = "nomad-data", size_gb = 20 },
-          { name = "consul-data",  size_gb = 20 },
+          { name = "nomad-data", size_gb = 20, disk_type = "pd-balanced" },
+          { name = "consul-data",  size_gb = 20, disk_type = "pd-balanced" },
         ]
       }
     },
