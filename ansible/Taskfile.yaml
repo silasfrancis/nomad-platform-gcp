@@ -11,7 +11,7 @@ tasks:
     cmds:
       - |
         if [ -z "$GCP_PROJECT_ID" ]; then
-          echo "GCP_PROJECT_ID is not set. Run: export GCP_PROJECT_ID=your-real-project-id"
+          echo "GCP_PROJECT_ID is not set. Run: export GCP_PROJECT_ID=<project-id>"
           exit 1
         fi
 
