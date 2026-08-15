@@ -8,15 +8,15 @@ locals {
   bootstrap = data.terraform_remote_state.bootstrap.outputs
   network   = data.terraform_remote_state.network.outputs
 
-  # Service account members
-  management_vm_sa_member = local.bootstrap.service_accounts["management-vm-sa"].member
-  nomad_client_sa_member_prod  = local.bootstrap.service_accounts["nomad-client-sa-prod"].member
-  nomad_client_sa_member_dev  = local.bootstrap.service_accounts["nomad-client-sa-dev"].member
-  nomad_server_sa_member_prod  = local.bootstrap.service_accounts["nomad-server-sa-prod"].member
-  nomad_server_sa_member_dev  = local.bootstrap.service_accounts["nomad-server-sa-dev"].member
-  traefik_vm_sa_member_prod       = local.bootstrap.service_accounts["traefik-vm-sa-prod"].member
-  traefik_vm_sa_member_dev       = local.bootstrap.service_accounts["traefik-vm-sa-dev"].member
-  traefik_vm_sa_member_internal = local.bootstrap.service_accounts["traefik-vm-sa-internal"].member
+  # Service account emails
+  management_vm_sa_email = local.bootstrap.service_accounts["management-vm-sa"].email
+  nomad_client_sa_email_prod  = local.bootstrap.service_accounts["nomad-client-sa-prod"].email
+  nomad_client_sa_email_dev  = local.bootstrap.service_accounts["nomad-client-sa-dev"].email
+  nomad_server_sa_email_prod  = local.bootstrap.service_accounts["nomad-server-sa-prod"].email
+  nomad_server_sa_email_dev  = local.bootstrap.service_accounts["nomad-server-sa-dev"].email
+  traefik_vm_sa_email_prod       = local.bootstrap.service_accounts["traefik-vm-sa-prod"].email
+  traefik_vm_sa_email_dev       = local.bootstrap.service_accounts["traefik-vm-sa-dev"].email
+  traefik_vm_sa_email_internal = local.bootstrap.service_accounts["traefik-vm-sa-internal"].email
 
 
   zones = slice(data.google_compute_zones.available.names, 0, 3)
@@ -41,7 +41,7 @@ locals {
       zone                     = local.zones[0]
       subnetwork               = local.network.subnets["subnet-mgmt"].self_link
       external_ip              = false
-      service_account_email    = local.management_vm_sa_member
+      service_account_email    = local.management_vm_sa_email
       boot_disk_size_gb        = 50
       tags                     = ["mgmt"]
       labels                   = { role = "mgmt" }
@@ -63,7 +63,7 @@ locals {
       subnetwork               = local.network.subnets["subnet-mgmt"].self_link
       static_external_ip       = false
       external_ip              = false
-      service_account_email    = local.traefik_vm_sa_member_internal
+      service_account_email    = local.traefik_vm_sa_email_internal
       boot_disk_size_gb        = 20
       tags                     = ["traefik"]
       labels                   = { role = "traefik-internal" }
@@ -86,7 +86,7 @@ locals {
         zone                  = local.zones[i % length(local.zones)]
         subnetwork            = local.network.subnets["subnet-dev-private"].self_link
         external_ip           = false
-        service_account_email = local.nomad_server_sa_member_dev
+        service_account_email = local.nomad_server_sa_email_dev
         boot_disk_size_gb     = 20
         tags                  = ["nomad-server-dev", "consul-server-dev"]
         labels                = { role = "control-plane", environment = "dev" }
@@ -105,7 +105,7 @@ locals {
         subnetwork            = local.network.subnets["subnet-dev-public"].self_link
         static_external_ip    = true
         external_ip           = true
-        service_account_email = local.traefik_vm_sa_member_dev
+        service_account_email = local.traefik_vm_sa_email_dev
         boot_disk_size_gb     = 20
         tags                  = ["traefik"]
         labels                = { role = "traefik-public", environment = "dev" }
@@ -122,7 +122,7 @@ locals {
         zone                  = local.zones[i % length(local.zones)]
         subnetwork            = local.network.subnets["subnet-prod-private"].self_link
         external_ip           = false
-        service_account_email = local.nomad_server_sa_member_prod
+        service_account_email = local.nomad_server_sa_email_prod
         boot_disk_size_gb     = 20
         tags                  = ["nomad-server-prod", "consul-server-prod"]
         labels                = { role = "control-plane", environment = "prod" }
@@ -141,7 +141,7 @@ locals {
         subnetwork            = local.network.subnets["subnet-prod-public"].self_link
         static_external_ip    = true
         external_ip           = true
-        service_account_email = local.traefik_vm_sa_member_prod
+        service_account_email = local.traefik_vm_sa_email_prod
         boot_disk_size_gb     = 20
         tags                  = ["traefik"]
         labels                = { role = "traefik-public", environment = "prod" }
@@ -170,7 +170,7 @@ locals {
       min_replicas             = 1
       max_replicas             = 5
       spot                     = false
-      service_account_email    = local.nomad_client_sa_member_dev
+      service_account_email    = local.nomad_client_sa_email_dev
       tags                     = ["nomad-client-dev", "consul-client-dev"]
       labels                   = { role = "worker", environment = "dev", pool = "on-demand" }
       environment              = "dev"
@@ -183,7 +183,7 @@ locals {
       min_replicas             = 0
       max_replicas             = 5
       spot                     = true
-      service_account_email    = local.nomad_client_sa_member_dev
+      service_account_email    = local.nomad_client_sa_email_dev
       tags                     = ["nomad-client-dev", "consul-client-dev"]
       labels                   = { role = "worker", environment = "dev", pool = "spot" }
       environment              = "dev"
@@ -196,7 +196,7 @@ locals {
       min_replicas             = 2
       max_replicas             = 10
       spot                     = false
-      service_account_email    = local.nomad_client_sa_member_prod
+      service_account_email    = local.nomad_client_sa_email_prod
       tags                     = ["nomad-client-prod", "consul-client-prod"]
       labels                   = { role = "worker", environment = "prod", pool = "on-demand" }
       environment              = "prod"
@@ -209,7 +209,7 @@ locals {
       min_replicas             = 1
       max_replicas             = 10
       spot                     = true
-      service_account_email    = local.nomad_client_sa_member_prod
+      service_account_email    = local.nomad_client_sa_email_prod
       tags                     = ["nomad-client-prod", "consul-client-prod"]
       labels                   = { role = "worker", environment = "prod", pool = "spot" }
       environment              = "prod"
