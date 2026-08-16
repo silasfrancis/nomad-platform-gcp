@@ -36,6 +36,7 @@ tasks:
     desc: "Step 0.5 — confirms the dynamic inventory actually resolves hosts into every group the playbooks expect"
     deps: [check-env]
     cmds:
+      - envsubst < inventory/gcp.yaml.tmpl > inventory/gcp.yaml
       - ansible-inventory --graph
 
   pki-reminder:
