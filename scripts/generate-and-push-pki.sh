@@ -21,7 +21,7 @@
 # terraform/bootstrap's default_secrets map (this script only writes
 # versions, never creates containers).
 #
-# Usage: ./generate-and-push-pki.sh <gcp-project-id>
+# Usage: ./scripts/generate-and-push-pki.sh <gcp-project-id>
 
 set -euo pipefail
 
