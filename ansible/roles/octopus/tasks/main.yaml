@@ -7,7 +7,7 @@
 
 # --- Sql-Data Disk (Backs Both mssql's Data And Octopus's Own Volumes) ---
 - name: Check If Sql-Data Disk Is Already Formatted
-  ansible.builtin.command: blkid /dev/disk/by-id/google-sql-data
+  ansible.builtin.command: blkid /dev/disk/by-id/google-{{ sql_data_disk_name }}
   register: sql_disk_blkid
   failed_when: false
   changed_when: false
@@ -15,7 +15,7 @@
 - name: Format Sql-Data Disk (Only If Unformatted)
   community.general.filesystem:
     fstype: ext4
-    dev: /dev/disk/by-id/google-sql-data
+    dev: /dev/disk/by-id/google-{{ sql_data_disk_name }}
   when: sql_disk_blkid.rc != 0
 
 - name: Ensure Octopus Data Mount Point Exists
@@ -27,7 +27,7 @@
 - name: Mount Sql-Data Disk
   ansible.posix.mount:
     path: "{{ octopus_data_dir }}"
-    src: /dev/disk/by-id/google-sql-data
+    src: /dev/disk/by-id/google-{{ sql_data_disk_name }}
     fstype: ext4
     opts: defaults,nofail
     state: mounted

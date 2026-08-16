@@ -7,10 +7,10 @@ storage "raft" {
 }
 
 seal "gcpckms" {
-  project    = "{{ vault_gcp_kms_project }}"
-  region     = "{{ vault_gcp_kms_region }}"
-  key_ring   = "{{ vault_gcp_kms_key_ring }}"
-  crypto_key = "{{ vault_gcp_kms_crypto_key }}"
+  project    = "{{ gcp_project_id }}"
+  region     = "{{ gcp_kms_region }}"
+  key_ring   = "{{ gcp_kms_key_ring }}"
+  crypto_key = "{{ gcp_kms_crypto_key }}"
 }
 
 listener "tcp" {

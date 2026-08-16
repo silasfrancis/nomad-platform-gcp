@@ -87,8 +87,7 @@
     mode: "0644"
   notify: Reload Sysctl
 
-# --- Optional: Google Cloud CLI (mgmt-vm Only — Its Backup Scripts Need
-# gcloud/gsutil To Read Secret Manager And Write To GCS) ---
+# Optional: Google Cloud CLI
 - name: Add Google Cloud SDK Apt GPG Key
   ansible.builtin.apt_key:
     url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
@@ -108,7 +107,3 @@
     state: present
     update_cache: true
   when: common_install_gcloud_cli | bool
-# --- System Users (Homes Created By The Roles That Actually Use Them —
-# consul And nomad Roles Create Their Own consul/nomad System Users
-# Alongside Package Install, Not Here, So Uid/Gid Setup Stays Next To The
-# Binary Install That Needs It) ---

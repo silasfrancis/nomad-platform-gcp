@@ -15,11 +15,13 @@ vault_download_url: "https://releases.hashicorp.com/vault/{{ vault_version }}/va
 # Vault Is A Project-Wide Singleton On mgmt-vm — These Are Genuinely
 # Static, Safe To Bake. Override With Real Values From
 # terraform_remote_state (bootstrap Outputs) At Run Time.
-vault_gcp_kms_project: "CHANGEME-project-id"
-vault_gcp_kms_region: "us-central1"
-vault_gcp_kms_key_ring: "vault-unseal"
-vault_gcp_kms_crypto_key: "vault-unseal-key"
+gcp_project_id: ""
+gcp_kms_region: "europe-west1"
+gcp_kms_key_ring: "vault-unseal"
+gcp_kms_crypto_key: "vault-unseal-key"
 secret_management_ca_cert: ""
+secret_vault_cert: "vault-cert"
+secret_vault_tls_key: "vault-tls-key"
 secret_vault_snapshot_token: "vault-snapshot-token"
 secret_vault_operator_token: "vault-operator-token"
 
@@ -30,3 +32,5 @@ vault_ui_enabled: true
 vault_snapshot_gcs_bucket: " nomad-platform-gcp-europe-west1-platform-artifacts"
 vault_snapshot_gcs_prefix: "vault-snapshots"
 vault_snapshot_schedule: "*-*-* 02:00:00"
+
+vault_data_disk_name: "mgmt-vm-vault-data"

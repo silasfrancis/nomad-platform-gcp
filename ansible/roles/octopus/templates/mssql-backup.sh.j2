@@ -10,10 +10,12 @@ BACKUP_FILE="/tmp/octopus-sql-${TIMESTAMP}.bak"
 GZ_FILE="${BACKUP_FILE}.gz"
 
 SA_PASSWORD="$(gcloud secrets versions access latest --secret={{ secret_octopus_sql_admin_password }} --project={{ gcp_project_id }})"
+export SQLCMDPASSWORD="${SA_PASSWORD}"
 
 echo "$(date -u +%FT%TZ): backing up OctopusDeploy database"
-docker exec {{ mssql_container_name }} /opt/mssql-tools/bin/sqlcmd \
-  -S localhost -U sa -P "${SA_PASSWORD}" \
+
+docker exec -e SQLCMDPASSWORD="${SQLCMDPASSWORD}" {{ mssql_container_name }} /opt/mssql-tools/bin/sqlcmd \
+  -S localhost -U sa \
   -Q "BACKUP DATABASE [OctopusDeploy] TO DISK = N'/var/opt/mssql/octopus-sql-${TIMESTAMP}.bak'"
 
 docker cp "{{ mssql_container_name }}:/var/opt/mssql/octopus-sql-${TIMESTAMP}.bak" "${BACKUP_FILE}"
@@ -25,4 +27,5 @@ echo "$(date -u +%FT%TZ): uploading to gs://{{ mssql_backup_gcs_bucket }}/{{ mss
 gsutil cp "${GZ_FILE}" "gs://{{ mssql_backup_gcs_bucket }}/{{ mssql_backup_gcs_prefix }}/"
 
 rm -f "${GZ_FILE}"
+trap 'docker exec {{ mssql_container_name }} rm -f "/var/opt/mssql/octopus-sql-${TIMESTAMP}.bak" 2>/dev/null || true' EXIT
 echo "$(date -u +%FT%TZ): done"

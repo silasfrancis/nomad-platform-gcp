@@ -9,4 +9,6 @@ github_runner_download_url: >-
 
 github_owner: "silasfrancis"
 github_repo: "nomad-platform-gcp"
-github_runner_name: "mgmt-vm"
+github_runner_name: "nomad-platform-runner"
+
+secret_github_bot_pat: "github-nomad-repo-pat"

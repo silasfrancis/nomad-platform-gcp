@@ -48,14 +48,14 @@
 - name: Fetch Vault Certificate From Secret Manager
   ansible.builtin.command: >
     gcloud secrets versions access latest
-    --secret=vault-cert --project={{ gcp_project_id }}
+    --secret={{ secret_vault_cert }} --project={{ gcp_project_id }}
   register: vault_cert_fetch
   changed_when: false
 
 - name: Fetch Vault Private Key From Secret Manager
   ansible.builtin.command: >
     gcloud secrets versions access latest
-    --secret=vault-key --project={{ gcp_project_id }}
+    --secret={{ secret_vault_tls_key }} --project={{ gcp_project_id }}
   register: vault_key_fetch
   no_log: true
   changed_when: false
@@ -81,7 +81,7 @@
 # Boot Disk. fstab Entry Only; Formatting/Mounting Happens Below, Guarded
 # So It's Safe Whether The Disk Is Already Formatted Or Not. ---
 - name: Check If Vault Data Disk Is Already Formatted
-  ansible.builtin.command: blkid /dev/disk/by-id/google-vault-data
+  ansible.builtin.command: blkid /dev/disk/by-id/google-{{ vault_data_disk_name }}
   register: vault_disk_blkid
   failed_when: false
   changed_when: false
@@ -89,13 +89,13 @@
 - name: Format Vault Data Disk (Only If Unformatted)
   community.general.filesystem:
     fstype: ext4
-    dev: /dev/disk/by-id/google-vault-data
+    dev: /dev/disk/by-id/google-{{ vault_data_disk_name }}
   when: vault_disk_blkid.rc != 0
 
 - name: Add Vault Data Disk Fstab Entry And Mount
   ansible.posix.mount:
     path: "{{ vault_data_dir }}"
-    src: /dev/disk/by-id/google-vault-data
+    src: /dev/disk/by-id/google-{{ vault_data_disk_name }}
     fstype: ext4
     opts: defaults,nofail
     state: mounted

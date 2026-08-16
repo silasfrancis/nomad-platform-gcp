@@ -1,13 +1,7 @@
 ---
 # Run Against: role_mgmt Group (Dynamic Inventory). mgmt-vm Has No env
-# Label, So dev.yaml/prod.yaml Group Vars Never Apply Here — Correct, Since
+# Label, So dev.yaml/prod.yaml Group Vars Never Apply Here, Since
 # Vault/Octopus/The Runner Are Environment-Independent Singletons.
-#
-# OPEN ITEM: A grafana Role Isn't Built Yet — Add It Here Once It Exists.
-# Grafana Itself Needs No Bootstrap-Level Ansible Beyond Package Install +
-# A Static datasources.yaml (It Queries Both dev/prod Prometheus Via A
-# Datasource Variable Switcher At The Dashboard Level, Not At Install
-# Time), So It Should Be A Fairly Small Addition When You're Ready For It.
 
 - name: Configure The Management VM
   hosts: role_mgmt
@@ -16,7 +10,23 @@
     docker_extra_group_users: ["gh-runner"]
     traefik_mode: internal
     common_install_gcloud_cli: true
+  roles:
+    - common
+    - vault
+    - github-runner
+    - docker
+    - octopus
   tasks:
+    - name: Vault Backup Service On mgmt-vm
+      ansible.builtin.include_role:
+        name: vault
+        tasks_from: backup
+
+    - name: Octopus Deploy Backup Service On mgmt-vm
+      ansible.builtin.include_role:
+        name: octopus
+        tasks_from: backup
+
     - name: Mount Docker Data Disk On mgmt-vm
       ansible.builtin.include_role:
         name: docker
@@ -28,13 +38,3 @@
       ansible.builtin.include_role:
         name: docker
         tasks_from: schedule-docker-prune
-  roles:
-    - common
-    - vault
-    - github-runner
-    - docker
-    - octopus
-    - role: vault
-      tasks_from: backup.yaml
-    - role: octopus
-      tasks_from: backup.yaml
