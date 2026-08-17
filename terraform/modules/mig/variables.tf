@@ -12,7 +12,7 @@ variable "disk_cmek_key" {
 
 variable "boot_disk_image" {
   type    = string
-  default = "nomad-client-image-20260813-104710" 
+  default = "nomad-client-image-20260817-203509" 
 }
 
 variable "zones" {

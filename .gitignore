@@ -42,4 +42,3 @@ pki-local/
 *.pkrvars.hcl
 !*.pkrvars.hcl.example
 packer_cache/
-ansible/inventory/gcp.yaml

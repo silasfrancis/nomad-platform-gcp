@@ -10,10 +10,8 @@ vault_kv_prefix: "kv/data/dev"
 
 bootstrap_expect: 1
 
-# Real Internal Names/IPs Of The Nomad+Consul Server Nodes In This
-# Environment — Fill In Once compute/ Has Applied.
-retry_join:
-  - "nomad-dev-server-0"
+# Nomad/Consul Server discovery configs are passed in at runtime via startup scripts
+retry_join: ""
 
 traefik_active_instances:
   - dev-public

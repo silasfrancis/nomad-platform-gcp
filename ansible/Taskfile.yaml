@@ -36,8 +36,13 @@ tasks:
     desc: "Step 0.5 — confirms the dynamic inventory actually resolves hosts into every group the playbooks expect"
     deps: [check-env]
     cmds:
-      - envsubst < inventory/gcp.yaml.tmpl > inventory/gcp.yaml
       - ansible-inventory --graph
+
+  connectivity-check:
+    desc: "Step 0.6 — confirms Ansible can actually reach every inventory host over SSH (via IAP)"
+    deps: [inventory-check]
+    cmds:
+      - ansible -i inventory/gcp.yaml all -m ping
 
   pki-reminder:
     desc: "Step 1 — REMINDER ONLY, not runnable from here: scripts/generate-and-push-pki.sh (outside this ansible/ directory) must have been run at least once before anything below — every role fetches its TLS material directly from Secret Manager and has nothing to fall back to if it doesn't exist yet"

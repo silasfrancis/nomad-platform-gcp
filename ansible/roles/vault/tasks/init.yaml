@@ -13,7 +13,7 @@
   changed_when: false
   failed_when: false
   environment:
-    VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
+    VAULT_ADDR: "https://127.0.0.1:8200"
     VAULT_SKIP_VERIFY: "true"
 
 - name: Parse Vault Status
@@ -26,7 +26,7 @@
   when: not vault_status.initialized
   no_log: true
   environment:
-    VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
+    VAULT_ADDR: "https://127.0.0.1:8200"
     VAULT_SKIP_VERIFY: "true"
 
 - name: Parse Vault Init Output
@@ -58,7 +58,7 @@
   register: vault_status_final
   changed_when: false
   environment:
-    VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
+    VAULT_ADDR: "https://127.0.0.1:8200"
     VAULT_SKIP_VERIFY: "true"
 
 - name: Assert Vault Is Unsealed (GCP KMS Auto-Unseal Should Have Handled This)
@@ -91,7 +91,7 @@
   register: vault_audit_list
   changed_when: false
   environment:
-    VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
+    VAULT_ADDR: "https://127.0.0.1:8200"
     VAULT_SKIP_VERIFY: "true"
     VAULT_TOKEN: "{{ vault_effective_root_token }}"
 
@@ -101,7 +101,7 @@
   no_log: true
   changed_when: true
   environment:
-    VAULT_ADDR: "https://{{ vault_internal_dns }}:8200"
+    VAULT_ADDR: "https://127.0.0.1:8200"
     VAULT_SKIP_VERIFY: "true"
     VAULT_TOKEN: "{{ vault_effective_root_token }}"
 

@@ -1,22 +1,23 @@
-variable "gcp_project" {
+variable "project_id" {
+  type = string
+}
+
+variable "region" {
   type = string
 }
 
 variable "vault_address" {
   type        = string
-  description = "Reached via traefik-internal's mgmt instance (scripts/open-tunnel.sh mgmt tunnels localhost:8443 there) — not a direct connection to mgmt-vm:8200 any more. No CACERT needed: Traefik terminates with a real Let's Encrypt cert."
+  description = "Reached via traefik-internal's mgmt instance (scripts/open-tunnel.sh mgmt tunnels localhost:8443 there)."
   default     = "https://vault.platform.lefrancis.org:8443"
 }
 
 variable "octopus_address" {
   type    = string
+  description = "Reached via traefik-internal's mgmt instance (scripts/open-tunnel.sh mgmt tunnels localhost:8443 there)."
   default = "https://octopus.platform.lefrancis.org:8443"
 }
 
-variable "traefik_internal_address" {
-  type        = string
-  description = "traefik-internal's own internal FQDN or IP (e.g. traefik-internal.ZONE.c.PROJECT.internal), reachable from mgmt subnet. Used only to build Vault's Postgres TCP-passthrough connection strings in modules/vault/engines.tf — this is server-to-server traffic on the VPC, unrelated to vault_address/octopus_address above, which are for the operator's own IAP-tunneled Terraform runs."
-}
 
 variable "octopus_api_key" {
   type      = string

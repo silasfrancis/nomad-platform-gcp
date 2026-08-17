@@ -10,7 +10,7 @@
 
 services:
   mssql:
-    image: ${SQL_IMAGE}
+    image: {{ mssql_image }}
     container_name: {{ mssql_container_name }}
     restart: unless-stopped
     environment:

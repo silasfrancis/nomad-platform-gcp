@@ -62,12 +62,8 @@ default = {
     # mgmt-vm (management-vm-sa).
     "vault-snapshot-token" = { labels = { purpose = "vault", tier = "mgmt" } }
     "grafana-admin-token"  = { labels = { purpose = "grafana", tier = "mgmt" } }
-
-    "octopus-admin-api-key"        = { labels = { purpose = "octopus", tier = "mgmt" } }
-    "octopus-master-key"           = { labels = { purpose = "octopus", tier = "mgmt" } }
-    "octopus-mssql-admin-password" = { labels = { purpose = "octopus", tier = "mgmt" } }
-
     "github-nomad-repo-pat" = { labels = { purpose = "cicd", tier = "mgmt" } }
+    
     "octopus-slack-webhook-url" = { labels = { purpose = "cicd", tier = "mgmt" } }
     "cloudflare-api-token"  = { labels = { purpose = "traefik", tier = "mgmt" } }
   }

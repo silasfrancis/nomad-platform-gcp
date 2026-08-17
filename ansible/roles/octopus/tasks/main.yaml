@@ -93,8 +93,6 @@
   failed_when: false
 
 - name: Generate New Octopus Master Key (Only If None Exists Yet)
-  # Per Octopus's Own Docs: "Create A New Master Key With The Command:
-  # openssl rand 16 | base64"
   ansible.builtin.shell: openssl rand 16 | base64
   register: octopus_master_key_generated
   no_log: true

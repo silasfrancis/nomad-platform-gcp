@@ -22,8 +22,3 @@ variable "github_repository" {
   description = "org/repo — bound in the GitHub OIDC role's claims so only workflows from this repo can authenticate"
   default     = "silasfrancis/nomad-platform-gcp"
 }
-
-variable "traefik_internal_address" {
-  type        = string
-  description = "traefik-internal's own internal FQDN or IP — see engines.tf for how it's used to reach Postgres in dev/prod via a dedicated TCP passthrough, now that mgmt-vm no longer runs its own local Consul agents to resolve postgres.service.consul directly."
-}

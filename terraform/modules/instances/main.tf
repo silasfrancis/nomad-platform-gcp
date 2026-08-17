@@ -111,4 +111,5 @@ resource "google_compute_attached_disk" "additional_attachments" {
   project  = var.project_id
   disk     = google_compute_disk.additional[each.key].id
   instance = google_compute_instance.this[each.value.instance_key].id
+  device_name = each.key
 }

@@ -9,18 +9,13 @@
 #   traefik-prod          -> role=traefik-public, environment=prod
 #   nomad client MIGs    -> role=worker, environment=dev|prod, pool=on-demand|spot
 #
-# The label key for environment is "environment", NOT "env" — this
-# matters: keyed_groups below used to key on labels.env, which never
-# matched anything, meaning group_vars/dev.yaml and prod.yaml silently
-# never auto-loaded for ANY host. Fixed below.
-#
 # mgmt-vm and traefik-internal have no environment label at all — they
 # correctly stay out of the dev/prod groups (they serve both), which is
 # why group_vars/dev.yaml/prod.yaml deliberately don't apply to them.
 
 plugin: google.cloud.gcp_compute
 projects:
-  - "${GCP_PROJECT_ID}"
+  - "nomad-platform-gcp"
 auth_kind: application
 zones:
   - europe-west1-b
@@ -43,3 +38,4 @@ keyed_groups:
 
 compose:
   ansible_host: name
+  gce_zone: zone | regex_replace('^.*/', '')

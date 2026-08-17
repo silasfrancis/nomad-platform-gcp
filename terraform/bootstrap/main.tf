@@ -590,6 +590,42 @@ module "secrets" {
         }
       }
     }
+
+    "octopus-mssql-admin-password" = {
+      labels = { purpose = "octopus", tier = "mgmt" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.management_vm_member]
+        }
+      }
+    }
+
+    "octopus-master-key" = {
+      labels = { purpose = "octopus", tier = "mgmt" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.management_vm_member]
+        }
+      }
+    }
+
+    "octopus-admin-password" = {
+      labels = { purpose = "octopus", tier = "mgmt" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.management_vm_member]
+        }
+      }
+    }
+
+    "octopus-admin-api-key" = {
+      labels = { purpose = "octopus", tier = "mgmt" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.management_vm_member]
+        }
+      }
+    }
   }
   
   depends_on = [ google_project_service.apis ]

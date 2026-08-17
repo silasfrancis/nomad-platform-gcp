@@ -20,7 +20,7 @@ octopus_tentacle_port: 10943
 
 octopus_node_name: "mgmt-vm"
 octopus_admin_username: "admin"
-octopus_admin_email: "ops@lefrancis.org"
+octopus_admin_email: "silasfrancis07@gmail.com"
 
 # Docker-In-Docker Powers Octopus's Worker Container Support — Not Used In
 # This Project (No Worker Containers Planned), So Disabled. This Also

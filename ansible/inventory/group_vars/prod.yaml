@@ -9,10 +9,8 @@ vault_kv_prefix: "kv/data/prod"
 
 bootstrap_expect: 3
 
-retry_join:
-  - "nomad-prod-server-0"
-  - "nomad-prod-server-1"
-  - "nomad-prod-server-2"
+# Nomad/Consul Server discovery configs are passed in at runtime via startup scripts
+retry_join: ""
 
 traefik_active_instances:
   - prod-public

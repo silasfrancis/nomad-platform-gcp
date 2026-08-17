@@ -34,3 +34,4 @@ vault_snapshot_gcs_prefix: "vault-snapshots"
 vault_snapshot_schedule: "*-*-* 02:00:00"
 
 vault_data_disk_name: "mgmt-vm-vault-data"
+vault_internal_dns: "mgmt-vm.europe-west1-b.c.nomad-platform-gcp.internal"
