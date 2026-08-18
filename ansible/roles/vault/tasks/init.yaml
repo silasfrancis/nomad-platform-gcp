@@ -4,16 +4,28 @@
 # init` must run exactly once, ever, per cluster; this file guards that
 # with Vault's own initialized status rather than an external marker.
 #
-# Root token is used exactly once, on the very first run, immediately
-# after init, to mint two downstream tokens — then discarded for good:
+# Root token is used to mint two downstream tokens — then never needed
+# again:
 #   - vault-operator: full admin ("*", sudo). Used for personal
 #     CLI/UI login AND for platform-config Terraform runs. Written once,
 #     never read back by the VM (operator-tier — human-read-only).
 #   - vm-operator: broad-but-not-total ongoing scope (mounts, policies,
 #     auth, audit — no blanket sudo). What this playbook uses for
-#     everything below, on the very first run (fresh, in memory) and on
-#     every rerun (read back from Secret Manager). Covers whatever gets
-#     added to this file later without needing a policy rewrite each time.
+#     everything below, on every rerun (read back from Secret Manager).
+#
+# RECOVERY: if the first-run block (everything from "Write vault-operator
+# Admin Policy" through "Push vm-operator Token") fails partway, Vault is
+# already initialized and this file's normal guards (not
+# vault_status.initialized) will skip the remaining first-run steps on
+# every future run — permanently, since Vault refuses to init twice. To
+# resume a partial first run, pass the root token back in manually:
+#   ansible-playbook playbooks/vault-init.yaml \
+#     -e gcp_project_id=$GCP_PROJECT_ID \
+#     -e vault_manual_root_token="$(gcloud secrets versions access latest \
+#        --secret=vault-root-token --project=$GCP_PROJECT_ID)"
+# You can always retrieve the root token yourself
+# via gcloud regardless of the tier-based accessor config, since Owner
+# bypasses it but the VM itself can't, by design.
 
 - name: Check Vault Status
   ansible.builtin.command: vault status -format=json
@@ -44,6 +56,11 @@
   ansible.builtin.set_fact:
     vault_init_result: "{{ vault_init_raw.stdout | from_json }}"
   when: not vault_status.initialized
+  no_log: true
+
+- name: Set Recovery Root Token Fact (Only Used If Passed Via -e, For Resuming A Failed First Run)
+  ansible.builtin.set_fact:
+    recovery_root_token: "{{ vault_manual_root_token | default('') }}"
   no_log: true
 
 - name: Write Vault Root Token To Secret Manager
@@ -80,7 +97,17 @@
       Vault reports sealed=true after init. Check the seal "gcpckms" block
       in vault.hcl and the KMS key's IAM bindings before proceeding.
 
-- name: Write vault-operator Admin Policy (Only On First Run)
+- name: Set First-Run Block Facts
+  ansible.builtin.set_fact:
+    run_first_run_tasks: "{{ (not vault_status.initialized) or (recovery_root_token != '') }}"
+    minting_token: >-
+      {{ vault_init_result.root_token if not vault_status.initialized
+         else recovery_root_token }}
+  no_log: true
+
+# vault-operator: Full Admin. Personal Login + Terraform's Token.
+
+- name: Write vault-operator Admin Policy (First Run Or Recovery)
   ansible.builtin.copy:
     dest: /tmp/vault-operator-policy.hcl
     content: |
@@ -88,46 +115,47 @@
         capabilities = ["create", "read", "update", "delete", "list", "sudo"]
       }
     mode: "0600"
-  when: not vault_status.initialized
+  when: run_first_run_tasks
 
-- name: Apply vault-operator Admin Policy (Only On First Run)
+- name: Apply vault-operator Admin Policy (First Run Or Recovery)
   ansible.builtin.command: vault policy write vault-operator /tmp/vault-operator-policy.hcl
-  when: not vault_status.initialized
+  when: run_first_run_tasks
   environment:
     VAULT_ADDR: "{{ vault_local_addr }}"
-    VAULT_TOKEN: "{{ vault_init_result.root_token }}"
+    VAULT_TOKEN: "{{ minting_token }}"
+    VAULT_SKIP_VERIFY: "true"
   no_log: true
 
-- name: Create vault-operator Token (Only On First Run)
-  # period=8760h (~1yr) — doubles as your personal login, not just a
-  # short-lived automation credential. Renew before expiry:
-  # VAULT_TOKEN=<token> vault token renew
+- name: Create vault-operator Token (First Run Or Recovery)
   ansible.builtin.command: >
     vault token create -policy=vault-operator -period=8760h -format=json
-  when: not vault_status.initialized
+  when: run_first_run_tasks
   environment:
     VAULT_ADDR: "{{ vault_local_addr }}"
-    VAULT_TOKEN: "{{ vault_init_result.root_token }}"
+    VAULT_TOKEN: "{{ minting_token }}"
+    VAULT_SKIP_VERIFY: "true"
   register: vault_operator_token_raw
   no_log: true
 
-- name: Extract vault-operator Token Value (Only On First Run)
+- name: Extract vault-operator Token Value (First Run Or Recovery)
   ansible.builtin.set_fact:
     vault_operator_token: "{{ (vault_operator_token_raw.stdout | from_json).auth.client_token }}"
-  when: not vault_status.initialized
+  when: run_first_run_tasks
   no_log: true
 
-- name: Push vault-operator Token To Secret Manager (Only On First Run)
+- name: Push vault-operator Token To Secret Manager (First Run Or Recovery)
   ansible.builtin.command: >
     gcloud secrets versions add {{ secret_vault_operator_token }} --data-file=- --project={{ gcp_project_id }}
   args:
     stdin: "{{ vault_operator_token }}"
-  when: not vault_status.initialized
+  when: run_first_run_tasks
   no_log: true
   changed_when: true
 
+# vm-operator: Broad Ongoing Scope, No Blanket Sudo. What This File
+# Uses For Everything Below — Now And Anything Added Later.
 
-- name: Write vm-operator Policy (Only On First Run)
+- name: Write vm-operator Policy (First Run Or Recovery)
   ansible.builtin.copy:
     dest: /tmp/vm-operator-policy.hcl
     content: |
@@ -141,64 +169,67 @@
         capabilities = ["create", "read", "update", "delete", "list", "sudo"]
       }
       path "sys/audit" {
-        capabilities = ["read", "list"]
+        capabilities = ["read", "list", "sudo"]
       }
       path "sys/audit/*" {
         capabilities = ["create", "read", "update", "delete", "sudo"]
       }
     mode: "0600"
-  when: not vault_status.initialized
+  when: run_first_run_tasks
 
-- name: Apply vm-operator Policy (Only On First Run)
+- name: Apply vm-operator Policy (First Run Or Recovery)
   ansible.builtin.command: vault policy write vm-operator /tmp/vm-operator-policy.hcl
-  when: not vault_status.initialized
+  when: run_first_run_tasks
   environment:
     VAULT_ADDR: "{{ vault_local_addr }}"
-    VAULT_TOKEN: "{{ vault_init_result.root_token }}"
+    VAULT_TOKEN: "{{ minting_token }}"
+    VAULT_SKIP_VERIFY: "true"
   no_log: true
 
-- name: Create vm-operator Token (Only On First Run)
+- name: Create vm-operator Token (First Run Or Recovery)
   ansible.builtin.command: >
     vault token create -policy=vm-operator -period=720h -format=json
-  when: not vault_status.initialized
+  when: run_first_run_tasks
   environment:
     VAULT_ADDR: "{{ vault_local_addr }}"
-    VAULT_TOKEN: "{{ vault_init_result.root_token }}"
+    VAULT_TOKEN: "{{ minting_token }}"
+    VAULT_SKIP_VERIFY: "true"
   register: vault_vm_operator_token_raw
   no_log: true
 
-- name: Extract vm-operator Token Value (Only On First Run)
+- name: Extract vm-operator Token Value (First Run Or Recovery)
   ansible.builtin.set_fact:
     vault_vm_operator_token_fresh: "{{ (vault_vm_operator_token_raw.stdout | from_json).auth.client_token }}"
-  when: not vault_status.initialized
+  when: run_first_run_tasks
   no_log: true
 
-- name: Push vm-operator Token To Secret Manager (Only On First Run)
+- name: Push vm-operator Token To Secret Manager (First Run Or Recovery)
   ansible.builtin.command: >
     gcloud secrets versions add {{ secret_vault_vm_operator_token }} --data-file=- --project={{ gcp_project_id }}
   args:
     stdin: "{{ vault_vm_operator_token_fresh }}"
-  when: not vault_status.initialized
+  when: run_first_run_tasks
   no_log: true
   changed_when: true
 
-# Root Token's Last Use, Ever, In This File. Everything Below Uses
-# effective_vault_token: Root If This IS The First Run (Already In Memory,
-# Nothing Extra Gained By Switching Mid-Run), Or vm-operator (Read Back
-# From Secret Manager) On Every Rerun. Add Future Tasks Below This Point.
+# Root/recovery token's last use, ever, in this file.
+# Everything below uses effective_vault_token: the freshly-minted
+# vm-operator token if this run just created one (first run or
+# recovery), or the one already sitting in Secret Manager from a past
+# successful run (routine reruns).
 
-- name: Read vm-operator Token From Secret Manager (Reruns Only)
+- name: Read vm-operator Token From Secret Manager (Routine Reruns Only)
   ansible.builtin.command: >
     gcloud secrets versions access latest --secret={{ secret_vault_vm_operator_token }} --project={{ gcp_project_id }}
   register: vault_vm_operator_token_from_secret
   no_log: true
   changed_when: false
-  when: vault_status.initialized
+  when: vault_status.initialized and not run_first_run_tasks
 
 - name: Set Effective Vault Token Fact
   ansible.builtin.set_fact:
     effective_vault_token: >-
-      {{ vault_init_result.root_token if not vault_status.initialized
+      {{ vault_vm_operator_token_fresh if run_first_run_tasks
          else vault_vm_operator_token_from_secret.stdout }}
   no_log: true
 
@@ -208,8 +239,8 @@
   changed_when: false
   environment:
     VAULT_ADDR: "{{ vault_local_addr }}"
-    VAULT_SKIP_VERIFY: "true"
     VAULT_TOKEN: "{{ effective_vault_token }}"
+    VAULT_SKIP_VERIFY: "true"
 
 - name: Enable File Audit Device (Only If Not Already Enabled)
   ansible.builtin.command: vault audit enable file file_path={{ vault_log_dir }}/audit.log
@@ -217,17 +248,21 @@
   changed_when: true
   environment:
     VAULT_ADDR: "{{ vault_local_addr }}"
-    VAULT_SKIP_VERIFY: "true"
     VAULT_TOKEN: "{{ effective_vault_token }}"
+    VAULT_SKIP_VERIFY: "true"
 
 # Add any future ongoing Vault config tasks here, using
-# VAULT_TOKEN: "{{ effective_vault_token }}" — no new policy work needed
+#   VAULT_ADDR: "{{ vault_local_addr }}"
+#   VAULT_TOKEN: "{{ effective_vault_token }}"
+#   VAULT_SKIP_VERIFY: "true" — no new policy work needed
 # unless a task needs a path outside vm-operator's current scope.
 
 - name: Report Init Outcome
   ansible.builtin.debug:
     msg: >-
-      {{ 'Vault was already initialized — ran ongoing config via vm-operator token.'
+      {{ 'Vault initialized this run via recovery token — resumed a previously partial first run.'
+         if (vault_status.initialized and run_first_run_tasks)
+         else 'Vault was already initialized — ran ongoing config via vm-operator token.'
          if vault_status.initialized
          else 'Vault initialized for the first time. Root token + recovery keys archived (human-read-only). vault-operator token minted for personal login + Terraform. vm-operator token minted for this playbook'\''s ongoing use. Audit logging enabled.' }}
 

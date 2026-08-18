@@ -25,6 +25,7 @@ secret_vault_tls_key: "vault-tls-key"
 
 vault_listener_address: "0.0.0.0:8200"
 vault_ui_enabled: true
+vault_manual_root_token: ""
 
 # Backup
 vault_snapshot_gcs_bucket: " nomad-platform-gcp-europe-west1-platform-artifacts"

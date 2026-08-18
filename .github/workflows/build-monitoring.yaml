@@ -84,7 +84,7 @@ jobs:
   test-nomad-sentinel:
     needs: split-nomad-sentinel
     if: needs.split-nomad-sentinel.outputs.nomad_sentinel_changed == 'true'
-    runs-on: self-hosted
+    runs-on: nomad-platform-runner
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
 
