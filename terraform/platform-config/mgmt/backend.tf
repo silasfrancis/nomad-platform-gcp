@@ -1,14 +1,12 @@
 terraform {
-  required_version = ">= 1.9.0"
-
   required_providers {
     vault         = { 
       source = "hashicorp/vault", 
-      version = "~> 4.0" 
+      version = "5.11.0" 
     }
     octopusdeploy = { 
       source = "OctopusDeploy/octopusdeploy", 
-      version = "~> 0.40" 
+      version = "1.19.3" 
     }
     google = {
       source  = "hashicorp/google"
@@ -16,7 +14,7 @@ terraform {
     }
     random = { 
       source = "hashicorp/random", 
-      version = "~> 3.6" 
+      version = "3.9.0"
     }
   }
 
@@ -24,8 +22,9 @@ terraform {
 }
 
 provider "vault" {
-  address = var.vault_address
-# token
+  address      = var.vault_address
+  token        = var.vault_token
+  ca_cert_file = pathexpand("~/.terraform-certs/management-ca.pem")
 }
 
 provider "octopusdeploy" {

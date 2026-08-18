@@ -158,10 +158,10 @@ resource "octopusdeploy_variable" "traefik_internal_port" {
 }
 
 resource "octopusdeploy_variable" "image_tag" {
-  owner_id = octopusdeploy_library_variable_set.platform_shared.id
-  name     = "ImageTag"
-  type     = "String"
-  value    = "#{Octopus.Release.Number}"
+  owner_id    = octopusdeploy_library_variable_set.platform_shared.id
+  name        = "ImageTag"
+  type        = "String"
+  value       = "#{Octopus.Release.Number}"
   description = "Alias for the release number GitHub Actions sets when it calls octo create-release — the same image tag is promoted through every environment, never rebuilt."
 }
 
@@ -188,5 +188,5 @@ resource "octopusdeploy_variable" "artifact_registry" {
   owner_id = octopusdeploy_library_variable_set.platform_shared.id
   name     = "ArtifactRegistry"
   type     = "String"
-  value    = local.artifact_registry_path # e.g. "us-central1-docker.pkg.dev/${var.gcp_project}/platform-images"
+  value    = local.artifact_registry_path # e.g. "us-central1-docker.pkg.dev/${var.gcp_project_id}/platform-images"
 }

@@ -73,7 +73,7 @@ certificatesResolvers:
 api:
   dashboard: false
 
-{% if traefik_instance.name == "dev-public" or traefik_instance.name == "prod-public" %}
+{% if traefik_instance.metrics_port %}
 metrics:
   prometheus:
     entryPoint: metrics

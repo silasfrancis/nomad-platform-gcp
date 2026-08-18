@@ -257,7 +257,13 @@ module "secrets" {
       labels = { purpose = "dev", tier = "scoped", environment = "dev" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = concat(local.dev_members, local.management_members)
+          members = concat(
+            local.dev_members,  # Nomad/Consul prod server ca
+            [
+              local.traefik_vm_internal_member, # Traefik internal needs to validate Consul cert (Consul catalog)
+              "user:${var.platform_admin_email}"
+            ]
+          )
         }
       }
     }
@@ -265,7 +271,13 @@ module "secrets" {
       labels = { purpose = "prod", tier = "scoped", environment = "prod" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = concat(local.prod_members, [local.management_vm_member])
+          members = concat(
+            local.prod_members, # Nomad/Consul prod server ca
+            [
+              local.traefik_vm_internal_member,  # Traefik internal needs to validate Consul cert (Consul catalog)
+              "user:${var.platform_admin_email}"
+            ]
+          )
         }
       }
     }
@@ -277,9 +289,9 @@ module "secrets" {
       iam = {
         "roles/secretmanager.secretAccessor" = {
           members = concat(
-            local.management_members,
-            local.dev_members,
-            local.prod_members
+            local.dev_members, # Nomad servers to validate vault cert
+            local.prod_members, # Nomad servers to validate vault cert
+            ["user:${var.platform_admin_email}"]
           )
         }
       }
@@ -631,7 +643,7 @@ module "secrets" {
       labels = { purpose = "octopus", tier = "operator", environment = "dev" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = ["user:${var.platform_admin_email}"]
+          members = ["user:${var.platform_admin_email}"] # applied via terraform and written to octpus deploy, so no vm needs this
         }
       }
     }
@@ -639,7 +651,7 @@ module "secrets" {
       labels = { purpose = "octopus", tier = "operator", environment = "prod" }
       iam = {
         "roles/secretmanager.secretAccessor" = {
-          members = ["user:${var.platform_admin_email}"]
+          members = ["user:${var.platform_admin_email}"] # applied via terraform and written to octpus deploy, so no vm needs this
         }
       }
     }

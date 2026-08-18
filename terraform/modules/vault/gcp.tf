@@ -2,7 +2,7 @@
 resource "google_service_account" "vault_gcp_backend" {
   account_id   = "vault-gcp-backend"
   display_name = "Vault GCP Secrets Backend Master SA"
-  project      = var.gcp_project
+  project      = var.gcp_project_id
 }
 
 # Grant Vault the permissions it needs to manage service accounts and keys
@@ -12,7 +12,7 @@ resource "google_project_iam_member" "vault_gcp_backend_roles" {
     "roles/iam.serviceAccountAdmin"
   ])
 
-  project = var.gcp_project
+  project = var.gcp_project_id
   role    = each.key
   member  = google_service_account.vault_gcp_backend.member
 }
@@ -35,12 +35,12 @@ resource "vault_gcp_secret_roleset" "nomad_autoscaler" {
   backend     = vault_gcp_secret_backend.gcp.path
   roleset     = "nomad-autoscaler-${each.value}"
   secret_type = "service_account_key"
-  project     = var.gcp_project
+  project     = var.gcp_project_id
 
   # Give the generated service account permissions to manage/view the MIGs 
   # and instance operations required for scaling clusters up and down
   binding {
-    resource = "//cloudresourcemanager.googleapis.com/projects/${var.gcp_project}"
+    resource = "//cloudresourcemanager.googleapis.com/projects/${var.gcp_project_id}"
     roles = [
       "roles/compute.instanceAdmin.v1",
       "roles/compute.networkViewer"
