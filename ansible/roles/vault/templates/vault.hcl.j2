@@ -21,7 +21,7 @@ listener "tcp" {
 
 api_addr     = "https://{{ vault_internal_dns }}:8200"
 cluster_addr = "https://{{ vault_internal_dns }}:8201"
-
+disable_mlock = true
 ui = {{ vault_ui_enabled | lower }}
 
 log_level = "INFO"

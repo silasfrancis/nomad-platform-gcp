@@ -33,23 +33,12 @@ variable "default_secrets" {
     })), {})
   }))
 default = {
-    # --- root: Write-Once Bootstrap Secrets, Essentially Archival After
-    # Initial Setup. Human-Only (platform_admin_email) — No VM, Ever. ---
-    "vault-root-token"    = { labels = { purpose = "vault", tier = "root" } }
-    "vault-recovery-keys" = { labels = { purpose = "vault", tier = "root" } }
 
     "nomad-acl-root-token-dev"   = { labels = { purpose = "nomad", tier = "root", environment = "dev" } }
     "nomad-acl-root-token-prod"  = { labels = { purpose = "nomad", tier = "root", environment = "prod" } }
     "consul-acl-root-token-dev"  = { labels = { purpose = "consul", tier = "root", environment = "dev" } }
     "consul-acl-root-token-prod" = { labels = { purpose = "consul", tier = "root", environment = "prod" } }
-
-    # --- operator: Ongoing Tokens Read Only By Whoever Runs
-    # terraform/platform-config. Human-Only, Never A VM.
-    #
-    # vault-admin-token DROPPED — same duplicate-naming issue as the
-    # nomad/consul admin tokens below. One human operator, one token
-    # per system; vault-operator-token already covers this. ---
-    "vault-operator-token"       = { labels = { purpose = "vault", tier = "operator" } }
+  
     "consul-operator-token-dev"  = { labels = { purpose = "consul", tier = "operator", environment = "dev" } }
     "consul-operator-token-prod" = { labels = { purpose = "consul", tier = "operator", environment = "prod" } }
     "nomad-operator-token-dev"   = { labels = { purpose = "nomad", tier = "operator", environment = "dev" } }
@@ -65,7 +54,6 @@ default = {
     "github-nomad-repo-pat" = { labels = { purpose = "cicd", tier = "mgmt" } }
     
     "octopus-slack-webhook-url" = { labels = { purpose = "cicd", tier = "mgmt" } }
-    "cloudflare-api-token"  = { labels = { purpose = "traefik", tier = "mgmt" } }
   }
 }
 

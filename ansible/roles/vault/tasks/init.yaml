@@ -1,8 +1,19 @@
 ---
-# Called ONLY From playbooks/vault-init.yaml — Never Included By
-# tasks/main.yaml Or Any Routine site.yaml/mgmt.yaml Pass. `vault operator
-# init` Must Run Exactly Once, Ever, Per Cluster; This File Guards That
-# With Vault's Own initialized Status Rather Than An External Marker.
+# Called only from playbooks/vault-init.yaml — never included by
+# tasks/main.yaml or any routine site.yaml/mgmt.yaml pass. `vault operator
+# init` must run exactly once, ever, per cluster; this file guards that
+# with Vault's own initialized status rather than an external marker.
+#
+# Root token is used exactly once, on the very first run, immediately
+# after init, to mint two downstream tokens — then discarded for good:
+#   - vault-operator: full admin ("*", sudo). Used for personal
+#     CLI/UI login AND for platform-config Terraform runs. Written once,
+#     never read back by the VM (operator-tier — human-read-only).
+#   - vm-operator: broad-but-not-total ongoing scope (mounts, policies,
+#     auth, audit — no blanket sudo). What this playbook uses for
+#     everything below, on the very first run (fresh, in memory) and on
+#     every rerun (read back from Secret Manager). Covers whatever gets
+#     added to this file later without needing a policy rewrite each time.
 
 - name: Check Vault Status
   ansible.builtin.command: vault status -format=json
@@ -13,7 +24,7 @@
   changed_when: false
   failed_when: false
   environment:
-    VAULT_ADDR: "https://127.0.0.1:8200"
+    VAULT_ADDR: "{{ vault_local_addr }}"
     VAULT_SKIP_VERIFY: "true"
 
 - name: Parse Vault Status
@@ -26,7 +37,7 @@
   when: not vault_status.initialized
   no_log: true
   environment:
-    VAULT_ADDR: "https://127.0.0.1:8200"
+    VAULT_ADDR: "{{ vault_local_addr }}"
     VAULT_SKIP_VERIFY: "true"
 
 - name: Parse Vault Init Output
@@ -36,19 +47,19 @@
   no_log: true
 
 - name: Write Vault Root Token To Secret Manager
-  ansible.builtin.shell: >
-    echo -n "{{ vault_init_result.root_token }}" |
-    gcloud secrets versions add {{ secret_vault_root_token }}
-    --data-file=- --project={{ gcp_project_id }}
+  ansible.builtin.command: >
+    gcloud secrets versions add {{ secret_vault_root_token }} --data-file=- --project={{ gcp_project_id }}
+  args:
+    stdin: "{{ vault_init_result.root_token }}"
   when: not vault_status.initialized
   no_log: true
   changed_when: true
 
 - name: Write Vault Recovery Keys To Secret Manager
-  ansible.builtin.shell: >
-    echo -n "{{ vault_init_result.recovery_keys_b64 | join(',') }}" |
-    gcloud secrets versions add {{ secret_vault_recovery_keys }}
-    --data-file=- --project={{ gcp_project_id }}
+  ansible.builtin.command: >
+    gcloud secrets versions add {{ secret_vault_recovery_keys }} --data-file=- --project={{ gcp_project_id }}
+  args:
+    stdin: "{{ vault_init_result.recovery_keys_b64 | join(',') }}"
   when: not vault_status.initialized
   no_log: true
   changed_when: true
@@ -58,7 +69,7 @@
   register: vault_status_final
   changed_when: false
   environment:
-    VAULT_ADDR: "https://127.0.0.1:8200"
+    VAULT_ADDR: "{{ vault_local_addr }}"
     VAULT_SKIP_VERIFY: "true"
 
 - name: Assert Vault Is Unsealed (GCP KMS Auto-Unseal Should Have Handled This)
@@ -67,58 +78,58 @@
       - (vault_status_final.stdout | from_json).sealed == false
     fail_msg: >
       Vault reports sealed=true after init. Check the seal "gcpckms" block
-      in vault.hcl and the KMS key's IAM bindings before proceeding to
-      Terraform's service-config layer.
+      in vault.hcl and the KMS key's IAM bindings before proceeding.
 
-- name: Read Root Token From Secret Manager (Needed On Re-Runs Where Init Already Happened Previously)
-  ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret={{ secret_vault_root_token }} --project={{ gcp_project_id }}
-  register: vault_root_token_from_secret
-  no_log: true
-  changed_when: false
-  when: vault_status.initialized
+- name: Write vault-operator Admin Policy (Only On First Run)
+  ansible.builtin.copy:
+    dest: /tmp/vault-operator-policy.hcl
+    content: |
+      path "*" {
+        capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+      }
+    mode: "0600"
+  when: not vault_status.initialized
 
-- name: Set Effective Root Token Fact
-  ansible.builtin.set_fact:
-    vault_effective_root_token: >-
-      {{ vault_init_result.root_token if not vault_status.initialized
-         else vault_root_token_from_secret.stdout }}
-  no_log: true
-
-- name: Check If Audit Logging Is Already Enabled
-  ansible.builtin.command: vault audit list -format=json
-  register: vault_audit_list
-  changed_when: false
+- name: Apply vault-operator Admin Policy (Only On First Run)
+  ansible.builtin.command: vault policy write vault-operator /tmp/vault-operator-policy.hcl
+  when: not vault_status.initialized
   environment:
-    VAULT_ADDR: "https://127.0.0.1:8200"
-    VAULT_SKIP_VERIFY: "true"
-    VAULT_TOKEN: "{{ vault_effective_root_token }}"
+    VAULT_ADDR: "{{ vault_local_addr }}"
+    VAULT_TOKEN: "{{ vault_init_result.root_token }}"
+  no_log: true
 
-- name: Enable File Audit Device (Only If Not Already Enabled)
-  ansible.builtin.command: vault audit enable file file_path={{ vault_log_dir }}/audit.log
-  when: (vault_audit_list.stdout | from_json) == {}
+- name: Create vault-operator Token (Only On First Run)
+  # period=8760h (~1yr) — doubles as your personal login, not just a
+  # short-lived automation credential. Renew before expiry:
+  # VAULT_TOKEN=<token> vault token renew
+  ansible.builtin.command: >
+    vault token create -policy=vault-operator -period=8760h -format=json
+  when: not vault_status.initialized
+  environment:
+    VAULT_ADDR: "{{ vault_local_addr }}"
+    VAULT_TOKEN: "{{ vault_init_result.root_token }}"
+  register: vault_operator_token_raw
+  no_log: true
+
+- name: Extract vault-operator Token Value (Only On First Run)
+  ansible.builtin.set_fact:
+    vault_operator_token: "{{ (vault_operator_token_raw.stdout | from_json).auth.client_token }}"
+  when: not vault_status.initialized
+  no_log: true
+
+- name: Push vault-operator Token To Secret Manager (Only On First Run)
+  ansible.builtin.command: >
+    gcloud secrets versions add {{ secret_vault_operator_token }} --data-file=- --project={{ gcp_project_id }}
+  args:
+    stdin: "{{ vault_operator_token }}"
+  when: not vault_status.initialized
   no_log: true
   changed_when: true
-  environment:
-    VAULT_ADDR: "https://127.0.0.1:8200"
-    VAULT_SKIP_VERIFY: "true"
-    VAULT_TOKEN: "{{ vault_effective_root_token }}"
 
-- name: Report Init Outcome
-  ansible.builtin.debug:
-    msg: >-
-      {{ 'Vault was already initialized — no action taken.'
-         if vault_status.initialized
-         else 'Vault initialized for the first time. Root token and recovery keys written to Secret Manager, audit logging enabled.' }}
 
-# Terraform Operator Token — Scoped Down From Root
-# Root token is used exactly once, right here, to mint a scoped
-# operator token for platform-config's Terraform runs. Root itself
-# stays in the root tier and is never referenced again after this.
-- name: Write terraform-operator Vault policy
+- name: Write vm-operator Policy (Only On First Run)
   ansible.builtin.copy:
-    dest: /tmp/terraform-operator-policy.hcl
+    dest: /tmp/vm-operator-policy.hcl
     content: |
       path "sys/mounts/*" {
         capabilities = ["create", "read", "update", "delete", "list"]
@@ -129,39 +140,101 @@
       path "auth/*" {
         capabilities = ["create", "read", "update", "delete", "list", "sudo"]
       }
+      path "sys/audit" {
+        capabilities = ["read", "list"]
+      }
+      path "sys/audit/*" {
+        capabilities = ["create", "read", "update", "delete", "sudo"]
+      }
     mode: "0600"
+  when: not vault_status.initialized
 
-- name: Apply terraform-operator Vault policy
-  ansible.builtin.command: >
-    vault policy write terraform-operator /tmp/terraform-operator-policy.hcl
+- name: Apply vm-operator Policy (Only On First Run)
+  ansible.builtin.command: vault policy write vm-operator /tmp/vm-operator-policy.hcl
+  when: not vault_status.initialized
   environment:
-    VAULT_ADDR: "{{ vault_addr }}"
-    VAULT_TOKEN: "{{ vault_root_token }}"
+    VAULT_ADDR: "{{ vault_local_addr }}"
+    VAULT_TOKEN: "{{ vault_init_result.root_token }}"
   no_log: true
 
-- name: Create terraform-operator Vault token
+- name: Create vm-operator Token (Only On First Run)
   ansible.builtin.command: >
-    vault token create -policy=terraform-operator -period=720h -format=json
+    vault token create -policy=vm-operator -period=720h -format=json
+  when: not vault_status.initialized
   environment:
-    VAULT_ADDR: "{{ vault_addr }}"
-    VAULT_TOKEN: "{{ vault_root_token }}"
-  register: vault_operator_token_raw
+    VAULT_ADDR: "{{ vault_local_addr }}"
+    VAULT_TOKEN: "{{ vault_init_result.root_token }}"
+  register: vault_vm_operator_token_raw
   no_log: true
 
-- name: Extract terraform-operator token value
+- name: Extract vm-operator Token Value (Only On First Run)
   ansible.builtin.set_fact:
-    vault_operator_token: "{{ (vault_operator_token_raw.stdout | from_json).auth.client_token }}"
+    vault_vm_operator_token_fresh: "{{ (vault_vm_operator_token_raw.stdout | from_json).auth.client_token }}"
+  when: not vault_status.initialized
   no_log: true
 
-- name: Push terraform-operator Vault token to Secret Manager
+- name: Push vm-operator Token To Secret Manager (Only On First Run)
   ansible.builtin.command: >
-    gcloud secrets versions add {{ secret_vault_operator_token }}
-    --data-file=- --project={{ gcp_project }}
+    gcloud secrets versions add {{ secret_vault_vm_operator_token }} --data-file=- --project={{ gcp_project_id }}
   args:
-    stdin: "{{ vault_operator_token }}"
+    stdin: "{{ vault_vm_operator_token_fresh }}"
+  when: not vault_status.initialized
+  no_log: true
+  changed_when: true
+
+# Root Token's Last Use, Ever, In This File. Everything Below Uses
+# effective_vault_token: Root If This IS The First Run (Already In Memory,
+# Nothing Extra Gained By Switching Mid-Run), Or vm-operator (Read Back
+# From Secret Manager) On Every Rerun. Add Future Tasks Below This Point.
+
+- name: Read vm-operator Token From Secret Manager (Reruns Only)
+  ansible.builtin.command: >
+    gcloud secrets versions access latest --secret={{ secret_vault_vm_operator_token }} --project={{ gcp_project_id }}
+  register: vault_vm_operator_token_from_secret
+  no_log: true
+  changed_when: false
+  when: vault_status.initialized
+
+- name: Set Effective Vault Token Fact
+  ansible.builtin.set_fact:
+    effective_vault_token: >-
+      {{ vault_init_result.root_token if not vault_status.initialized
+         else vault_vm_operator_token_from_secret.stdout }}
   no_log: true
 
-- name: Remove local policy file
+- name: Check If Audit Logging Is Already Enabled
+  ansible.builtin.command: vault audit list -format=json
+  register: vault_audit_list
+  changed_when: false
+  environment:
+    VAULT_ADDR: "{{ vault_local_addr }}"
+    VAULT_SKIP_VERIFY: "true"
+    VAULT_TOKEN: "{{ effective_vault_token }}"
+
+- name: Enable File Audit Device (Only If Not Already Enabled)
+  ansible.builtin.command: vault audit enable file file_path={{ vault_log_dir }}/audit.log
+  when: (vault_audit_list.stdout | from_json) == {}
+  changed_when: true
+  environment:
+    VAULT_ADDR: "{{ vault_local_addr }}"
+    VAULT_SKIP_VERIFY: "true"
+    VAULT_TOKEN: "{{ effective_vault_token }}"
+
+# Add any future ongoing Vault config tasks here, using
+# VAULT_TOKEN: "{{ effective_vault_token }}" — no new policy work needed
+# unless a task needs a path outside vm-operator's current scope.
+
+- name: Report Init Outcome
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'Vault was already initialized — ran ongoing config via vm-operator token.'
+         if vault_status.initialized
+         else 'Vault initialized for the first time. Root token + recovery keys archived (human-read-only). vault-operator token minted for personal login + Terraform. vm-operator token minted for this playbook'\''s ongoing use. Audit logging enabled.' }}
+
+- name: Remove Local Policy Files
   ansible.builtin.file:
-    path: /tmp/terraform-operator-policy.hcl
+    path: "{{ item }}"
     state: absent
+  loop:
+    - /tmp/vault-operator-policy.hcl
+    - /tmp/vm-operator-policy.hcl

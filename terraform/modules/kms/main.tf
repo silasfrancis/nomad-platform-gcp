@@ -30,11 +30,6 @@ locals {
     }
   }
 
-  # Flattened map of keyring/key → key config
-  # Built from kms_keyrings so there is only one source of truth.
-  # Format: "<keyring>/<key>" = { purpose, rotation_period }
-  # Used to resolve key IDs in IAM bindings
-  # without repeating keyring+key names.
   kms_keys_flat = merge([
     for keyring_name, keyring in local.kms_keyrings : {
       for key_name, key_config in keyring.keys :
@@ -45,67 +40,23 @@ locals {
     }
   ]...)
 
-  default_crypto_key_members = {
-    "platform/storage-cmek"           = []
-    "platform/disk-cmek"              = []
-    "vault-unseal/vault-unseal-cmek"  = []
-    "secrets/secrets-cmek"            = []
-  }
-  
+  # Flatten var.crypto_key_iam from key_ref -> role -> {members, condition}
+  # into one entry per key×role binding, keyed by "<key_ref>__<role>" so
+  # each role gets its own google_kms_crypto_key_iam_binding resource —
+  # this is what lets a single key carry multiple roles simultaneously.
+  crypto_key_iam_flat = merge([
+    for key_ref, roles in var.crypto_key_iam : {
+      for role, binding in roles :
+      "${key_ref}__${role}" => {
+        key_ref   = key_ref
+        role      = role
+        members   = toset(binding.members)
+        condition = binding.condition
+      }
+    }
+  ]...)
+
   key_ring_iam_bindings = {}
-  crypto_key_iam = {
-    "platform/storage-cmek" = {
-      role = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-      members = toset(concat(
-        local.default_crypto_key_members["platform/storage-cmek"],
-        lookup(var.crypto_key_members, "platform/storage-cmek", [])
-      ))
-      condition = {
-        title       = null
-        description = null
-        expression  = null
-      }
-    }
-
-    "platform/disk-cmek" = {
-      role = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-      members = toset(concat(
-        local.default_crypto_key_members["platform/disk-cmek"],
-        lookup(var.crypto_key_members, "platform/disk-cmek", [])
-      ))
-      condition = {
-        title       = null
-        description = null
-        expression  = null
-      }
-    }
-
-    "vault-unseal/vault-unseal-cmek" = {
-      role = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-      members = toset(concat(
-        local.default_crypto_key_members["vault-unseal/vault-unseal-cmek"],
-        lookup(var.crypto_key_members, "vault-unseal/vault-unseal-cmek", [])
-      ))
-      condition = {
-        title       = null
-        description = null
-        expression  = null
-      }
-    }
-
-    "secrets/secrets-cmek" = {
-      role = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-      members = toset(concat(
-        local.default_crypto_key_members["secrets/secrets-cmek"],
-        lookup(var.crypto_key_members, "secrets/secrets-cmek", [])
-      ))
-      condition = {
-        title       = null
-        description = null
-        expression  = null
-      }
-    }
-  }
 }
 
 resource "google_kms_key_ring" "this" {
@@ -129,23 +80,17 @@ resource "google_kms_crypto_key" "keys" {
     algorithm        = "GOOGLE_SYMMETRIC_ENCRYPTION"
     protection_level = "SOFTWARE"
   }
-
-  # lifecycle {
-  #   prevent_destroy = true
-  # }
 }
 
 resource "google_kms_crypto_key_iam_binding" "this" {
-  for_each = local.crypto_key_iam
+  for_each = local.crypto_key_iam_flat
 
-  crypto_key_id = google_kms_crypto_key.keys[each.key].id
+  crypto_key_id = google_kms_crypto_key.keys[each.value.key_ref].id
   role          = each.value.role
   members       = each.value.members
 
-  # Condition block only created when expression is non-null.
-  # Sending an empty condition block to the GCP API causes a validation error.
   dynamic "condition" {
-    for_each = each.value.condition.expression != null ? [each.value.condition] : []
+    for_each = each.value.condition != null ? [each.value.condition] : []
     content {
       title       = condition.value.title
       description = condition.value.description

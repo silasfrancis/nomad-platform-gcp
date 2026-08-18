@@ -16,12 +16,13 @@ output "kms_keys" {
 }
 
 output "kms_key_access_control" {
-  description = "A summary of the KMS keys and the service accounts authorized to use them."
+  description = "A summary of the KMS keys and the roles/members authorized on each, grouped by key."
   value = {
-    for key_ref, iam in google_kms_crypto_key_iam_binding.this : 
+    for key_ref in distinct([for binding in local.crypto_key_iam_flat : binding.key_ref]) :
     key_ref => {
-      role    = iam.role
-      members = iam.members
+      for binding_key, binding in google_kms_crypto_key_iam_binding.this :
+      binding.role => binding.members
+      if local.crypto_key_iam_flat[binding_key].key_ref == key_ref
     }
   }
 }

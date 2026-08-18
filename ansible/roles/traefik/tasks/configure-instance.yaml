@@ -24,7 +24,6 @@
   ansible.builtin.include_tasks: fetch-instance-fqdns.yaml
   vars:
     target_filter: "{{ traefik_instance.backend_instance_filter }}"
-  when: traefik_instance.static_routes | length > 0
 
 # consulCatalog Is Skipped Entirely For mgmt (catalog_env: ~) — Vault/
 # Octopus/Grafana Are All Fixed Backends, No Consul Involvement At All.

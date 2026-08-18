@@ -84,36 +84,52 @@ module "service_account" {
   depends_on = [ google_project_service.apis ]
 }
 
-# KMS
-
+#KMS
 module "kms" {
   source = "../modules/kms"
 
   project_id     = var.project_id
   project_number = var.project_number
   location       = var.region
-  crypto_key_members = {
-    
-    "platform/storage-cmek" = [
-      "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com",
-      "serviceAccount:service-${var.project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com",
-      "serviceAccount:service-${var.project_number}@gcp-sa-logging.iam.gserviceaccount.com",
-    ]
 
-    "platform/disk-cmek" = [
-      "serviceAccount:service-${var.project_number}@compute-system.iam.gserviceaccount.com",
-    ]
+  crypto_key_iam = {
+    "platform/storage-cmek" = {
+      "roles/cloudkms.cryptoKeyEncrypterDecrypter" = {
+        members = [
+          "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com",
+          "serviceAccount:service-${var.project_number}@gcp-sa-artifactregistry.iam.gserviceaccount.com",
+          "serviceAccount:service-${var.project_number}@gcp-sa-logging.iam.gserviceaccount.com",
+        ]
+      }
+    }
 
-    "vault-unseal/vault-unseal-cmek" = [
-      module.service_account.service_accounts["management-vm-sa"].member
-    ]
+    "platform/disk-cmek" = {
+      "roles/cloudkms.cryptoKeyEncrypterDecrypter" = {
+        members = [
+          "serviceAccount:service-${var.project_number}@compute-system.iam.gserviceaccount.com",
+        ]
+      }
+    }
 
-    "secrets/secrets-cmek" = [
-      "serviceAccount:service-${var.project_number}@gcp-sa-secretmanager.iam.gserviceaccount.com",
-    ]
+    "vault-unseal/vault-unseal-cmek" = {
+      "roles/cloudkms.cryptoKeyEncrypterDecrypter" = {
+        members = [module.service_account.service_accounts["management-vm-sa"].member]
+      }
+      "roles/cloudkms.viewer" = {
+        members = [module.service_account.service_accounts["management-vm-sa"].member]
+      }
+    }
+
+    "secrets/secrets-cmek" = {
+      "roles/cloudkms.cryptoKeyEncrypterDecrypter" = {
+        members = [
+          "serviceAccount:service-${var.project_number}@gcp-sa-secretmanager.iam.gserviceaccount.com",
+        ]
+      }
+    }
   }
 
-  depends_on = [ 
+  depends_on = [
     google_project_service.apis,
     google_project_service_identity.identities
   ]
@@ -490,6 +506,43 @@ module "secrets" {
       }
     }
 
+    # Vault root token and recovery keys
+    "vault-root-token" = {
+      labels = { purpose = "vault", tier = "root" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.management_vm_member]
+        }
+      }
+    }
+
+    "vault-recovery-keys" = {
+      labels = { purpose = "vault", tier = "root" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.management_vm_member]
+        }
+      }
+    }
+
+    "vault-operator-token" = {
+      labels = { purpose = "vault", tier = "operator" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.management_vm_member]
+        }
+      }
+    }
+
+    "vault-vm-operator-token" = {
+      labels = { purpose = "vault", tier = "mgmt" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.management_vm_member]
+        }
+      }
+    }
+
     # Traefik Tokens
     "consul-traefik-token-dev" = {
       labels = { purpose = "traefik", tier = "scoped", environment = "dev" }
@@ -626,7 +679,16 @@ module "secrets" {
         }
       }
     }
+
+  "cloudflare-api-token" = { 
+    labels = { purpose = "traefik", tier = "scoped" } 
+    iam = {
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.traefik_vm_internal_member]
+        }
+      }
+    }
   }
-  
+
   depends_on = [ google_project_service.apis ]
 }

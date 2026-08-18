@@ -18,12 +18,10 @@ vault_download_url: "https://releases.hashicorp.com/vault/{{ vault_version }}/va
 gcp_project_id: ""
 gcp_kms_region: "europe-west1"
 gcp_kms_key_ring: "vault-unseal"
-gcp_kms_crypto_key: "vault-unseal-key"
+gcp_kms_crypto_key: "vault-unseal-cmek"
 secret_management_ca_cert: ""
 secret_vault_cert: "vault-cert"
 secret_vault_tls_key: "vault-tls-key"
-secret_vault_snapshot_token: "vault-snapshot-token"
-secret_vault_operator_token: "vault-operator-token"
 
 vault_listener_address: "0.0.0.0:8200"
 vault_ui_enabled: true
@@ -35,3 +33,4 @@ vault_snapshot_schedule: "*-*-* 02:00:00"
 
 vault_data_disk_name: "mgmt-vm-vault-data"
 vault_internal_dns: "mgmt-vm.europe-west1-b.c.nomad-platform-gcp.internal"
+vault_local_addr: "https://127.0.0.1:8200"
