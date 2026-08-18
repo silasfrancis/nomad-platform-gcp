@@ -257,14 +257,20 @@
 #   VAULT_SKIP_VERIFY: "true" — no new policy work needed
 # unless a task needs a path outside vm-operator's current scope.
 
+- name: Set Init Outcome Message
+  ansible.builtin.set_fact:
+    init_outcome_msg: >-
+      {% if vault_status.initialized and run_first_run_tasks %}
+      Vault initialized this run via recovery token — resumed a previously partial first run.
+      {% elif vault_status.initialized %}
+      Vault was already initialized — ran ongoing config via vm-operator token.
+      {% else %}
+      Vault initialized for the first time. Root token and recovery keys archived (human-read-only). The vault-operator token was minted for personal login and Terraform use. The vm-operator token was minted for this playbook's ongoing runs. Audit logging enabled.
+      {% endif %}
+
 - name: Report Init Outcome
   ansible.builtin.debug:
-    msg: >-
-      {{ 'Vault initialized this run via recovery token — resumed a previously partial first run.'
-         if (vault_status.initialized and run_first_run_tasks)
-         else 'Vault was already initialized — ran ongoing config via vm-operator token.'
-         if vault_status.initialized
-         else 'Vault initialized for the first time. Root token + recovery keys archived (human-read-only). vault-operator token minted for personal login + Terraform. vm-operator token minted for this playbook'\''s ongoing use. Audit logging enabled.' }}
+    msg: "{{ init_outcome_msg }}"
 
 - name: Remove Local Policy Files
   ansible.builtin.file:
