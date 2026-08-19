@@ -23,7 +23,6 @@ variable "vault_address" {
 variable "vault_token" {
   type = string
   sensitive = true
-  description = "Vault Operator token (Created in ansible/playbooks/vault-init.yaml and can be gotten from gcp secret - vault-operator-token)"
 }
 
 variable "octopus_address" {
@@ -32,19 +31,18 @@ variable "octopus_address" {
   default = "https://octopus.platform.lefrancis.org:8443"
 }
 
-
 variable "octopus_api_key" {
-  type      = string
-  sensitive = true 
-  description = "Octopus deploy API key (Created in ansible/playbooks/mgmt.yaml and can be gotten from gcp secret - octopus-admin-api-key)"
+  type = string
 }
 
 variable "nomad_address_dev" {
   type = string
+  default     = "https://nomad-dev.platform.lefrancis.org:8444"
 }
 
 variable "nomad_address_prod" {
   type = string
+  default     = "https://nomad-prod.platform.lefrancis.org:8445"
 }
 
 variable "github_oidc_audience" {

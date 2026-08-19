@@ -96,6 +96,15 @@
   register: _dynamic_routes
   when: traefik_instance.static_routes | length > 0
 
+- name: "[{{ traefik_instance.name }}] Validate Rendered Routes YAML Is Well-Formed"
+  ansible.builtin.command: >
+    python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))"
+    "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/dynamic/routes.yaml"
+  when:
+    - traefik_instance.static_routes | length > 0
+    - _dynamic_routes.changed
+  changed_when: false
+
 - name: "[{{ traefik_instance.name }}] Write Environment File (Cloudflare Token, DNS-01 Instances Only)"
   ansible.builtin.copy:
     dest: "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/traefik.env"

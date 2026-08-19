@@ -36,6 +36,19 @@ EOF
 WSL_EOF
         echo
     fi
+
+    echo "------------------------------------------------------------------"
+    echo "WSL note: this only updates WSL's own /etc/hosts. If you browse"
+    echo "from a native Windows browser (not one running inside WSL/WSLg),"
+    echo "Windows resolves hostnames via its OWN separate hosts file —"
+    echo "WSL and Windows do not share /etc/hosts."
+    echo
+    echo "Add the same block below to:"
+    echo "  C:\\Windows\\System32\\drivers\\etc\\hosts"
+    echo "(edit via Notepad running as Administrator — the file has no"
+    echo "extension, so set Notepad's file filter to \"All Files\" to see it)"
+    echo "------------------------------------------------------------------"
+    echo
 fi
 
 # Print block for /etc/hosts

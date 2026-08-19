@@ -260,7 +260,7 @@ module "secrets" {
           members = concat(
             local.dev_members,  # Nomad/Consul prod server ca
             [
-              local.traefik_vm_internal_member, # Traefik internal needs to validate Consul cert (Consul catalog)
+              local.traefik_vm_internal_member, # Traefik internal needs to validate Nomad/Consul server cert (+ Consul catalog)
               "user:${var.platform_admin_email}"
             ]
           )
@@ -274,7 +274,7 @@ module "secrets" {
           members = concat(
             local.prod_members, # Nomad/Consul prod server ca
             [
-              local.traefik_vm_internal_member,  # Traefik internal needs to validate Consul cert (Consul catalog)
+              local.traefik_vm_internal_member,  # Traefik internal needs to validate Nomad/Consul server cert (+ Consul catalog)
               "user:${var.platform_admin_email}"
             ]
           )
@@ -291,7 +291,10 @@ module "secrets" {
           members = concat(
             local.dev_members, # Nomad servers to validate vault cert
             local.prod_members, # Nomad servers to validate vault cert
-            ["user:${var.platform_admin_email}"]
+            [
+              local.traefik_vm_internal_member, # Traefik internal needs to validate vault cert
+              "user:${var.platform_admin_email}"
+            ]
           )
         }
       }
