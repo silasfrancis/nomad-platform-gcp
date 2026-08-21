@@ -2,12 +2,6 @@ variable "project_id" {
   type = string
 }
 
-variable "boot_disk_image" {
-  description = "Image family for the boot disk, shared by every static VM unless an instance overrides it."
-  type        = string
-  default     = "debian-cloud/debian-12"
-}
-
 variable "disk_cmek_key" {
   description = "KMS key self-link for boot disk encryption (bootstrap's platform/disk-cmek)."
   type        = string
@@ -27,6 +21,7 @@ variable "instances" {
     tags                  = optional(list(string), [])
     startup_script        = optional(string, "")
     shutdown_script       = optional(string, "")
+    boot_disk_image       = optional(string, "debian-cloud/debian-12")
     boot_disk_size_gb     = optional(number, 20)
     labels                = optional(map(string), {})
     additional_disks = optional(list(object({

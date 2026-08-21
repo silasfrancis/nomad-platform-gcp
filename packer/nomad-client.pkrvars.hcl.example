@@ -4,6 +4,10 @@
 project_id             = ""
 disk_cmek_key_id       = ""
 service_account_email  = ""
+image_name             = "nomad-client-image"
+image_family           = "nomad-client"
+image_description      = "Nomad client golden image"
+ansible_playbook       = "nomad-clients.yaml"
 
 # Defaults Below Are Usually Fine As-Is — Only Override If Needed.
 # zone         = "europe-west1-b"

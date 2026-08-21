@@ -10,11 +10,6 @@ variable "disk_cmek_key" {
   type = string
 }
 
-variable "boot_disk_image" {
-  type    = string
-  default = "nomad-client-image-20260817-203509" 
-}
-
 variable "zones" {
   description = "Zones this region's MIGs distribute across (regional/multi-zone, per architecture doc 1.3 — reduces Spot preemption risk since capacity pressure is typically zone-specific)."
   type        = list(string)
@@ -29,6 +24,7 @@ variable "migs" {
     max_replicas             = number
     spot                     = bool
     service_account_email    = string
+    boot_disk_image       = optional(string,  "debian-cloud/debian-12")
     boot_disk_size_gb        = optional(number, 30)
     tags                     = optional(list(string), [])
     labels                   = optional(map(string), {})

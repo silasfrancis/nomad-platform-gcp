@@ -1,0 +1,15 @@
+# Copy This To nomad-server.pkrvars.hcl (Gitignored) And Fill In Real
+# Values Before Running `packer build`.
+
+project_id             = ""
+disk_cmek_key_id       = ""
+service_account_email  = ""
+image_name             = "nomad-server-image"
+image_family           = "nomad-server"
+image_description      = "Nomad server golden image"
+ansible_playbook       = "nomad-servers.yaml"
+
+# Defaults Below Are Usually Fine As-Is — Only Override If Needed.
+# zone         = "europe-west1-b"
+# subnetwork   = "subnet-mgmt"
+# ssh_username = "packer"

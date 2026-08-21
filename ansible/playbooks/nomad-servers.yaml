@@ -1,10 +1,6 @@
 ---
-# Run Against: role_nomad_server Group (Dynamic Inventory — Covers Both
-# dev And prod Server Nodes; dev.yaml/prod.yaml Group Vars Apply Per-Host
-# Automatically Based On Each Instance's env Label).
-
 - name: Configure Nomad Server Nodes
-  hosts: role_control_plane
+  hosts:  "{{ target_hosts | default('role_control_plane') }}" #target_hosts is overrident by packer during image build 
   become: true
   vars:
     consul_mode: server

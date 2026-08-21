@@ -12,36 +12,35 @@ packer {
 }
 
 locals {
-  # Version-Controlled Naming
-  image_name = "nomad-client-image-${formatdate("YYYYMMDD-hhmmss", timestamp())}"
-
-  # Paths Assume `packer build` Is Invoked From Inside This Directory
-  # (packer/nomad-client/), Adjust it If You Invoke It From
-  # Elsewhere.
-  ansible_dir = "../../ansible"
+  image_name = "${var.image_name}-${formatdate("YYYYMMDD-hhmmss", timestamp())}"
+  ansible_dir = "../ansible"
 }
 
-source "googlecompute" "nomad_client" {
+source "googlecompute" "nomad" {
   project_id   = var.project_id
   zone         = var.zone
-  machine_type = "e2-medium" # Build VM Only
+  machine_type = "e2-medium"
 
   source_image_family = "debian-12"
-  image_name           = local.image_name
-  image_family         = "nomad-client"
-  image_description    = "nomad-platform-gcp Nomad client golden image — common, consul, nomad, docker, falco roles baked via Ansible."
 
-  subnetwork             = var.subnetwork
-  service_account_email  = var.service_account_email
+  image_name   = local.image_name
+  image_family = var.image_family
 
-  scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+  image_description = var.image_description
+
+  subnetwork            = var.subnetwork
+  service_account_email = var.service_account_email
+
+  scopes = [
+    "https://www.googleapis.com/auth/cloud-platform"
+  ]
 
   use_iap          = true
   use_internal_ip  = true
   omit_external_ip = true
-  use_os_login = false
-  ssh_username = var.ssh_username
-  
+  use_os_login     = false
+  ssh_username     = var.ssh_username
+
   disk_size = 20
   disk_type = "pd-balanced"
 
@@ -50,22 +49,23 @@ source "googlecompute" "nomad_client" {
   }
 
   labels = {
-    role       = "nomad-client-image"
+    role       = var.image_family
     managed-by = "packer"
   }
 }
 
 build {
-  sources = ["source.googlecompute.nomad_client"]
+  sources = ["source.googlecompute.nomad"]
 
   # Runs ansible-playbook locally Connecting Out To The Ephemeral Build VM Over The Same
   # IAP-Tunneled SSH Packer Itself Used To Provision It.
   #
   # target_hosts=all Overrides nomad-clients.yaml's Default hosts: role_worker
   provisioner "ansible" {
-    playbook_file = "${local.ansible_dir}/playbooks/nomad-clients.yaml"
-    user          = build.User
-    use_proxy     = false
+    playbook_file = "${local.ansible_dir}/playbooks/${var.ansible_playbook}"
+
+    user                 = build.User
+    use_proxy            = false
     keep_inventory_file  = true
 
     ansible_env_vars = [

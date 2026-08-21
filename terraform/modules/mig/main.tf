@@ -20,7 +20,7 @@ resource "google_compute_instance_template" "this" {
   labels = each.value.labels
 
   disk {
-    source_image = var.boot_disk_image
+    source_image = each.value.boot_disk_image
     disk_size_gb = each.value.boot_disk_size_gb
     disk_type    = "pd-balanced"
     boot         = true

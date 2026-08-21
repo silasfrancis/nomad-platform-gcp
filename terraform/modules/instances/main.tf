@@ -60,7 +60,7 @@ resource "google_compute_instance" "this" {
 
   boot_disk {
     initialize_params {
-      image = var.boot_disk_image
+      image = each.value.boot_disk_image
       size  = each.value.boot_disk_size_gb
       type  = "pd-balanced"
     }

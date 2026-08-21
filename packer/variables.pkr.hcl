@@ -14,6 +14,22 @@ variable "zone" {
   description = "Zone for the ephemeral build VM. Doesn't need to match where the real instances run — this VM is torn down right after the image is created."
 }
 
+variable "image_name" {
+  type = string
+}
+
+variable "image_family" {
+  type = string
+}
+
+variable "image_description" {
+  type = string
+}
+
+variable "ansible_playbook" {
+  type = string
+}
+
 variable "subnetwork" {
   type        = string
   default     = "subnet-mgmt"
@@ -28,5 +44,4 @@ variable "service_account_email" {
 variable "ssh_username" {
   type        = string
   default     = "packer"
-  description = "With use_os_login = true, Packer typically derives the actual login username from the authenticating identity's OS Login profile rather than using this value verbatim — this default hasn't been confirmed against a real build. Verify the actual connecting username in a test run before relying on this."
 }
