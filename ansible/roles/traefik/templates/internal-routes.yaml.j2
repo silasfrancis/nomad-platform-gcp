@@ -1,14 +1,10 @@
-# Managed By Ansible (traefik Role, Instance: {{ traefik_instance.name }}) — Static
-# Passthrough Routes. These Never Depend On consulCatalog: Vault/Octopus/
-# Grafana (mgmt) And The Nomad/Consul Admin APIs (dev-internal/prod-internal)
-# Are All Fixed Backends, Resolved Once At Playbook-Run Time.
-#
-# Backends With More Than One Resolved Instance (e.g. A 3-Node Prod Raft
-# Cluster) List Every Instance As A Separate loadBalancer Server — Any
-# One Of Them Can Serve The Admin API, So Whichever Is Reachable During
-# A terraform apply Is Enough.
-
 http:
+{% if traefik_instance.backend_ca_secret is not none %}
+  serversTransports:
+    backend-ca:
+      rootCAs:
+        - "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/tls/ca.pem"
+{% endif %}
   routers:
 {% for route in traefik_instance.static_routes %}
     {{ route.subdomain }}:
@@ -24,6 +20,9 @@ http:
 {% for route in traefik_instance.static_routes %}
     {{ route.subdomain }}:
       loadBalancer:
+{% if route.scheme == 'https' and traefik_instance.backend_ca_secret is not none %}
+        serversTransport: backend-ca
+{% endif %}
         servers:
 {% for fqdn in resolved_instance_fqdns %}
           - url: "{{ route.scheme }}://{{ fqdn }}:{{ route.port }}"

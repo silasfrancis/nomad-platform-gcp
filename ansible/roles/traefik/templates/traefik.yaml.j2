@@ -49,7 +49,7 @@ providers:
   # Consul Service Tag.
   consulCatalog:
     endpoint:
-      address: "{% if traefik_instance.static_routes | length > 0 %}{{ resolved_instance_fqdns[0] }}:8500{% else %}localhost:8500{% endif %}"
+      address: "{% if traefik_instance.catalog_env in ['dev', 'prod'] %}{{ resolved_instance_fqdns[0] }}:8500{% else %}localhost:8500{% endif %}"
       token: "{{ _catalog_token_read.stdout }}"
       tls:
         ca: "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/tls/ca.pem"

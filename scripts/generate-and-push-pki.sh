@@ -27,6 +27,19 @@ set -euo pipefail
 
 PROJECT_ID="${1:?Usage: $0 <gcp-project-id>}"
 
+# GCE internal DNS is ZonalOnly for this project — only the zone-qualified
+# form (<instance>.<zone>.c.<project>.internal) resolves, not the shorter
+# zoneless form. So SANs use one wildcard per zone (matches X.509's
+# single-leftmost-label wildcard rule against <instance>.<zone>.c...) —
+# covers every current and future instance in any of these zones without
+# per-instance regeneration. Keep in sync with ansible/inventory/gcp.yaml's
+# zones list.
+GCE_ZONES=(europe-west1-b europe-west1-c europe-west1-d)
+ZONE_SANS=""
+for z in "${GCE_ZONES[@]}"; do
+  ZONE_SANS="${ZONE_SANS},DNS:*.${z}.c.${PROJECT_ID}.internal"
+done
+
 # --- Pre-Flight: Every Secret Container Below Must Already Exist In
 # terraform/bootstrap's default_secrets Map (Created There So They Share
 # The Same storage_cmek KMS Key And Replication/Labeling As Everything
@@ -153,13 +166,13 @@ for env in dev prod; do
   fi
 
   generate_leaf "consul-server-${env}" "server.dc-${env}.consul" \
-    "DNS:server.dc-${env}.consul,DNS:localhost,IP:127.0.0.1" \
+    "DNS:server.dc-${env}.consul,DNS:localhost,IP:127.0.0.1${ZONE_SANS}" \
     "${WORKDIR}/${ca_file_prefix}-ca-cert.pem" "${WORKDIR}/${ca_file_prefix}-ca-key.pem"
   push_secret "consul-server-cert-${env}" "${WORKDIR}/consul-server-${env}-cert.pem"
   push_secret "consul-server-tls-key-${env}" "${WORKDIR}/consul-server-${env}-key.pem"
 
   generate_leaf "consul-client-${env}" "client.dc-${env}.consul" \
-    "DNS:client.dc-${env}.consul,DNS:localhost,IP:127.0.0.1" \
+    "DNS:client.dc-${env}.consul,DNS:localhost,IP:127.0.0.1${ZONE_SANS}" \
     "${WORKDIR}/${ca_file_prefix}-ca-cert.pem" "${WORKDIR}/${ca_file_prefix}-ca-key.pem"
   push_secret "consul-client-cert-${env}" "${WORKDIR}/consul-client-${env}-cert.pem"
   push_secret "consul-client-tls-key-${env}" "${WORKDIR}/consul-client-${env}-key.pem"
@@ -168,13 +181,13 @@ done
 # --- Nomad Server/Client Certs, Per Environment ---
 for env in dev prod; do
   generate_leaf "nomad-server-${env}" "server.dc-${env}.nomad" \
-    "DNS:server.dc-${env}.nomad,DNS:localhost,IP:127.0.0.1" \
+    "DNS:server.dc-${env}.nomad,DNS:localhost,IP:127.0.0.1${ZONE_SANS}" \
     "${WORKDIR}/${env}-ca-cert.pem" "${WORKDIR}/${env}-ca-key.pem"
   push_secret "nomad-server-cert-${env}" "${WORKDIR}/nomad-server-${env}-cert.pem"
   push_secret "nomad-server-tls-key-${env}" "${WORKDIR}/nomad-server-${env}-key.pem"
 
   generate_leaf "nomad-client-${env}" "client.dc-${env}.nomad" \
-    "DNS:client.dc-${env}.nomad,DNS:localhost,IP:127.0.0.1" \
+    "DNS:client.dc-${env}.nomad,DNS:localhost,IP:127.0.0.1${ZONE_SANS}" \
     "${WORKDIR}/${env}-ca-cert.pem" "${WORKDIR}/${env}-ca-key.pem"
   push_secret "nomad-client-cert-${env}" "${WORKDIR}/nomad-client-${env}-cert.pem"
   push_secret "nomad-client-tls-key-${env}" "${WORKDIR}/nomad-client-${env}-key.pem"
@@ -182,7 +195,7 @@ done
 
 # --- Vault's Cert & Key (Signed by Management CA) ---
 generate_leaf vault "vault.platform.lefrancis.org" \
-  "DNS:vault.platform.lefrancis.org,DNS:localhost,IP:127.0.0.1" \
+  "DNS:vault.platform.lefrancis.org,DNS:localhost,IP:127.0.0.1${ZONE_SANS}" \
   "${WORKDIR}/management-ca-cert.pem" "${WORKDIR}/management-ca-key.pem"
 push_secret vault-cert "${WORKDIR}/vault-cert.pem"
 push_secret vault-tls-key "${WORKDIR}/vault-key.pem"

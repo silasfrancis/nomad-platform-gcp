@@ -17,24 +17,14 @@
     - "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/tls"
     - "{{ traefik_base_log_dir }}/{{ traefik_instance.name }}"
 
-# Only Instances With Fixed Admin-API/Tool Backends Need This — The
-# Public Instances (static_routes: []) Route Purely Through
-# consulCatalog And Never Need To Know A Backend's GCE Instance Name.
 - name: "[{{ traefik_instance.name }}] Resolve Backend Instance FQDN(s)"
   ansible.builtin.include_tasks: fetch-instance-fqdns.yaml
   vars:
     target_filter: "{{ traefik_instance.backend_instance_filter }}"
+  when: traefik_instance.backend_instance_filter is defined and traefik_instance.backend_instance_filter | length > 0
 
 # consulCatalog Is Skipped Entirely For mgmt (catalog_env: ~) — Vault/
 # Octopus/Grafana Are All Fixed Backends, No Consul Involvement At All.
-# For Every Other Instance, This Is The Idempotent Check: The First
-# Time This Runs Against dev-internal/prod-internal, Before Dev's/
-# Prod's Own platform-config Terraform Has Applied, The Secret Doesn't
-# Exist Yet And catalog_enabled Comes Out False — consulCatalog Is Left
-# Out Of The Rendered Config Entirely. Re-Running The Same Playbook
-# Later (Once The Secret Exists) Picks It Up Automatically. For
-# dev-public/prod-public The Token Already Exists From Earlier Work, So
-# This Just Resolves True Immediately — Same Check, No Special-Casing.
 - name: "[{{ traefik_instance.name }}] Check Whether This Environment's Catalog Token Exists Yet"
   ansible.builtin.command: >
     gcloud secrets versions access latest
@@ -44,17 +34,6 @@
   changed_when: false
   failed_when: false
   when: traefik_instance.catalog_env is not none
-
-- name: "[{{ traefik_instance.name }}] Fetch This Environment's CA Certificate (Only If Its Token Exists)"
-  ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret=ca-cert-{{ traefik_instance.catalog_env }} --project={{ gcp_project_id }}
-  register: _ca_cert_read
-  changed_when: false
-  when:
-    - traefik_instance.catalog_env is not none
-    - _catalog_token_read.rc == 0
-    - _catalog_token_read.stdout | length > 0
 
 - name: "[{{ traefik_instance.name }}] Determine Whether consulCatalog Should Be Enabled This Run"
   ansible.builtin.set_fact:
@@ -66,6 +45,17 @@
         and (_catalog_token_read.stdout | length > 0)
       }}
 
+# One CA, one file, two consumers: consulCatalog's client TLS (when
+# enabled) and serversTransport for static-route backend TLS (when this
+# instance has any https static route).
+- name: "[{{ traefik_instance.name }}] Fetch CA Certificate"
+  ansible.builtin.command: >
+    gcloud secrets versions access latest
+    --secret={{ traefik_instance.backend_ca_secret }} --project={{ gcp_project_id }}
+  register: _ca_cert_read
+  changed_when: false
+  when: traefik_instance.backend_ca_secret is not none
+
 - name: "[{{ traefik_instance.name }}] Write CA Certificate"
   ansible.builtin.copy:
     content: "{{ _ca_cert_read.stdout }}"
@@ -73,7 +63,7 @@
     owner: "{{ traefik_user }}"
     group: "{{ traefik_group }}"
     mode: "0640"
-  when: catalog_enabled
+  when: traefik_instance.backend_ca_secret is not none
 
 - name: "[{{ traefik_instance.name }}] Template Static Traefik Configuration"
   ansible.builtin.template:

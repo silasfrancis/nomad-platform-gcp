@@ -130,6 +130,24 @@ locals {
       deny  = []
     }
 
+    "consul-catalog-dev-public" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-dev-public"]]
+      destination_ranges  = [local.cidr["subnet-dev-private"]]
+      allow               = [{ protocol = "tcp", ports = ["8500"] }]
+      deny                = []
+    }
+
+    "consul-catalog-prod-public" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-prod-public"]]
+      destination_ranges  = [local.cidr["subnet-prod-private"]]
+        allow               = [{ protocol = "tcp", ports = ["8500"] }]
+        deny                = []
+      }
+
     "traefik-public" = {
       direction           = "INGRESS"
       priority            = 1000
