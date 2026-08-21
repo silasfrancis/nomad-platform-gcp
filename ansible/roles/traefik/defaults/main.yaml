@@ -13,7 +13,8 @@ traefik_bin_dir: /usr/local/bin
 traefik_base_config_dir: /etc/traefik
 traefik_base_log_dir: /var/log/traefik
 
-traefik_acme_email: "ops@lefrancis.org"
+traefik_acme_email: "silasfrancis07@gmail.com"
+cloudflare_domain: "lefrancis.org"
 
 # Cloudflare DNS-01 token — only read for instances using
 # challenge: dns-01. Shared across all of those (same zone).

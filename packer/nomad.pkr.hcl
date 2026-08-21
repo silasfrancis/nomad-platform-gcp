@@ -73,12 +73,14 @@ build {
       "ANSIBLE_ROLES_PATH=${local.ansible_dir}/roles",
     ]
 
-    extra_arguments = [
-      "-e", "target_hosts=all",
-      "-e", "@${local.ansible_dir}/inventory/group_vars/all.yaml",
-      "-e", "ansible_ssh_common_args=",
-      "-e", "ansible_user=${build.User}",
-      "-vvvv"
-    ]
+    extra_arguments = concat(
+          [
+            "-e", "target_hosts=all",
+            "-e", "@${local.ansible_dir}/inventory/group_vars/all.yaml",
+            "-e", "ansible_ssh_common_args=",
+            "-e", "ansible_user=${build.User}"
+          ],
+          var.extra_ansible_arguments
+        )
   }
 }

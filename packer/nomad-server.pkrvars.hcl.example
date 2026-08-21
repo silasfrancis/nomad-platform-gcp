@@ -9,6 +9,12 @@ image_family           = "nomad-server"
 image_description      = "Nomad server golden image"
 ansible_playbook       = "nomad-servers.yaml"
 
+# This variable will be used to pass extra arguments to the ansible_local provisioner.
+# extra_ansible_arguments = [
+#    "-vvvv",
+#    "-e", "format_and_mount_disk=false",
+# ]
+
 # Defaults Below Are Usually Fine As-Is — Only Override If Needed.
 # zone         = "europe-west1-b"
 # subnetwork   = "subnet-mgmt"

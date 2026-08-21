@@ -51,20 +51,20 @@
   register: nomad_disk_blkid
   failed_when: false
   changed_when: false
-  when: nomad_mode == 'server'
+  when: nomad_mode == 'server' and format_and_mount_disk == true
 
 - name: Format Nomad Data Disk (Only If Unformatted)
   community.general.filesystem:
     fstype: ext4
     dev: /dev/disk/by-id/google-nomad-data
-  when: nomad_mode == 'server' and nomad_disk_blkid.rc != 0
+  when: nomad_mode == 'server' and nomad_disk_blkid.rc != 0 and format_and_mount_disk == true
 
 - name: Ensure Nomad Data Mount Point Exists
   ansible.builtin.file:
     path: "{{ nomad_data_dir }}"
     state: directory
     mode: "0750"
-  when: nomad_mode == 'server'
+  when: nomad_mode == 'server' and format_and_mount_disk == true
 
 - name: Mount Nomad Data Disk
   ansible.posix.mount:
@@ -73,7 +73,7 @@
     fstype: ext4
     opts: defaults,nofail
     state: mounted
-  when: nomad_mode == 'server'
+  when: nomad_mode == 'server' and format_and_mount_disk == true
 
 - name: Ensure Nomad Data Directory Ownership After Mount
   ansible.builtin.file:
@@ -82,7 +82,7 @@
     group: "{{ nomad_group }}"
     mode: "0750"
     state: directory
-  when: nomad_mode == 'server'
+  when: nomad_mode == 'server' and format_and_mount_disk == true
 
 # Client Mode (No Persistent Disk) — Just A Plain Local Directory.
 - name: Ensure Nomad Data Directory Exists (Client Mode — No Persistent Disk)

@@ -45,3 +45,8 @@ variable "ssh_username" {
   type        = string
   default     = "packer"
 }
+
+variable "extra_ansible_arguments" {
+  type    = list(string)
+  default = []
+}

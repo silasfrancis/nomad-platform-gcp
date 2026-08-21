@@ -13,6 +13,15 @@ http:
 {% if route.scheme == 'https' %}
       tls:
         certResolver: letsencrypt
+        domains:
+          - main: "{{ cloudflare_domain }}"
+            sans:
+{% if traefik_instance.challenge == 'dns-01' %}
+              - "{{ traefik_instance.domain }}"
+              - "*.{{ traefik_instance.domain }}"
+{% else %}
+              - "{{ traefik_instance.domain }}"
+{% endif %}
 {% endif %}
 {% endfor %}
 

@@ -41,3 +41,5 @@ consul_acl_default_policy: "deny"
 consul_telemetry_prometheus_enabled: true
 
 secret_consul_operator_token: "consul-operator-token-{{ environment }}"
+
+format_and_mount_disk: true
