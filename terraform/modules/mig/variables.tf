@@ -24,7 +24,7 @@ variable "migs" {
     max_replicas             = number
     spot                     = bool
     service_account_email    = string
-    boot_disk_image       = optional(string,  "debian-cloud/debian-12")
+    boot_disk_image          = optional(string,  "debian-cloud/debian-12")
     boot_disk_size_gb        = optional(number, 30)
     tags                     = optional(list(string), [])
     labels                   = optional(map(string), {})

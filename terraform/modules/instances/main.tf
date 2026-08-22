@@ -1,4 +1,4 @@
-# Static VMs (Non-Autoscaled)
+# Static VMs
 #
 # Covers control-plane and fixed infrastructure: Nomad servers, the mgmt
 # VM, and the three Traefik edge VMs. Nomad client workload nodes are NOT
@@ -7,14 +7,14 @@
 # than a plain google_compute_instance.
 
 locals {
-disks_flat = merge([
-    for inst_key, inst in var.instances : {
-      for disk in try(inst.additional_disks, []) : "${inst_key}-${disk.name}" => merge(disk, {
-        instance_key = inst_key
-        zone         = inst.zone
-      })
-    }
-  ]...)
+  disks_flat = merge([
+      for inst_key, inst in var.instances : {
+        for disk in try(inst.additional_disks, []) : "${inst_key}-${disk.name}" => merge(disk, {
+          instance_key = inst_key
+          zone         = inst.zone
+        })
+      }
+    ]...)
   
   # Filter instances that need a static external IP reserved
   static_ips = {
@@ -67,6 +67,17 @@ resource "google_compute_instance" "this" {
     kms_key_self_link = var.disk_cmek_key
   }
 
+  dynamic "attached_disk" {
+    for_each = { for k, v in local.disks_flat : k => v if v.instance_key == each.key }
+    iterator = ad
+    content {
+      source            = google_compute_disk.additional[ad.key].self_link
+      device_name       = ad.value.name
+      kms_key_self_link = var.disk_cmek_key
+      mode              = "READ_WRITE"
+    }
+  }
+  
   network_interface {
     subnetwork = each.value.subnetwork
 
@@ -103,13 +114,4 @@ resource "google_compute_instance" "this" {
   lifecycle {
     ignore_changes = [attached_disk]
   }
-}
-
-resource "google_compute_attached_disk" "additional_attachments" {
-  for_each = local.disks_flat
-
-  project  = var.project_id
-  disk     = google_compute_disk.additional[each.key].id
-  instance = google_compute_instance.this[each.value.instance_key].id
-  device_name = each.key
 }

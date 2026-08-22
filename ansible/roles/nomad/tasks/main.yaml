@@ -36,63 +36,13 @@
     - "{{ nomad_log_dir }}"
     - "{{ nomad_tls_dir }}"
 
-# --- nomad-data Persistent Disk (Server Mode Only) ---
-# Nomad Servers Run Their Own Raft Log Here — Job Specs, Evaluations,
-# Allocations (Current + Historical), Deployment Tracking, ACL
-# Tokens/Policies. Nomad Clients Don't Run Raft (No Persistent State Worth
-# Protecting), So This Only Applies When nomad_mode == "server". Job Specs
-# Alone Are Recoverable From Git If Lost — Allocation History, Deployment
-# State, And ACLs Are Not.
-#
-# Assumes The Terraform Disk Resource Is Named "nomad-data" — Confirm
-# This Matches Whatever Name You Actually Used.
-- name: Check If Nomad Data Disk Is Already Formatted
-  ansible.builtin.command: blkid /dev/disk/by-id/google-nomad-data
-  register: nomad_disk_blkid
-  failed_when: false
-  changed_when: false
-  when: nomad_mode == 'server' and format_and_mount_disk == true
-
-- name: Format Nomad Data Disk (Only If Unformatted)
-  community.general.filesystem:
-    fstype: ext4
-    dev: /dev/disk/by-id/google-nomad-data
-  when: nomad_mode == 'server' and nomad_disk_blkid.rc != 0 and format_and_mount_disk == true
-
-- name: Ensure Nomad Data Mount Point Exists
-  ansible.builtin.file:
-    path: "{{ nomad_data_dir }}"
-    state: directory
-    mode: "0750"
-  when: nomad_mode == 'server' and format_and_mount_disk == true
-
-- name: Mount Nomad Data Disk
-  ansible.posix.mount:
-    path: "{{ nomad_data_dir }}"
-    src: /dev/disk/by-id/google-nomad-data
-    fstype: ext4
-    opts: defaults,nofail
-    state: mounted
-  when: nomad_mode == 'server' and format_and_mount_disk == true
-
-- name: Ensure Nomad Data Directory Ownership After Mount
-  ansible.builtin.file:
-    path: "{{ nomad_data_dir }}"
-    owner: "{{ nomad_user }}"
-    group: "{{ nomad_group }}"
-    mode: "0750"
-    state: directory
-  when: nomad_mode == 'server' and format_and_mount_disk == true
-
-# Client Mode (No Persistent Disk) — Just A Plain Local Directory.
-- name: Ensure Nomad Data Directory Exists (Client Mode — No Persistent Disk)
+- name: Ensure Nomad Data Directory Exists
   ansible.builtin.file:
     path: "{{ nomad_data_dir }}"
     state: directory
     owner: "{{ nomad_user }}"
     group: "{{ nomad_group }}"
     mode: "0750"
-  when: nomad_mode != 'server'
 
 - name: Download And Unarchive Nomad Binary
   ansible.builtin.unarchive:

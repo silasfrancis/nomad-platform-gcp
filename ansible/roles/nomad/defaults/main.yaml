@@ -28,5 +28,3 @@ nomad_vault_address: "https://vault.platform.lefrancis.org:8200"
 nomad_vault_enabled: true
 
 secret_nomad_operator_token: "nomad-operator-token-{{ environment }}"
-
-format_and_mount_disk: true

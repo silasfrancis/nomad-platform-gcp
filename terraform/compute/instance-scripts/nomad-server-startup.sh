@@ -91,6 +91,50 @@ NOMAD_GOSSIP_KEY="$(fetch_secret "nomad-gossip-key-${ENVIRONMENT}")"
 
 echo "[nomad-server-startup] env=${ENVIRONMENT} dc=${DATACENTER} bootstrap_expect=${BOOTSTRAP_EXPECT} ip=${PRIVATE_IP}"
 
+# Data Disk Setup
+# Nomad and Consul Raft data live on dedicated persistent disks, not the
+# boot disk. This script only formats if blkid finds no filesystem and only mounts if not already mounted.
+
+wait_for_device() {
+  local device="$1"
+  for i in $(seq 1 30); do
+    if [[ -e "${device}" ]]; then
+      echo "[nomad-server-startup] Device ${device} present after $((i*2))s."
+      return 0
+    fi
+    sleep 2
+  done
+  echo "[nomad-server-startup] ERROR: ${device} did not appear after 90s." >&2
+  exit 1
+}
+
+setup_data_disk() {
+  local disk_name="$1"   # Terraform disk resource name, e.g. "nomad-data"
+  local mount_dir="$2"   # e.g. "/opt/nomad/data"
+  local owner="$3"
+  local group="$4"
+  local device="/dev/disk/by-id/google-${disk_name}"
+
+  wait_for_device "${device}"
+  mkdir -p "${mount_dir}"
+
+  if ! blkid "${device}" >/dev/null 2>&1; then
+    echo "[nomad-server-startup] Formatting ${disk_name} (no filesystem found)."
+    mkfs.ext4 -F "${device}"
+  fi
+
+  if ! mountpoint -q "${mount_dir}"; then
+    mount -t ext4 "${device}" "${mount_dir}"
+    echo "[nomad-server-startup] Mounted ${device} at ${mount_dir}."
+  fi
+
+  chown "${owner}:${group}" "${mount_dir}"
+  chmod 0750 "${mount_dir}"
+}
+
+setup_data_disk "consul-data" "/opt/consul/data" "consul" "consul"
+setup_data_disk "nomad-data"  "/opt/nomad/data"  "nomad"  "nomad"
+
 # --- Consul Instance Config ---
 cat > /etc/consul.d/99-instance.hcl <<EOF
 datacenter = "${DATACENTER}"

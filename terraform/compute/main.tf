@@ -87,6 +87,7 @@ locals {
         subnetwork            = local.network.subnets["subnet-dev-private"].self_link
         external_ip           = false
         service_account_email = local.nomad_server_sa_email_dev
+        boot_disk_image       = "${var.project_id}/nomad-server"
         boot_disk_size_gb     = 20
         tags                  = ["nomad-server-dev", "consul-server-dev"]
         labels                = { role = "control-plane", environment = "dev" }
@@ -123,6 +124,7 @@ locals {
         subnetwork            = local.network.subnets["subnet-prod-private"].self_link
         external_ip           = false
         service_account_email = local.nomad_server_sa_email_prod
+        boot_disk_image       = "${var.project_id}/nomad-server"
         boot_disk_size_gb     = 20
         tags                  = ["nomad-server-prod", "consul-server-prod"]
         labels                = { role = "control-plane", environment = "prod" }
@@ -171,6 +173,7 @@ locals {
       max_replicas             = 5
       spot                     = false
       service_account_email    = local.nomad_client_sa_email_dev
+      boot_disk_image          = "${var.project_id}/nomad-client"
       tags                     = ["nomad-client-dev", "consul-client-dev"]
       labels                   = { role = "worker", environment = "dev", pool = "on-demand" }
       environment              = "dev"
@@ -184,6 +187,7 @@ locals {
       max_replicas             = 5
       spot                     = true
       service_account_email    = local.nomad_client_sa_email_dev
+      boot_disk_image          = "${var.project_id}/nomad-client"
       tags                     = ["nomad-client-dev", "consul-client-dev"]
       labels                   = { role = "worker", environment = "dev", pool = "spot" }
       environment              = "dev"
@@ -197,6 +201,7 @@ locals {
       max_replicas             = 10
       spot                     = false
       service_account_email    = local.nomad_client_sa_email_prod
+      boot_disk_image          = "${var.project_id}/nomad-client"
       tags                     = ["nomad-client-prod", "consul-client-prod"]
       labels                   = { role = "worker", environment = "prod", pool = "on-demand" }
       environment              = "prod"
@@ -210,6 +215,7 @@ locals {
       max_replicas             = 10
       spot                     = true
       service_account_email    = local.nomad_client_sa_email_prod
+      boot_disk_image          = "${var.project_id}/nomad-client"
       tags                     = ["nomad-client-prod", "consul-client-prod"]
       labels                   = { role = "worker", environment = "prod", pool = "spot" }
       environment              = "prod"

@@ -10,7 +10,9 @@ image_description      = "Nomad client golden image"
 ansible_playbook       = "nomad-clients.yaml"
 
 # This variable will be used to pass extra arguments to the ansible_local provisioner.
-# extra_ansible_arguments = ["-vvvv"]
+# extra_ansible_arguments = [
+#    "-vvvv",
+# ]
 
 # Defaults Below Are Usually Fine As-Is — Only Override If Needed.
 # zone         = "europe-west1-b"
