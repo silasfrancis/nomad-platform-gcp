@@ -33,7 +33,7 @@ docker_extra_group_users: []
 # playbook that calls this task, passing docker_data_disk_name:
 # "mgmt-vm-docker-data".
 docker_data_disk_name: "mgmt-vm-docker-data"
-docker_data_mount_path: /var/lib/docker
+docker_data_mount_path: "/var/lib/docker"
 
 # Only used by tasks/schedule-docker-prune.yaml, also never called from
 # main.yaml. docker_prune_schedule takes any valid systemd OnCalendar

@@ -50,6 +50,7 @@
     gcloud secrets versions access latest
     --secret={{ secret_vault_cert }} --project={{ gcp_project_id }}
   register: vault_cert_fetch
+  no_log: true
   changed_when: false
 
 - name: Fetch Vault Private Key From Secret Manager
@@ -67,6 +68,8 @@
     owner: "{{ vault_user }}"
     group: "{{ vault_group }}"
     mode: "0644"
+  no_log: true
+  notify: Restart Vault
 
 - name: Write Vault Private Key
   ansible.builtin.copy:
@@ -76,8 +79,9 @@
     group: "{{ vault_group }}"
     mode: "0600"
   no_log: true
+  notify: Restart Vault
 
-# --- Attached vault-data Disk — Raft Storage Must Live Here, Never On The
+# Attached vault-data Disk — Raft Storage Must Live Here, Never On The
 # Boot Disk. fstab Entry Only; Formatting/Mounting Happens Below, Guarded
 # So It's Safe Whether The Disk Is Already Formatted Or Not. ---
 - name: Check If Vault Data Disk Is Already Formatted
@@ -108,7 +112,7 @@
     mode: "0750"
     state: directory
 
-# --- Configuration + Service ---
+# Configuration + Service
 - name: Template Vault Configuration
   ansible.builtin.template:
     src: vault.hcl.j2

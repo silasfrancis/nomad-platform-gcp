@@ -17,7 +17,7 @@ http:
           - main: "{{ cloudflare_domain }}"
             sans:
 {% if traefik_instance.challenge == 'dns-01' %}
-              - "{{ traefik_instance.domain }}"
+              - "*.{{ cloudflare_domain }}"
               - "*.{{ traefik_instance.domain }}"
 {% else %}
               - "{{ traefik_instance.domain }}"

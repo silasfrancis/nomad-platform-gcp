@@ -133,3 +133,5 @@
     _static_config.changed
     or (_dynamic_routes is defined and _dynamic_routes.changed)
     or _systemd_unit.changed
+    or (_ca_cert_read is defined and _ca_cert_read is changed)
+    or (cloudflare_token_read is defined and traefik_instance.challenge == 'dns-01')

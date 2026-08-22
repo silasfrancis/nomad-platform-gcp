@@ -48,4 +48,4 @@ case "${TARGET}" in
 esac
 
 sleep 3
-echo "Verify with: jobs -l. Run scripts/close-tunnels.sh when the apply is done."
+echo "Run scripts/close-tunnels.sh when the apply is done."
