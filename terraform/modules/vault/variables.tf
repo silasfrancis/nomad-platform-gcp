@@ -2,6 +2,12 @@ variable "gcp_project_id" {
   type = string
 }
 
+variable "nomad_provisioned" {
+  description = "Whether Nomad servers are up and serving JWKS. Set false to skip resources that depend on Nomad being reachable (e.g. JWT auth backends) until compute exists."
+  type        = bool
+  default     = true
+}
+
 variable "vault_vm_member" {
   type = string
 }

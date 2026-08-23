@@ -15,7 +15,6 @@ resource "vault_mount" "database" {
   type = "database"
 }
 
-resource "vault_mount" "gcp" {
+resource "vault_gcp_secret_backend" "gcp" {
   path = "gcp"
-  type = "gcp"
 }

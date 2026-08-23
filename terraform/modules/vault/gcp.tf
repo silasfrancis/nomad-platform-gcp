@@ -1,7 +1,3 @@
-resource "vault_gcp_secret_backend" "gcp" {
-  path = "gcp"
-}
-
 # Grant Vault's VM the permissions it needs to manage service accounts and keys
 resource "google_project_iam_member" "vault_gcp_backend_roles" {
   for_each = toset([

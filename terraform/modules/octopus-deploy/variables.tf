@@ -5,7 +5,7 @@ variable "gcp_project_id" {
 variable "use_dummy_secrets" {
   type        = bool
   description = "Use temporary placeholder values for sensitive data while testing."
-  default     = true
+  default     = false
 }
 
 variable "nomad_address_dev" {

@@ -14,6 +14,10 @@ variable "compute_tfstate_key" {
   type = string
 }
 
+variable "bootstrap_tfstate_key" {
+  type = string
+}
+
 variable "vault_address" {
   type        = string
   description = "Reached via traefik-internal's mgmt instance (scripts/open-tunnel.sh mgmt tunnels localhost:8443 there)."

@@ -95,13 +95,15 @@ resource "octopusdeploy_variable" "nomad_acl_token" {
   name         = "NomadAclToken"
   type         = "Sensitive"
   is_sensitive = true
-  value = var.use_dummy_secrets ? local.dummy_token : data.google_secret_manager_secret_version.octopus_deploy_token[each.key].secret_data
+
+  sensitive_value = var.use_dummy_secrets ? local.dummy_token : data.google_secret_manager_secret_version.octopus_deploy_token[each.key].secret_data
+
   scope {
     environments = [local.env_by_key[each.key]]
   }
 
   lifecycle {
-    ignore_changes = [value]
+    ignore_changes = [sensitive_value]
   }
 }
 
@@ -111,13 +113,15 @@ resource "octopusdeploy_variable" "nomad_ca_cert" {
   name         = "NomadCaCert"
   type         = "Sensitive"
   is_sensitive = true
-  value        = var.use_dummy_secrets ? local.dummy_ca_cert : data.google_secret_manager_secret_version.ca_cert[each.key].secret_data
+
+  sensitive_value = var.use_dummy_secrets ? local.dummy_ca_cert : data.google_secret_manager_secret_version.ca_cert[each.key].secret_data
+
   scope {
     environments = [local.env_by_key[each.key]]
   }
-  
+
   lifecycle {
-    ignore_changes = [value]
+    ignore_changes = [sensitive_value]
   }
 }
 
@@ -182,14 +186,14 @@ resource "octopusdeploy_variable" "image_tag" {
 }
 
 resource "octopusdeploy_variable" "slack_webhook_url" {
-  owner_id     = octopusdeploy_library_variable_set.platform_shared.id
-  name         = "SlackWebhookUrl"
-  type         = "Sensitive"
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "SlackWebhookUrl"
+  type     = "Sensitive"
   is_sensitive = true
-  value        = var.use_dummy_secrets ? local.dummy_webhook : data.google_secret_manager_secret_version.slack_webhook_url[0].secret_data
+  sensitive_value = var.use_dummy_secrets ? local.dummy_webhook : data.google_secret_manager_secret_version.slack_webhook_url[0].secret_data
 
   lifecycle {
-    ignore_changes = [value]
+    ignore_changes = [sensitive_value]
   }
 }
 

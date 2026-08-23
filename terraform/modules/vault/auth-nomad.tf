@@ -1,30 +1,34 @@
 # Nomad Workload Identity — JWT Auth Backends, One Per Environment
-#
-# No static token anywhere in this chain: Nomad signs a per-allocation
-# JWT at placement time, and Vault verifies it directly against Nomad's
-# own JWKS endpoint.
-resource "vault_jwt_auth_backend" "nomad_dev" {
-  path        = "jwt-nomad-dev"
-  jwks_url    = "${var.nomad_address_dev}/.well-known/jwks.json"
-  jwks_ca_pem = data.google_secret_manager_secret_version.ca_cert_dev.secret_data
-}
-
-resource "vault_jwt_auth_backend" "nomad_prod" {
-  path        = "jwt-nomad-prod"
-  jwks_url    = "${var.nomad_address_prod}/.well-known/jwks.json"
-  jwks_ca_pem = data.google_secret_manager_secret_version.ca_cert_prod.secret_data
-}
 
 # Vault's outbound call to Nomad's JWKS endpoint needs to trust
 # whichever CA signed Nomad's own server certificate — this is Nomad's
 # environment CA, not Vault's own certificate, since Vault is the
 # caller here rather than the thing being connected to.
 data "google_secret_manager_secret_version" "ca_cert_dev" {
+  count = var.nomad_provisioned ? 1 : 0
   secret = "ca-cert-dev"
 }
 
 data "google_secret_manager_secret_version" "ca_cert_prod" {
+  count = var.nomad_provisioned ? 1 : 0
   secret = "ca-cert-prod"
+}
+
+# No static token anywhere in this chain: Nomad signs a per-allocation
+# JWT at placement time, and Vault verifies it directly against Nomad's
+# own JWKS endpoint.
+resource "vault_jwt_auth_backend" "nomad_dev" {
+  count = var.nomad_provisioned ? 1 : 0
+  path        = "jwt-nomad-dev"
+  jwks_url    = "${var.nomad_address_dev}/.well-known/jwks.json"
+  jwks_ca_pem = data.google_secret_manager_secret_version.ca_cert_dev[0].secret_data
+}
+
+resource "vault_jwt_auth_backend" "nomad_prod" {
+  count = var.nomad_provisioned ? 1 : 0
+  path        = "jwt-nomad-prod"
+  jwks_url    = "${var.nomad_address_prod}/.well-known/jwks.json"
+  jwks_ca_pem = data.google_secret_manager_secret_version.ca_cert_prod[0].secret_data
 }
 
 # Per-Consumer Roles — One Per Service In locals.vault_consumers, Per
@@ -32,9 +36,9 @@ data "google_secret_manager_secret_version" "ca_cert_prod" {
 # policy name from policies.tf, so a dev role can never resolve to a
 # policy that also grants prod access.
 resource "vault_jwt_auth_backend_role" "consumer_dev" {
-  for_each = local.vault_consumers
+  for_each = var.nomad_provisioned ? local.vault_consumers : {}
 
-  backend         = vault_jwt_auth_backend.nomad_dev.path
+  backend         = vault_jwt_auth_backend.nomad_dev[0].path
   role_name       = each.key
   role_type       = "jwt"
   bound_audiences = ["vault.io"]
@@ -48,9 +52,9 @@ resource "vault_jwt_auth_backend_role" "consumer_dev" {
 }
 
 resource "vault_jwt_auth_backend_role" "consumer_prod" {
-  for_each = local.vault_consumers
+  for_each = var.nomad_provisioned ? local.vault_consumers : {}
 
-  backend         = vault_jwt_auth_backend.nomad_prod.path
+  backend         = vault_jwt_auth_backend.nomad_prod[0].path
   role_name       = each.key
   role_type       = "jwt"
   bound_audiences = ["vault.io"]
