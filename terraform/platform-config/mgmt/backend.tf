@@ -4,9 +4,9 @@ terraform {
       source = "hashicorp/vault", 
       version = "5.11.0" 
     }
-    octopusdeploy = { 
-      source = "OctopusDeploy/octopusdeploy", 
-      version = "1.19.3" 
+    octopusdeploy = {
+      source  = "OctopusDeploy/octopusdeploy"
+      version = "1.19.3"
     }
     google = {
       source  = "hashicorp/google"
@@ -30,6 +30,7 @@ provider "vault" {
 provider "octopusdeploy" {
   address = var.octopus_address
   api_key = var.octopus_api_key
+  space_id = var.octopus_space_id
 }
 
 provider "google" {

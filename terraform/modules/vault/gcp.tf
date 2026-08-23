@@ -1,11 +1,8 @@
-# Create a dedicated service account for Vault to use as its master backend
-resource "google_service_account" "vault_gcp_backend" {
-  account_id   = "vault-gcp-backend"
-  display_name = "Vault GCP Secrets Backend Master SA"
-  project      = var.gcp_project_id
+resource "vault_gcp_secret_backend" "gcp" {
+  path = "gcp"
 }
 
-# Grant Vault the permissions it needs to manage service accounts and keys
+# Grant Vault's VM the permissions it needs to manage service accounts and keys
 resource "google_project_iam_member" "vault_gcp_backend_roles" {
   for_each = toset([
     "roles/iam.serviceAccountKeyAdmin",
@@ -14,36 +11,34 @@ resource "google_project_iam_member" "vault_gcp_backend_roles" {
 
   project = var.gcp_project_id
   role    = each.key
-  member  = google_service_account.vault_gcp_backend.member
+  member  = var.vault_vm_member
 }
 
-# Generate the JSON private key file for this service account
-resource "google_service_account_key" "vault_gcp_backend_key" {
-  service_account_id = google_service_account.vault_gcp_backend.name
+resource "google_service_account" "nomad_autoscaler" {
+  for_each     = toset(["dev", "prod"])
+  account_id   = "nomad-autoscaler-${each.key}"
+  display_name = "Nomad Autoscaler ${each.key}"
+  project      = var.gcp_project_id
 }
 
-# Decode the base64 key generated above and feed it to Vault
-resource "vault_gcp_secret_backend" "gcp" {
-  path        = "gcp"
-  credentials = base64decode(google_service_account_key.vault_gcp_backend_key.private_key)
-}
-
-# Create the Roleset specifically for the Nomad Autoscaler per environment
-resource "vault_gcp_secret_roleset" "nomad_autoscaler" {
-  for_each = toset(["dev", "prod"])
-
-  backend     = vault_gcp_secret_backend.gcp.path
-  roleset     = "nomad-autoscaler-${each.value}"
-  secret_type = "service_account_key"
-  project     = var.gcp_project_id
-
-  # Give the generated service account permissions to manage/view the MIGs 
-  # and instance operations required for scaling clusters up and down
-  binding {
-    resource = "//cloudresourcemanager.googleapis.com/projects/${var.gcp_project_id}"
-    roles = [
-      "roles/compute.instanceAdmin.v1",
-      "roles/compute.networkViewer"
-    ]
+resource "google_project_iam_member" "nomad_autoscaler_roles" {
+  for_each = {
+    for pair in setproduct(["dev", "prod"],
+      ["roles/compute.instanceAdmin.v1",
+      "roles/compute.networkViewer"]) :
+    "${pair[0]}-${pair[1]}" => pair
   }
+
+  project = var.gcp_project_id
+  role    = each.value[1]
+  member  = google_service_account.nomad_autoscaler[each.value[0]].member
+}
+
+resource "vault_gcp_secret_impersonated_account" "nomad_autoscaler" {
+  for_each             = toset(["dev", "prod"])
+  backend              = vault_gcp_secret_backend.gcp.path
+  impersonated_account = "nomad-autoscaler-${each.key}"
+  service_account_email = google_service_account.nomad_autoscaler[each.key].email
+  token_scopes          = ["https://www.googleapis.com/auth/cloud-platform"]
+  ttl                   = "3600"
 }

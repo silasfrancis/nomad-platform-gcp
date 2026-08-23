@@ -48,6 +48,10 @@ resource "octopusdeploy_process_step" "this" {
     "Octopus.Action.TargetRoles" = "nomad-cluster"
   }
 
+  primary_package = {
+    package_id = "each.value.project"
+  }
+
   execution_properties = {
     "Octopus.Action.RunOnServer"           = "True"
     "Octopus.Action.Script.ScriptSource"   = "Package"
@@ -55,7 +59,6 @@ resource "octopusdeploy_process_step" "this" {
     "Octopus.Action.Script.Syntax"         = "Bash"
   }
 }
-
 resource "octopusdeploy_process_steps_order" "this" {
   for_each   = local.projects
   process_id = octopusdeploy_process.this[each.key].id

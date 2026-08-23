@@ -64,7 +64,7 @@ job "nomad-autoscaler" {
 
       template {
         data = <<EOF
-{{ with secret "gcp/roleset/nomad-autoscaler-${var.environment}/key" }}
+{{ with secret "gcp/impersonated-account/nomad-autoscaler-${var.environment}/token" }}
 {{ .Data.private_key_data | base64Decode }}
 {{ end }}
 EOF

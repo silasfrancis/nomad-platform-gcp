@@ -35,6 +35,11 @@ variable "octopus_api_key" {
   type = string
 }
 
+variable "octopus_space_id" {
+  type = string
+  default = "Spaces-1"
+}
+
 variable "nomad_address_dev" {
   type = string
   default     = "https://nomad-dev.platform.lefrancis.org:8444"

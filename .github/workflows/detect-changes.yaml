@@ -1,20 +1,5 @@
 name: Detect Changes & Build Matrix
 
-# Generic across every matrix-based pipeline in this repo — the config
-# file passed in via `config-file` is the only thing that varies.
-# Consumers: build-services.yaml (boutique-services.json),
-# build-monitoring.yaml (monitoring-tools.json), deploy-platform-jobs.yaml
-# (platform-jobs.json). Adding a new matrix-based pipeline later just
-# means adding a new config file under .github/configs/ — nothing here
-# needs to change.
-#
-# runs-on: ubuntu-latest, not self-hosted — this job only needs git
-# history and jq, no private network access, no Docker, nothing that
-# requires the self-hosted runner on mgmt-vm. There's exactly one
-# self-hosted runner registered; using ubuntu-latest here means this
-# doesn't queue behind (or ahead of) actual build/deploy work for a job
-# that's pure bookkeeping.
-
 on:
   workflow_call:
     inputs:

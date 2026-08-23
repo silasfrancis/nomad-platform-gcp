@@ -2,6 +2,12 @@ variable "gcp_project_id" {
   type = string
 }
 
+variable "use_dummy_secrets" {
+  type        = bool
+  description = "Use temporary placeholder values for sensitive data while testing."
+  default     = true
+}
+
 variable "nomad_address_dev" {
   type        = string
   description = "dev Nomad server address, used for the NomadApiUrl deployment variable"

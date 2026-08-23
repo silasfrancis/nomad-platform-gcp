@@ -2,6 +2,10 @@ variable "gcp_project_id" {
   type = string
 }
 
+variable "vault_vm_member" {
+  type = string
+}
+
 variable "nomad_address_dev" {
   type        = string
   description = "dev Nomad server address, reachable from wherever Vault runs (mgmt subnet) — used only to build the JWKS URL, not for API calls"

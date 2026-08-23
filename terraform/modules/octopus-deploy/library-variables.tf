@@ -3,22 +3,30 @@
 # Values every project's deployment process needs in common. Anything
 # specific to a single project (e.g. replica count) is set on that
 # project directly in projects.tf instead of duplicated here.
+
+locals {
+  dummy_token      = "hvs.CAESIJ_placeholder_token_for_testing"
+  dummy_ca_cert    = "-----BEGIN CERTIFICATE-----\nFAKE_CERTIFICATE_FOR_TESTING\n-----END CERTIFICATE-----"
+  dummy_webhook    = "https://hooks.slack.com/services/T00/B00/XXXXX"
+}
+
 resource "octopusdeploy_library_variable_set" "platform_shared" {
   name        = "platform-shared"
   description = "Nomad connection details and deployment configuration shared across every project's deployment process."
 }
 
 data "google_secret_manager_secret_version" "octopus_deploy_token" {
-  for_each = toset(["dev", "prod"])
+  for_each = var.use_dummy_secrets ? [] : toset(["dev", "prod"])
   secret   = "octopus-deploy-token-${each.key}"
 }
 
 data "google_secret_manager_secret_version" "ca_cert" {
-  for_each = toset(["dev", "prod"])
+  for_each = var.use_dummy_secrets ? [] : toset(["dev", "prod"])
   secret   = "ca-cert-${each.key}"
 }
 
 data "google_secret_manager_secret_version" "slack_webhook_url" {
+  count  = var.use_dummy_secrets ? 0 : 1
   secret = var.slack_webhook_secret_name
 }
 
@@ -87,9 +95,13 @@ resource "octopusdeploy_variable" "nomad_acl_token" {
   name         = "NomadAclToken"
   type         = "Sensitive"
   is_sensitive = true
-  value        = data.google_secret_manager_secret_version.octopus_deploy_token[each.key].secret_data
+  value = var.use_dummy_secrets ? local.dummy_token : data.google_secret_manager_secret_version.octopus_deploy_token[each.key].secret_data
   scope {
     environments = [local.env_by_key[each.key]]
+  }
+
+  lifecycle {
+    ignore_changes = [value]
   }
 }
 
@@ -99,9 +111,13 @@ resource "octopusdeploy_variable" "nomad_ca_cert" {
   name         = "NomadCaCert"
   type         = "Sensitive"
   is_sensitive = true
-  value        = data.google_secret_manager_secret_version.ca_cert[each.key].secret_data
+  value        = var.use_dummy_secrets ? local.dummy_ca_cert : data.google_secret_manager_secret_version.ca_cert[each.key].secret_data
   scope {
     environments = [local.env_by_key[each.key]]
+  }
+  
+  lifecycle {
+    ignore_changes = [value]
   }
 }
 
@@ -170,7 +186,11 @@ resource "octopusdeploy_variable" "slack_webhook_url" {
   name         = "SlackWebhookUrl"
   type         = "Sensitive"
   is_sensitive = true
-  value        = data.google_secret_manager_secret_version.slack_webhook_url.secret_data
+  value        = var.use_dummy_secrets ? local.dummy_webhook : data.google_secret_manager_secret_version.slack_webhook_url[0].secret_data
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "octopusdeploy_variable" "datacenter" {
