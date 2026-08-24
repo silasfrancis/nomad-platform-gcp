@@ -24,7 +24,7 @@ nomad_telemetry_prometheus_enabled: true
 # Vault Address Is Static (Single Vault Node On mgmt-vm, Reachable By Both
 # Environments). vault_jwt_auth_backend_path Comes From group_vars/dev.yaml
 # Or prod.yaml.
-nomad_vault_address: "https://vault.platform.lefrancis.org:8200"
+nomad_vault_address: ""
 nomad_vault_enabled: true
 
 secret_nomad_operator_token: "nomad-operator-token-{{ environment }}"

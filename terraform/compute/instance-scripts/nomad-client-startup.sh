@@ -25,6 +25,16 @@
 # Service Account Has compute.instances.list (Or roles/compute.viewer).
 #
 # Runs On Every Boot — Idempotent By Design.
+#
+# ACL Token Bootstrap Ordering — Gated, Not Assumed:
+# consul-client-agent-token-${ENVIRONMENT} And
+# nomad-client-consul-token-${ENVIRONMENT} Don't Exist Until AFTER The
+# Nomad Servers Have Been ACL-Bootstrapped And platform-config Terraform
+# Has Minted The Real Tokens. fetch_token_optional Below Falls Back To An
+# Empty String If Either Secret Isn't There Yet, Same As The Server
+# Script. Nomad Clients On A MIG Reboot/Reimage Routinely, So The Next
+# Boot After Terraform Creates The Tokens Picks Them Up Automatically —
+# No Manual Intervention Needed On This Node Type.
 
 set -euo pipefail
 
@@ -49,9 +59,30 @@ NODE_NAME="$(hostname)"
 GCP_PROJECT="$(curl -sf -H "${METADATA_HEADER}" \
   "http://metadata.google.internal/computeMetadata/v1/project/project-id")"
 
+# Required Secret — Hard-Fails The Script (Via set -e) If Missing. Use
+# For Certs/Gossip Keys, Which Must Always Exist By The Time A Client
+# Boots (Pushed By generate-and-push-pki.sh Before Any Instance Is
+# Created).
 fetch_secret() {
   local secret_name="$1"
   gcloud secrets versions access latest --secret="${secret_name}" --project="${GCP_PROJECT}"
+}
+
+# Optional Secret — Never Fails The Script. Used For ACL Tokens That
+# Genuinely Don't Exist Until After The Servers' ACL Bootstrap +
+# Terraform Have Run. Logs To Stderr So The Outcome Is Visible In Cloud
+# Logging Without Polluting The Captured Value On Stdout.
+fetch_token_optional() {
+  local secret_name="$1"
+  local label="$2"
+  local value
+  if value="$(gcloud secrets versions access latest --secret="${secret_name}" --project="${GCP_PROJECT}" 2>/dev/null)"; then
+    echo "[nomad-client-startup] ${label}: found, applying." >&2
+    printf '%s' "${value}"
+  else
+    echo "[nomad-client-startup] ${label}: not created yet (expected before ACL bootstrap), using empty token." >&2
+    printf ''
+  fi
 }
 
 # --- Cloud Auto-Join Discover Strings — Same Target Regardless Of
@@ -61,10 +92,16 @@ CONSUL_DISCOVER="provider=gce project_name=${GCP_PROJECT} tag_value=consul-serve
 NOMAD_DISCOVER="provider=gce project_name=${GCP_PROJECT} tag_value=nomad-server-${ENVIRONMENT}"
 
 # --- Fetch Everything From Secret Manager ---
-mkdir -p /etc/consul.d/tls
-fetch_secret "consul-ca-cert" > /etc/consul.d/tls/ca.pem
+# CA Is Per-Environment And Shared Between Consul And Nomad — Both Are
+# Signed Off The Same ${ENVIRONMENT} CA By generate-and-push-pki.sh, So
+# It's Fetched Once And Written To Both Trust Stores Below.
+mkdir -p /etc/consul.d/tls /etc/nomad.d/tls
+fetch_secret "ca-cert-${ENVIRONMENT}" > /etc/consul.d/tls/ca.pem
+fetch_secret "ca-cert-${ENVIRONMENT}" > /etc/nomad.d/tls/ca.pem
+
+# Consul Client Leaf Cert/Key — Per-Environment.
 fetch_secret "consul-client-cert-${ENVIRONMENT}" > /etc/consul.d/tls/cert.pem
-fetch_secret "consul-client-key-${ENVIRONMENT}" > /etc/consul.d/tls/key.pem
+fetch_secret "consul-client-tls-key-${ENVIRONMENT}" > /etc/consul.d/tls/key.pem
 chown consul:consul /etc/consul.d/tls/ca.pem /etc/consul.d/tls/cert.pem /etc/consul.d/tls/key.pem
 chmod 0644 /etc/consul.d/tls/ca.pem /etc/consul.d/tls/cert.pem
 chmod 0600 /etc/consul.d/tls/key.pem
@@ -73,20 +110,25 @@ CONSUL_GOSSIP_KEY="$(fetch_secret "consul-gossip-key-${ENVIRONMENT}")"
 
 # consul-client-agent-token-{env} — Consul's OWN Agent Token
 # (acl.tokens.agent), Narrow Node-Identity Scope. Distinct From Nomad's
-# Own Consul Token Below. Falls Back To Empty If platform-config Hasn't
-# Created It Yet, Rather Than Failing The Whole Boot.
-CONSUL_AGENT_TOKEN="$(fetch_secret "consul-client-agent-token-${ENVIRONMENT}" || echo "")"
+# Own Consul Token Below.
+CONSUL_AGENT_TOKEN="$(fetch_token_optional "consul-client-agent-token-${ENVIRONMENT}" "Consul client agent token")"
 
 # nomad-client-consul-token-{env} — NOMAD'S OWN Token For Its consul{}
 # Block (Client Variant — Narrower Than The Server Variant, No acl/mesh
 # write).
-NOMAD_CONSUL_TOKEN="$(fetch_secret "nomad-client-consul-token-${ENVIRONMENT}" || echo "")"
+NOMAD_CONSUL_TOKEN="$(fetch_token_optional "nomad-client-consul-token-${ENVIRONMENT}" "Nomad client's Consul token")"
 
-mkdir -p /etc/nomad.d/tls
-fetch_secret "nomad-ca-cert" > /etc/nomad.d/tls/ca.pem
-fetch_secret "nomad-client-cert" > /etc/nomad.d/tls/cert.pem
-fetch_secret "nomad-client-tls-key" > /etc/nomad.d/tls/key.pem
-fetch_secret "vault-cert" > /etc/nomad.d/tls/vault-ca.pem
+# Nomad Client Leaf Cert/Key — Per-Environment, Signed By The Same CA As
+# Consul (See Above).
+fetch_secret "nomad-client-cert-${ENVIRONMENT}" > /etc/nomad.d/tls/cert.pem
+fetch_secret "nomad-client-tls-key-${ENVIRONMENT}" > /etc/nomad.d/tls/key.pem
+
+# vault-ca.pem — Trust Anchor For Verifying Vault's Server TLS Cert. Must
+# Be The CA That Signed Vault's Leaf (management-ca-cert), Not Vault's
+# Own Leaf Cert (vault-cert) — The Leaf Isn't A CA, So Using It Here
+# Wouldn't Do Real Chain Verification.
+fetch_secret "management-ca-cert" > /etc/nomad.d/tls/vault-ca.pem
+
 chown nomad:nomad /etc/nomad.d/tls/ca.pem /etc/nomad.d/tls/cert.pem /etc/nomad.d/tls/key.pem /etc/nomad.d/tls/vault-ca.pem
 chmod 0644 /etc/nomad.d/tls/ca.pem /etc/nomad.d/tls/cert.pem /etc/nomad.d/tls/vault-ca.pem
 chmod 0600 /etc/nomad.d/tls/key.pem
@@ -147,7 +189,8 @@ consul {
 }
 
 vault {
-  jwt_auth_backend_path = "jwt-nomad-${ENVIRONMENT}"
+  address                = "https://vault.platform.lefrancis.org:8443"
+  jwt_auth_backend_path  = "jwt-nomad-${ENVIRONMENT}"
 }
 EOF
 chown nomad:nomad /etc/nomad.d/99-instance.hcl
