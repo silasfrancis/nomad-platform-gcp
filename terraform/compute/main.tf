@@ -168,6 +168,7 @@ locals {
   all_migs = {
     "nomad-dev-ondemand" = {
       machine_type            = "e2-standard-2"
+      environment             = "dev"
       subnetwork               = local.network.subnets["subnet-dev-private"].self_link
       min_replicas             = 1
       max_replicas             = 5
@@ -176,12 +177,12 @@ locals {
       boot_disk_image          = "${var.project_id}/nomad-client"
       tags                     = ["nomad-client-dev", "consul-client-dev"]
       labels                   = { role = "worker", environment = "dev", pool = "on-demand" }
-      environment              = "dev"
       scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
       startup_script           = local.nomad_client_startup_script
     }
     "nomad-dev-spot" = {
       machine_type            = "e2-standard-2"
+      environment             = "dev"
       subnetwork               = local.network.subnets["subnet-dev-private"].self_link
       min_replicas             = 0
       max_replicas             = 5
@@ -190,12 +191,12 @@ locals {
       boot_disk_image          = "${var.project_id}/nomad-client"
       tags                     = ["nomad-client-dev", "consul-client-dev"]
       labels                   = { role = "worker", environment = "dev", pool = "spot" }
-      environment              = "dev"
       startup_script           = local.nomad_client_startup_script
       shutdown_script          = local.nomad_client_spot_shutdown_script
     }
     "nomad-prod-ondemand" = {
       machine_type            = "e2-standard-2"
+      environment             = "prod"
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
       min_replicas             = 2
       max_replicas             = 10
@@ -204,12 +205,12 @@ locals {
       boot_disk_image          = "${var.project_id}/nomad-client"
       tags                     = ["nomad-client-prod", "consul-client-prod"]
       labels                   = { role = "worker", environment = "prod", pool = "on-demand" }
-      environment              = "prod"
       scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
       startup_script           = local.nomad_client_startup_script
     }
     "nomad-prod-spot" = {
       machine_type            = "e2-standard-2"
+      environment             = "prod"
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
       min_replicas             = 1
       max_replicas             = 10
@@ -218,7 +219,6 @@ locals {
       boot_disk_image          = "${var.project_id}/nomad-client"
       tags                     = ["nomad-client-prod", "consul-client-prod"]
       labels                   = { role = "worker", environment = "prod", pool = "spot" }
-      environment              = "prod"
       startup_script           = local.nomad_client_startup_script
       shutdown_script          = local.nomad_client_spot_shutdown_script
     }

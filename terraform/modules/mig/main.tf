@@ -1,13 +1,9 @@
 # Worker MIGs (Nomad & Consul Clients)
 #
 # One instance template + one regional (multi-zone) MIG + one autoscaler
-# PER ENTRY in var.migs. Everything is generated from that one map via
-# for_each — adding a fifth pool later means adding one map entry, not
+# per entry in var.migs. Everything is generated from that one map via
+# for_each, adding a fifth pool later means adding one map entry, not
 # three new resource blocks.
-#
-# Spot vs on-demand is a single boolean per entry (each.value.spot), not a
-# separate resource type — the only difference under the hood is the
-# scheduling block on the instance template.
 
 resource "google_compute_instance_template" "this" {
   for_each = var.migs
@@ -45,11 +41,7 @@ resource "google_compute_instance_template" "this" {
     preemptible         = each.value.spot
     automatic_restart   = !each.value.spot
     provisioning_model  = each.value.spot ? "SPOT" : "STANDARD"
-    # DELETE (not STOP) — client nodes are stateless workers; the MIG
-    # replaces a terminated Spot instance rather than restarting a
-    # stopped one, matching "MIG detects terminated instance and
-    # replaces it automatically"
-    instance_termination_action = each.value.spot ? "DELETE" : null
+    instance_termination_action = each.value.spot ? "STOP" : null
   }
 
   metadata = merge({

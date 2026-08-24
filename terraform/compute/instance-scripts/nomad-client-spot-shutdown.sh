@@ -4,8 +4,8 @@
 # Nothing To Drain For). Runs During GCP's ~30s ACPI G2 Soft-Off Warning
 # Window Before A Spot Instance Is Actually Reclaimed.
 #
-# -deadline 25s (Not 30s) Deliberately Leaves A Buffer Below GCP's Warning
-# Window So The Drain Command Itself Has Time To Return Before Termination.
+# -deadline 25s Deliberately Leaves A Buffer Below GCP's Warning
+# Window (30s) So The Drain Command Itself Has Time To Return Before Termination.
 
 set -euo pipefail
 

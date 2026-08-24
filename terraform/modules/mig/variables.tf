@@ -18,6 +18,7 @@ variable "zones" {
 variable "migs" {
   description = "Map of MIGs to create. Add an entry to create another pool — template, MIG, and autoscaler all generate from one map, nothing else needs touching."
   type = map(object({
+    environment             = string
     machine_type            = string
     subnetwork               = string # self-link
     min_replicas             = number
