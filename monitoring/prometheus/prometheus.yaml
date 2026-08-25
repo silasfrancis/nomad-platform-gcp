@@ -10,7 +10,10 @@ scrape_configs:
   # Node Exporter is tagged with consul service name "node-exporter".
   - job_name: node-exporter
     consul_sd_configs:
-      - server: "localhost:8500"
+      - server: "localhost:8501"
+        scheme: https
+        tls_config:
+          ca_file: /etc/prometheus/tls/ca.pem
         token: "${CONSUL_PROMETHEUS_TOKEN}"
         services: ["node-exporter"]
 
@@ -34,7 +37,10 @@ scrape_configs:
   # being scraped.
   - job_name: application-services
     consul_sd_configs:
-      - server: "localhost:8500"
+      - server: "localhost:8501"
+        scheme: https
+        tls_config:
+          ca_file: /etc/prometheus/tls/ca.pem
         token: "${CONSUL_PROMETHEUS_TOKEN}"
         tags: ["metrics"]
     relabel_configs:
@@ -46,19 +52,30 @@ scrape_configs:
   # on the nomad servers.
   - job_name: nomad
     consul_sd_configs:
-      - server: "localhost:8500"
+      - server: "localhost:8501"
+        scheme: https
+        tls_config:
+          ca_file: /etc/prometheus/tls/ca.pem
         token: "${CONSUL_PROMETHEUS_TOKEN}"
         services: ["nomad"]
+    scheme: https
+    tls_config:
+      ca_file: /etc/prometheus/tls/nomad-ca.pem
     metrics_path: /v1/metrics
     params:
       format: ["prometheus"]
 
-  # Consul's own /v1/agent/metrics 
   - job_name: consul
     consul_sd_configs:
-      - server: "localhost:8500"
+      - server: "localhost:8501"
+        scheme: https
+        tls_config:
+          ca_file: /etc/prometheus/tls/ca.pem
         token: "${CONSUL_PROMETHEUS_TOKEN}"
         services: ["consul"]
+    scheme: https
+    tls_config:
+      ca_file: /etc/prometheus/tls/ca.pem
     metrics_path: /v1/agent/metrics
     params:
       format: ["prometheus"]

@@ -23,7 +23,9 @@ acl {
 }
 
 consul {
-  address = "127.0.0.1:8500"
+  address = "127.0.0.1:8501"
+  ssl     = true
+  ca_file = "{{ nomad_tls_dir }}/ca.pem"
 }
 
 vault {

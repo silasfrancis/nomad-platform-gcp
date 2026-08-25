@@ -100,7 +100,7 @@ locals {
         local.cidr["subnet-prod-private"],
       ]
       allow = [
-        { protocol = "tcp", ports = ["8300", "8301", "8302", "8500"] },
+        { protocol = "tcp", ports = ["8300", "8301", "8302", "8501"] },
         { protocol = "udp", ports = ["8301", "8302"] },
       ]
       deny = []
@@ -135,7 +135,7 @@ locals {
       priority            = 1000
       source_ranges       = [local.cidr["subnet-dev-public"]]
       destination_ranges  = [local.cidr["subnet-dev-private"]]
-      allow               = [{ protocol = "tcp", ports = ["8500"] }]
+      allow               = [{ protocol = "tcp", ports = ["8501"] }]
       deny                = []
     }
 
@@ -144,7 +144,7 @@ locals {
       priority            = 1000
       source_ranges       = [local.cidr["subnet-prod-public"]]
       destination_ranges  = [local.cidr["subnet-prod-private"]]
-        allow               = [{ protocol = "tcp", ports = ["8500"] }]
+        allow               = [{ protocol = "tcp", ports = ["8501"] }]
         deny                = []
       }
 
@@ -295,7 +295,7 @@ locals {
       allow = [
         {
           protocol = "tcp"
-          ports    = ["8500"]
+          ports    = ["8501"]
         },
       ]
 
@@ -311,7 +311,7 @@ locals {
       allow = [
         {
           protocol = "tcp"
-          ports    = ["8500"]
+          ports    = ["8501"]
         },
       ]
 

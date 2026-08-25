@@ -31,7 +31,8 @@ consul_ports:
   server:   8300
   serf_lan: 8301
   serf_wan: 8302
-  http:     8500
+  http:     -1
+  https:    8501
   dns:      8600
   grpc_tls: 8503
 
@@ -40,4 +41,4 @@ consul_acl_enabled: true
 consul_acl_default_policy: "deny"
 consul_telemetry_prometheus_enabled: true
 
-secret_consul_operator_token: "consul-operator-token-{{ environment }}"
+secret_consul_operator_token: "consul-operator-token-{{ environment_name }}"

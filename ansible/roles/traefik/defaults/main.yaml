@@ -97,7 +97,7 @@ traefik_instance_catalog:
     backend_ca_secret: ca-cert-dev
     static_routes:
       - { subdomain: nomad-dev, scheme: https, port: 4646 }
-      - { subdomain: consul-dev, scheme: https, port: 8500 }
+      - { subdomain: consul-dev, scheme: https, port: 8501 }
 
   - name: prod-internal
     https_port: 8445
@@ -113,7 +113,7 @@ traefik_instance_catalog:
     backend_ca_secret: ca-cert-prod
     static_routes:
       - { subdomain: nomad-prod, scheme: https, port: 4646 }
-      - { subdomain: consul-prod, scheme: https, port: 8500 }
+      - { subdomain: consul-prod, scheme: https, port: 8501 }
 
   - name: dev-public
     https_port: 443

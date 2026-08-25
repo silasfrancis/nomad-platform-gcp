@@ -37,7 +37,11 @@ tls {
     verify_outgoing = true
   }
   internal_rpc {
-    verify_server_hostname = true
+    verify_incoming        = true   # requires a client cert on RPC connections
+    verify_server_hostname = true   # requires that cert to actually identify a server
+  }
+  https {
+    verify_incoming = false  # API accepts server-verified-only clients (Traefik's rootCAs config)
   }
 }
 
@@ -54,6 +58,7 @@ ports {
   serf_lan = {{ consul_ports.serf_lan }}
   serf_wan = {{ consul_ports.serf_wan }}
   http     = {{ consul_ports.http }}
+  https    = {{ consul_ports.https }}
   dns      = {{ consul_ports.dns }}
   grpc_tls = {{ consul_ports.grpc_tls }}
 }
