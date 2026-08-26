@@ -1,7 +1,16 @@
 terraform {
   required_providers {
-    consul = { source = "hashicorp/consul", version = "~> 2.0" }
-    google = { source = "hashicorp/google", version = "~> 7.0" }
-    vault  = { source = "hashicorp/vault", version = "~> 4.0" }
+    consul = { 
+      source = "hashicorp/consul",
+       version = "~> 2.0" 
+    }
+    google = { 
+      source = "hashicorp/google", 
+      version = "~> 7.0" 
+    }
+    vault  = { 
+      source = "hashicorp/vault",
+      version = "~> 5.0" 
+    }
   }
 }

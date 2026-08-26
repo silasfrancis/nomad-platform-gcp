@@ -1,11 +1,13 @@
 module "consul" {
-  source      = "../modules/consul"
+  source      = "../../modules/consul"
   environment = "dev"
-  gcp_project = var.gcp_project
+  gcp_project_id = var.project_id
 }
 
 module "nomad" {
-  source      = "../modules/nomad"
+  source      = "../../modules/nomad"
   environment = "dev"
-  gcp_project = var.gcp_project
+  gcp_project_id = var.project_id
 }
+
+

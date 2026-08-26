@@ -12,7 +12,7 @@ resource "nomad_acl_policy" "nomad_sentinel" {
     }
   EOT
   job_acl {
-    job_id = "nomad-sentinel"
+    job_id = "nomad-sentinel"  # workload identity
     namespace = "monitoring"
   }
 }
@@ -30,7 +30,7 @@ resource "nomad_acl_policy" "nomad_autoscaler" {
     }
   EOT
   job_acl {
-    job_id    = "nomad-autoscaler"
+    job_id    = "nomad-autoscaler"   # workload identity
     namespace = "plugins"
   }
 }
