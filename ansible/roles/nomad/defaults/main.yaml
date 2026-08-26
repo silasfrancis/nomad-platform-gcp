@@ -27,4 +27,4 @@ nomad_telemetry_prometheus_enabled: true
 nomad_vault_address: ""
 nomad_vault_enabled: true
 
-secret_nomad_operator_token: "nomad-operator-token-{{ environment_name }}"
+nomad_manual_root_token: ""

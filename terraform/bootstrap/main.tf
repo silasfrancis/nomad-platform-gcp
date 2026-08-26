@@ -558,7 +558,74 @@ module "secrets" {
       }
     }
 
-    # Traefik Tokens
+    # Consul tokens 
+    "consul-acl-root-token-dev" = { 
+      labels = { purpose = "consul", tier = "root", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_dev_member]
+        }
+        "roles/secretmanager.viewer" = { # metadata permission to confirm if acl root token exists (i.e cluster already bootstraped)
+          members = [local.nomad_server_dev_member]
+        }
+      }
+    }
+
+    "consul-acl-root-token-prod" = { 
+      labels = { purpose = "consul", tier = "root", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_prod_member]
+        }
+        "roles/secretmanager.viewer" = {
+          members = [local.nomad_server_prod_member]
+        }
+      }
+    }
+    
+    "consul-operator-token-dev" = {
+      labels = { purpose = "consul", tier = "operator", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_dev_member]
+        }
+      }
+    }
+
+    "consul-operator-token-prod" = {
+      labels = { purpose = "consul", tier = "operator", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_prod_member]
+        }
+      }
+    }
+
+    "consul-vm-operator-token-dev" = {
+      labels = { purpose = "consul", tier = "scoped", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_dev_member]
+        }
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_dev_member]
+        }
+      }
+    }
+
+    "consul-vm-operator-token-prod" = {
+      labels = { purpose = "consul", tier = "scoped", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_prod_member]
+        }
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_prod_member]
+        }
+      }
+    }
+
+    # Traefik Consul catalog tokens
     "consul-traefik-token-dev" = {
       labels = { purpose = "traefik", tier = "scoped", environment = "dev" }
       iam = {
@@ -575,7 +642,8 @@ module "secrets" {
         }
       }
     }
-    # Consul and Nomad agents consul tokens
+
+    # Consul agent tokens
     "consul-server-agent-token-dev"   = { 
         labels = { purpose = "consul", tier = "scoped", environment = "dev" } 
         iam = {
@@ -608,6 +676,8 @@ module "secrets" {
             }
         }
     }
+    
+    # Nomad agents consul tokens
     "nomad-server-consul-token-dev"   = { 
         labels = { purpose = "nomad", tier = "scoped", environment = "dev" } 
         iam = {
@@ -640,8 +710,76 @@ module "secrets" {
             }
         }
     }
+     
+     # Nomad tokens
 
-    # Octopus deploy deployment tokens
+    "nomad-acl-root-token-dev" = { 
+      labels = { purpose = "nomad", tier = "root", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_dev_member]
+        }
+        "roles/secretmanager.viewer" = { # metadata permission to confirm if acl root token exists (i.e cluster already bootstraped)
+          members = [local.nomad_server_dev_member]
+        }
+      }
+    }
+
+    "nomad-acl-root-token-prod" = { 
+      labels = { purpose = "nomad", tier = "root", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_prod_member]
+        }
+        "roles/secretmanager.viewer" = { # metadata permission to confirm if acl root token exists (i.e cluster already bootstraped)
+          members = [local.nomad_server_prod_member]
+        }
+      }
+    }
+    
+    "nomad-operator-token-dev" = {
+      labels = { purpose = "nomad", tier = "operator", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_dev_member]
+        }
+      }
+    }
+
+    "nomad-operator-token-prod" = {
+      labels = { purpose = "nomad", tier = "operator", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_prod_member]
+        }
+      }
+    }
+
+    "nomad-vm-operator-token-dev" = {
+      labels = { purpose = "nomad", tier = "scoped", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_dev_member]
+        }
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_dev_member]
+        }
+      }
+    }
+
+    "nomad-vm-operator-token-prod" = {
+      labels = { purpose = "nomad", tier = "scoped", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.nomad_server_prod_member]
+        }
+        "roles/secretmanager.secretAccessor" = {
+          members = [local.nomad_server_prod_member]
+        }
+      }
+    }
+
+    # Octopus deploy Nomad deployment tokens
     "octopus-deploy-token-dev" = {
       labels = { purpose = "octopus", tier = "operator", environment = "dev" }
       iam = {
@@ -659,6 +797,7 @@ module "secrets" {
       }
     }
 
+    # Octopus deploy docker compose secrets
     "octopus-mssql-admin-password" = {
       labels = { purpose = "octopus", tier = "mgmt" }
       iam = {
@@ -695,6 +834,7 @@ module "secrets" {
       }
     }
 
+  # Cloudflare token for ACME DNS-01 certs
   "cloudflare-api-token" = { 
     labels = { purpose = "traefik", tier = "scoped" } 
     iam = {

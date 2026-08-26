@@ -1,51 +1,75 @@
+---
 # Run Against: role_nomad_server Group, ONCE PER ENVIRONMENT — Use
 # `--limit dev` Or `--limit prod` Explicitly (Run This Playbook Twice,
-# Once Per Env). Bootstraps The First Server In Whatever Scope --limit
-# Gives It. Idempotent Via Secret Manager's Own Pre-Check, Same Pattern
-# As playbooks/vault-init.yaml.
+# Once Per Env). Same Three-Tier Token Pattern As
+# playbooks/vault-init.yaml:
+#   - Root/management token (from `consul acl bootstrap`) — written to
+#     Secret Manager, used only to mint the two tokens below, then
+#     never touched again except recovery.
+#   - consul-operator: full admin (acl=write, full write on
+#     key/service/session prefixes). Used for personal CLI/UI login
+#     AND for platform-config Terraform's Consul provider.
+#   - consul-vm-operator: broad ongoing scope (key/service/session/node
+#     write), deliberately WITHOUT acl=write — can't mint or modify its
+#     own tokens/policies. What this playbook (and anything added to it
+#     later) uses going forward, read back from Secret Manager on every
+#     rerun, so the root token is never touched again outside recovery.
 #
-# NOTE: This Only Produces The ROOT Token and Terraform Operator Token. Ongoing Policies (Admin Token,
-# Traefik's Read-Only Token, Client/Server Agent Tokens) Are Created By
-# terraform/platform-config, Which Reads This Root Token Back From Secret
-# Manager To Authenticate The Consul Provider. Run This Playbook BEFORE
-# platform-config.
+# NOTE: This Only Produces These Two Tokens. Per-role tokens
+# (nomad-server-consul-token, consul-*-agent-token, Traefik's read-only
+# token, etc.) Are Created By terraform/platform-config, Which Reads
+# consul-operator Back From Secret Manager To Authenticate Its Consul
+# Provider. Run This Playbook BEFORE platform-config.
+#
+# TLS: Consul's HTTP API Is HTTPS-Only (See platform-config/consul's
+# `ports.https`/`tls.https` Blocks) — Every Command Below Talks To
+# https://127.0.0.1:8501 With The Node's Own Cert/Key/CA From
+# /etc/consul.d/tls/.
+#
+# RECOVERY: Same Model As vault-init.yaml — If The First-Run Block
+# Fails Partway, Consul Is Already Bootstrapped And Can't Be
+# Re-Bootstrapped. Resume By Passing The Root Token Back In Manually:
+#   ansible-playbook playbooks/consul-acl-bootstrap.yaml --limit dev \
+#     -e gcp_project_id=$GCP_PROJECT_ID \
+#     -e consul_manual_root_token="$(gcloud secrets versions access latest \
+#        --secret=consul-acl-root-token-dev --project=$GCP_PROJECT_ID)"
 
-- name: Determine Secret Name For This Environment
+- name: Determine Secret Names For This Environment
   ansible.builtin.set_fact:
     consul_root_token_secret: "consul-acl-root-token-{{ environment_name }}"
+    secret_consul_operator_token: "consul-operator-token-{{ environment_name }}"
+    secret_consul_vm_operator_token: "consul-vm-operator-token-{{ environment_name }}"
 
-- name: Check If Already Bootstrapped
+- name: Check If Already Bootstrapped (Secret Existence Only)
   ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret={{ consul_root_token_secret }} --project={{ gcp_project_id }}
-  register: consul_bootstrap_existing
+    gcloud secrets versions list {{ consul_root_token_secret }}
+    --project={{ gcp_project_id }} --filter="state:ENABLED"
+    --format="value(name)"
+  register: consul_bootstrap_check
   run_once: true
   changed_when: false
   failed_when: false
 
-- name: Report Already-Bootstrapped And Skip
-  ansible.builtin.debug:
-    msg: "{{ consul_root_token_secret }} already exists — skipping, nothing to do."
+- name: Set Already-Bootstrapped Fact
+  ansible.builtin.set_fact:
+    consul_already_bootstrapped: "{{ (consul_bootstrap_check.stdout | default('') | trim) != '' }}"
   run_once: true
-  when: consul_bootstrap_existing.rc == 0
 
-- name: Wait Until Consul Has An Elected Leader
-  ansible.builtin.command: consul members
-  register: consul_leader_check
-  retries: 30
-  delay: 5
-  until: consul_leader_check.rc == 0
-  run_once: true
-  changed_when: false
-  when: consul_bootstrap_existing.rc != 0
-
-- name: Run Consul ACL Bootstrap (First Server In Scope Only)
+- name: Run Consul ACL Bootstrap (First Server In Scope Only, Retries Until Leader Elected)
   ansible.builtin.command: consul acl bootstrap -format=json
   register: consul_bootstrap_raw
+  until: consul_bootstrap_raw.rc == 0
+  retries: 30
+  delay: 5
   run_once: true
   no_log: true
-  when: consul_bootstrap_existing.rc != 0
+  when: not consul_already_bootstrapped
   changed_when: true
+  environment:
+    CONSUL_HTTP_ADDR: "https://127.0.0.1:8501"
+    CONSUL_CACERT: /etc/consul.d/tls/ca.pem
+    CONSUL_CLIENT_CERT: /etc/consul.d/tls/cert.pem
+    CONSUL_CLIENT_KEY: /etc/consul.d/tls/key.pem
 
 - name: Write Consul Root Token To Secret Manager
   ansible.builtin.shell: >
@@ -54,64 +78,242 @@
     --data-file=- --project={{ gcp_project_id }}
   run_once: true
   no_log: true
-  when: consul_bootstrap_existing.rc != 0
+  when: not consul_already_bootstrapped
   changed_when: true
 
-- name: Report Bootstrap Outcome
-  ansible.builtin.debug:
-    msg: "Consul ({{ environment_name }}) bootstrapped. Root token written to {{ consul_root_token_secret }}."
+- name: Set Recovery Root Token Fact (Only Used If Passed Via -e, For Resuming A Failed First Run)
+  ansible.builtin.set_fact:
+    consul_recovery_root_token: "{{ consul_manual_root_token | default('') }}"
   run_once: true
-  when: consul_bootstrap_existing.rc != 0
+  no_log: true
 
-# Terraform Operator Token — Scoped Down From Bootstrap (Management) Token
-- name: Write terraform-operator Consul ACL policy
+- name: Set First-Run Block Facts
+  ansible.builtin.set_fact:
+    consul_run_first_run_tasks: "{{ (not consul_already_bootstrapped) or (consul_recovery_root_token != '') }}"
+    consul_minting_token: >-
+      {{ (consul_bootstrap_raw.stdout | from_json).SecretID if (not consul_already_bootstrapped)
+         else consul_recovery_root_token }}
+  run_once: true
+  no_log: true
+
+# consul-operator: Full Admin. Personal CLI/UI Login + Terraform's Token.
+
+- name: Write consul-operator Policy (First Run Or Recovery)
   ansible.builtin.copy:
-    dest: /tmp/terraform-operator-policy.hcl
+    dest: /tmp/consul-operator-policy.hcl
     content: |
       acl = "write"
+
+      agent_prefix "" {
+        policy = "write"
+      }
+
+      node_prefix "" {
+        policy = "write"
+      }
+
       key_prefix "" {
         policy = "write"
       }
+
       service_prefix "" {
         policy = "write"
       }
+
       session_prefix "" {
         policy = "write"
       }
     mode: "0600"
+  when: consul_run_first_run_tasks
+  run_once: true
 
-- name: Apply terraform-operator Consul ACL policy
+- name: Apply consul-operator Policy (First Run Or Recovery)
   ansible.builtin.command: >
     consul acl policy create
-    -name=terraform-operator
-    -rules=@/tmp/terraform-operator-policy.hcl
-    -token={{ consul_bootstrap_token }}
+    -name=consul-operator
+    -rules=@/tmp/consul-operator-policy.hcl
+  when: consul_run_first_run_tasks
+  run_once: true
   no_log: true
+  environment:
+    CONSUL_HTTP_ADDR: "https://127.0.0.1:8501"
+    CONSUL_CACERT: /etc/consul.d/tls/ca.pem
+    CONSUL_CLIENT_CERT: /etc/consul.d/tls/cert.pem
+    CONSUL_CLIENT_KEY: /etc/consul.d/tls/key.pem
+    CONSUL_HTTP_TOKEN: "{{ consul_minting_token }}"
 
-- name: Create terraform-operator Consul ACL token
+- name: Create consul-operator Token (First Run Or Recovery)
   ansible.builtin.command: >
     consul acl token create
-    -policy-name=terraform-operator
-    -description="Terraform operator token - platform-config"
+    -policy-name=consul-operator
+    -description="Consul operator token - personal login + Terraform"
     -format=json
-    -token={{ consul_bootstrap_token }}
   register: consul_operator_token_raw
+  when: consul_run_first_run_tasks
+  run_once: true
   no_log: true
+  environment:
+    CONSUL_HTTP_ADDR: "https://127.0.0.1:8501"
+    CONSUL_CACERT: /etc/consul.d/tls/ca.pem
+    CONSUL_CLIENT_CERT: /etc/consul.d/tls/cert.pem
+    CONSUL_CLIENT_KEY: /etc/consul.d/tls/key.pem
+    CONSUL_HTTP_TOKEN: "{{ consul_minting_token }}"
 
-- name: Extract terraform-operator Consul token value
+- name: Extract consul-operator Token Value (First Run Or Recovery)
   ansible.builtin.set_fact:
     consul_operator_token: "{{ (consul_operator_token_raw.stdout | from_json).SecretID }}"
+  when: consul_run_first_run_tasks
+  run_once: true
   no_log: true
 
-- name: Push terraform-operator Consul token to Secret Manager
+- name: Push consul-operator Token To Secret Manager (First Run Or Recovery)
   ansible.builtin.command: >
     gcloud secrets versions add {{ secret_consul_operator_token }}
-    --data-file=- --project={{ gcp_project }}
+    --data-file=- --project={{ gcp_project_id }}
   args:
     stdin: "{{ consul_operator_token }}"
+  when: consul_run_first_run_tasks
+  run_once: true
+  no_log: true
+  changed_when: true
+
+# consul-vm-operator: Broad Ongoing Scope, No acl=write — What This
+# Playbook (And Any Future Tasks Added Here) Uses Going Forward, So The
+# Root/Management Token Above Is Never Touched Again Outside Recovery.
+
+- name: Write consul-vm-operator Policy (First Run Or Recovery)
+  ansible.builtin.copy:
+    dest: /tmp/consul-vm-operator-policy.hcl
+    content: |
+      operator = "write"
+
+      acl = "write"
+
+      agent_prefix "" {
+        policy = "write"
+      }
+
+      node_prefix "" {
+        policy = "write"
+      }
+
+      key_prefix "" {
+        policy = "write"
+      }
+
+      service_prefix "" {
+        policy = "write"
+      }
+
+      session_prefix "" {
+        policy = "write"
+      }
+    mode: "0600"
+  when: consul_run_first_run_tasks
+  run_once: true
+
+- name: Apply consul-vm-operator Policy (First Run Or Recovery)
+  ansible.builtin.command: >
+    consul acl policy create
+    -name=consul-vm-operator
+    -rules=@/tmp/consul-vm-operator-policy.hcl
+  when: consul_run_first_run_tasks
+  run_once: true
+  no_log: true
+  environment:
+    CONSUL_HTTP_ADDR: "https://127.0.0.1:8501"
+    CONSUL_CACERT: /etc/consul.d/tls/ca.pem
+    CONSUL_CLIENT_CERT: /etc/consul.d/tls/cert.pem
+    CONSUL_CLIENT_KEY: /etc/consul.d/tls/key.pem
+    CONSUL_HTTP_TOKEN: "{{ consul_minting_token }}"
+
+- name: Create consul-vm-operator Token (First Run Or Recovery)
+  ansible.builtin.command: >
+    consul acl token create
+    -policy-name=consul-vm-operator
+    -description="Consul VM operator token - ongoing Ansible administration"
+    -format=json
+  register: consul_vm_operator_token_raw
+  when: consul_run_first_run_tasks
+  run_once: true
+  no_log: true
+  environment:
+    CONSUL_HTTP_ADDR: "https://127.0.0.1:8501"
+    CONSUL_CACERT: /etc/consul.d/tls/ca.pem
+    CONSUL_CLIENT_CERT: /etc/consul.d/tls/cert.pem
+    CONSUL_CLIENT_KEY: /etc/consul.d/tls/key.pem
+    CONSUL_HTTP_TOKEN: "{{ consul_minting_token }}"
+
+- name: Extract consul-vm-operator Token Value (First Run Or Recovery)
+  ansible.builtin.set_fact:
+    consul_vm_operator_token_fresh: "{{ (consul_vm_operator_token_raw.stdout | from_json).SecretID }}"
+  when: consul_run_first_run_tasks
+  run_once: true
   no_log: true
 
-- name: Remove local policy file
+- name: Push consul-vm-operator Token To Secret Manager (First Run Or Recovery)
+  ansible.builtin.command: >
+    gcloud secrets versions add {{ secret_consul_vm_operator_token }}
+    --data-file=- --project={{ gcp_project_id }}
+  args:
+    stdin: "{{ consul_vm_operator_token_fresh }}"
+  when: consul_run_first_run_tasks
+  run_once: true
+  no_log: true
+  changed_when: true
+
+# Root/Recovery Token's Last Use, Ever, In This File. Everything Below
+# Uses effective_consul_token: The Freshly-Minted consul-vm-operator
+# Token If This Run Just Created One (First Run Or Recovery), Or The
+# One Already Sitting In Secret Manager From A Past Successful Run.
+
+- name: Read consul-vm-operator Token From Secret Manager (Routine Reruns Only)
+  ansible.builtin.command: >
+    gcloud secrets versions access latest --secret={{ secret_consul_vm_operator_token }} --project={{ gcp_project_id }}
+  register: consul_vm_operator_token_from_secret
+  when: consul_already_bootstrapped and not consul_run_first_run_tasks
+  run_once: true
+  no_log: true
+  changed_when: false
+
+- name: Set Effective Consul Token Fact
+  ansible.builtin.set_fact:
+    effective_consul_token: >-
+      {{ consul_vm_operator_token_fresh if consul_run_first_run_tasks
+         else consul_vm_operator_token_from_secret.stdout }}
+  run_once: true
+  no_log: true
+
+# Add any future ongoing Consul admin tasks here, using
+#   CONSUL_HTTP_ADDR: "https://127.0.0.1:8501"
+#   CONSUL_CACERT / CONSUL_CLIENT_CERT / CONSUL_CLIENT_KEY: as above
+#   CONSUL_HTTP_TOKEN: "{{ effective_consul_token }}" — no new policy
+# work needed unless a task needs a path outside consul-vm-operator's
+# current scope (in which case it likely belongs on consul-operator
+# instead, not a widened consul-vm-operator).
+
+- name: Set Bootstrap Outcome Message
+  ansible.builtin.set_fact:
+    consul_outcome_msg: >-
+      {% if consul_already_bootstrapped and not consul_run_first_run_tasks %}
+      {{ consul_root_token_secret }} already exists — skipped bootstrap, read consul-vm-operator token from Secret Manager for this run.
+      {% elif consul_already_bootstrapped and consul_run_first_run_tasks %}
+      Consul ({{ environment_name }}) already bootstrapped — resumed a previously partial first run via recovery token.
+      {% else %}
+      Consul ({{ environment_name }}) bootstrapped for the first time. Root token archived (human-only, Owner-bypass read). consul-operator token minted for personal login and Terraform use. consul-vm-operator token minted for this playbook's ongoing runs.
+      {% endif %}
+  run_once: true
+
+- name: Report Bootstrap Outcome
+  ansible.builtin.debug:
+    msg: "{{ consul_outcome_msg }}"
+  run_once: true
+
+- name: Remove Local Policy Files
   ansible.builtin.file:
-    path: /tmp/terraform-operator-policy.hcl
+    path: "{{ item }}"
     state: absent
+  loop:
+    - /tmp/consul-operator-policy.hcl
+    - /tmp/consul-vm-operator-policy.hcl
+  run_once: true

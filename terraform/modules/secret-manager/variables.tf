@@ -33,26 +33,9 @@ variable "default_secrets" {
     })), {})
   }))
 default = {
-
-    "nomad-acl-root-token-dev"   = { labels = { purpose = "nomad", tier = "root", environment = "dev" } }
-    "nomad-acl-root-token-prod"  = { labels = { purpose = "nomad", tier = "root", environment = "prod" } }
-    "consul-acl-root-token-dev"  = { labels = { purpose = "consul", tier = "root", environment = "dev" } }
-    "consul-acl-root-token-prod" = { labels = { purpose = "consul", tier = "root", environment = "prod" } }
-  
-    "consul-operator-token-dev"  = { labels = { purpose = "consul", tier = "operator", environment = "dev" } }
-    "consul-operator-token-prod" = { labels = { purpose = "consul", tier = "operator", environment = "prod" } }
-    "nomad-operator-token-dev"   = { labels = { purpose = "nomad", tier = "operator", environment = "dev" } }
-    "nomad-operator-token-prod"  = { labels = { purpose = "nomad", tier = "operator", environment = "prod" } }
-
-    # nomad-acl-admin-token-{dev,prod} DROPPED — duplicate of nomad-operator-token-{dev,prod}
-    # consul-acl-admin-token-{dev,prod} DROPPED — duplicate of consul-operator-token-{dev,prod}
-
-    # mgmt: Ongoing Secrets Consumed By Ansible Roles Running On
-    # mgmt-vm (management-vm-sa).
     "vault-snapshot-token" = { labels = { purpose = "vault", tier = "mgmt" } }
     "grafana-admin-token"  = { labels = { purpose = "grafana", tier = "mgmt" } }
     "github-nomad-repo-pat" = { labels = { purpose = "cicd", tier = "mgmt" } }
-    
     "octopus-slack-webhook-url" = { labels = { purpose = "cicd", tier = "mgmt" } }
   }
 }

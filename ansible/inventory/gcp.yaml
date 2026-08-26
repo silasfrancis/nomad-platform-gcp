@@ -33,9 +33,16 @@ hostnames:
 keyed_groups:
   - key: labels.role
     prefix: role
-  - key: labels.environment
-    prefix: ""
+  # - key: labels.environment
+  #   prefix: ""
+  #   leading_separator: false
+
+groups:
+  dev: "labels.environment is defined and labels.environment == 'dev'"
+  prod: "labels.environment is defined and labels.environment == 'prod'"
 
 compose:
   ansible_host: name
   gce_zone: zone | regex_replace('^.*/', '')
+
+cache: false

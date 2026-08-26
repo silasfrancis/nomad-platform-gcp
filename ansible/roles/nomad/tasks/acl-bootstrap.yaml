@@ -1,49 +1,75 @@
 ---
 # Run Against: role_nomad_server Group, ONCE PER ENVIRONMENT — Use
 # `--limit dev` Or `--limit prod` Explicitly (Run This Playbook Twice,
-# Once Per Env). Same Pattern As consul-acl-bootstrap.yaml And
-# playbooks/vault-init.yaml.
+# Once Per Env). Same Three-Tier Token Pattern As
+# playbooks/consul-acl-bootstrap.yaml And playbooks/vault-init.yaml:
+#   - Root/management token (from `nomad acl bootstrap`) — written to
+#     Secret Manager, used only to mint the two tokens below, then
+#     never touched again except recovery.
+#   - nomad-operator: full admin (namespace "*" write, acl write). Used
+#     for personal CLI/UI login AND for platform-config Terraform's
+#     Nomad provider.
+#   - nomad-vm-operator: broad ongoing scope (namespace "*" write),
+#     deliberately WITHOUT acl write — can't mint or modify its own
+#     tokens/policies. What this playbook (and anything added to it
+#     later) uses going forward, read back from Secret Manager on every
+#     rerun, so the root token is never touched again outside recovery.
 #
-# NOTE: This Only Produces The ROOT and Terraform provider token.
-# Ongoing Policies (Admin Token, nomad-sentinel/octopus-deploy/github-runner Tokens)
-# Are Created By terraform/platform-config. Run This Playbook BEFORE platform-config.
+# NOTE: This Only Produces These Two Tokens. Per-role/service tokens
+# (nomad-sentinel, octopus-deploy, github-runner, etc.) Are Created By
+# terraform/platform-config, Which Reads nomad-operator Back From Secret
+# Manager To Authenticate Its Nomad Provider. Run This Playbook BEFORE
+# platform-config.
+#
+# TLS: Nomad's HTTP API Is HTTPS-Only (`tls.http = true` In nomad.hcl) —
+# Every Command Below Talks To https://127.0.0.1:4646 With The Node's
+# Own Cert/Key/CA From /etc/nomad.d/tls/.
+#
+# RECOVERY: Same Model As consul-acl-bootstrap.yaml And vault-init.yaml
+# — If The First-Run Block Fails Partway, Nomad Is Already Bootstrapped
+# And Can't Be Re-Bootstrapped. Resume By Passing The Root Token Back In
+# Manually:
+#   ansible-playbook playbooks/nomad-acl-bootstrap.yaml --limit dev \
+#     -e gcp_project_id=$GCP_PROJECT_ID \
+#     -e nomad_manual_root_token="$(gcloud secrets versions access latest \
+#        --secret=nomad-acl-root-token-dev --project=$GCP_PROJECT_ID)"
 
-- name: Determine Secret Name For This Environment
+- name: Determine Secret Names For This Environment
   ansible.builtin.set_fact:
     nomad_root_token_secret: "nomad-acl-root-token-{{ environment_name }}"
+    secret_nomad_operator_token: "nomad-operator-token-{{ environment_name }}"
+    secret_nomad_vm_operator_token: "nomad-vm-operator-token-{{ environment_name }}"
 
-- name: Check If Already Bootstrapped
+- name: Check If Already Bootstrapped (Secret Existence Only)
   ansible.builtin.command: >
-    gcloud secrets versions access latest
-    --secret={{ nomad_root_token_secret }} --project={{ gcp_project_id }}
-  register: nomad_bootstrap_existing
+    gcloud secrets versions list {{ nomad_root_token_secret }}
+    --project={{ gcp_project_id }} --filter="state:ENABLED"
+    --format="value(name)"
+  register: nomad_bootstrap_check
   run_once: true
   changed_when: false
   failed_when: false
 
-- name: Report Already-Bootstrapped And Skip
-  ansible.builtin.debug:
-    msg: "{{ nomad_root_token_secret }} already exists — skipping, nothing to do."
+- name: Set Already-Bootstrapped Fact
+  ansible.builtin.set_fact:
+    nomad_already_bootstrapped: "{{ (nomad_bootstrap_check.stdout | default('') | trim) != '' }}"
   run_once: true
-  when: nomad_bootstrap_existing.rc == 0
 
-- name: Wait Until Nomad Has Elected A Leader
-  ansible.builtin.command: nomad status
-  register: nomad_status
-  retries: 30
-  delay: 5
-  until: nomad_status.rc == 0
-  run_once: true
-  changed_when: false
-  when: nomad_bootstrap_existing.rc != 0
-
-- name: Run Nomad ACL Bootstrap (First Server In Scope Only)
+- name: Run Nomad ACL Bootstrap (First Server In Scope Only, Retries Until Leader Elected)
   ansible.builtin.command: nomad acl bootstrap -json
   register: nomad_bootstrap_raw
+  until: nomad_bootstrap_raw.rc == 0
+  retries: 30
+  delay: 5
   run_once: true
   no_log: true
-  when: nomad_bootstrap_existing.rc != 0
+  when: not nomad_already_bootstrapped
   changed_when: true
+  environment:
+    NOMAD_ADDR: "https://127.0.0.1:4646"
+    NOMAD_CACERT: /etc/nomad.d/tls/ca.pem
+    NOMAD_CLIENT_CERT: /etc/nomad.d/tls/cert.pem
+    NOMAD_CLIENT_KEY: /etc/nomad.d/tls/key.pem
 
 - name: Write Nomad Root Token To Secret Manager
   ansible.builtin.shell: >
@@ -52,63 +78,230 @@
     --data-file=- --project={{ gcp_project_id }}
   run_once: true
   no_log: true
-  when: nomad_bootstrap_existing.rc != 0
+  when: not nomad_already_bootstrapped
   changed_when: true
 
-- name: Report Bootstrap Outcome
-  ansible.builtin.debug:
-    msg: "Nomad ({{ environment_name }}) bootstrapped. Root token written to {{ nomad_root_token_secret }}."
+- name: Set Recovery Root Token Fact (Only Used If Passed Via -e, For Resuming A Failed First Run)
+  ansible.builtin.set_fact:
+    nomad_recovery_root_token: "{{ nomad_manual_root_token | default('') }}"
   run_once: true
-  when: nomad_bootstrap_existing.rc != 0
+  no_log: true
 
-# Terraform Operator Token — Scoped Down From Bootstrap (Management) Token
-- name: Write terraform-operator Nomad ACL policy
+- name: Set First-Run Block Facts
+  ansible.builtin.set_fact:
+    nomad_run_first_run_tasks: "{{ (not nomad_already_bootstrapped) or (nomad_recovery_root_token != '') }}"
+    nomad_minting_token: >-
+      {{ (nomad_bootstrap_raw.stdout | from_json).SecretID if (not nomad_already_bootstrapped)
+         else nomad_recovery_root_token }}
+  run_once: true
+  no_log: true
+
+# nomad-operator: Full Admin. Personal CLI/UI Login + Terraform's Token.
+
+- name: Write nomad-operator Policy (First Run Or Recovery)
   ansible.builtin.copy:
-    dest: /tmp/terraform-operator-policy.hcl
+    dest: /tmp/nomad-operator-policy.hcl
     content: |
       namespace "*" {
         policy = "write"
       }
-      acl {
+
+      node {
+        policy = "write"
+      }
+
+      operator {
+        policy = "write"
+      }
+
+      agent {
+        policy = "read"
+      }
+
+      plugin {
+        policy = "read"
+      }
+    mode: "0600"
+  when: nomad_run_first_run_tasks
+  run_once: true
+
+- name: Apply nomad-operator Policy (First Run Or Recovery)
+  ansible.builtin.command: >
+    nomad acl policy apply
+    -description="Nomad operator policy - personal login + Terraform"
+    nomad-operator /tmp/nomad-operator-policy.hcl
+  when: nomad_run_first_run_tasks
+  run_once: true
+  # no_log: true
+  environment:
+    NOMAD_ADDR: "https://127.0.0.1:4646"
+    NOMAD_CACERT: /etc/nomad.d/tls/ca.pem
+    NOMAD_CLIENT_CERT: /etc/nomad.d/tls/cert.pem
+    NOMAD_CLIENT_KEY: /etc/nomad.d/tls/key.pem
+    NOMAD_TOKEN: "{{ nomad_minting_token }}"
+
+- name: Create nomad-operator Token (First Run Or Recovery)
+  ansible.builtin.command: >
+    nomad acl token create
+    -name="nomad-operator"
+    -policy=nomad-operator
+    -type=client
+    -json
+  register: nomad_operator_token_raw
+  when: nomad_run_first_run_tasks
+  run_once: true
+  no_log: true
+  environment:
+    NOMAD_ADDR: "https://127.0.0.1:4646"
+    NOMAD_CACERT: /etc/nomad.d/tls/ca.pem
+    NOMAD_CLIENT_CERT: /etc/nomad.d/tls/cert.pem
+    NOMAD_CLIENT_KEY: /etc/nomad.d/tls/key.pem
+    NOMAD_TOKEN: "{{ nomad_minting_token }}"
+
+- name: Extract nomad-operator Token Value (First Run Or Recovery)
+  ansible.builtin.set_fact:
+    nomad_operator_token: "{{ (nomad_operator_token_raw.stdout | from_json).SecretID }}"
+  when: nomad_run_first_run_tasks
+  run_once: true
+  no_log: true
+
+- name: Push nomad-operator Token To Secret Manager (First Run Or Recovery)
+  ansible.builtin.command: >
+    gcloud secrets versions add {{ secret_nomad_operator_token }}
+    --data-file=- --project={{ gcp_project_id }}
+  args:
+    stdin: "{{ nomad_operator_token }}"
+  when: nomad_run_first_run_tasks
+  run_once: true
+  no_log: true
+  changed_when: true
+
+# nomad-vm-operator: Broad Ongoing Scope, No acl Write — What This
+# Playbook (And Any Future Tasks Added Here) Uses Going Forward, So The
+# Root/Management Token Above Is Never Touched Again Outside Recovery.
+
+- name: Write nomad-vm-operator Policy (First Run Or Recovery)
+  ansible.builtin.copy:
+    dest: /tmp/nomad-vm-operator-policy.hcl
+    content: |
+      namespace "*" {
+        policy = "write"
+      }
+
+      node {
+        policy = "write"
+      }
+
+      operator {
         policy = "write"
       }
     mode: "0600"
+  when: nomad_run_first_run_tasks
+  run_once: true
 
-- name: Apply terraform-operator Nomad ACL policy
+- name: Apply nomad-vm-operator Policy (First Run Or Recovery)
   ansible.builtin.command: >
     nomad acl policy apply
-    -description="Terraform operator policy - platform-config"
-    terraform-operator /tmp/terraform-operator-policy.hcl
-  environment:
-    NOMAD_TOKEN: "{{ nomad_bootstrap_token }}"
+    -description="Nomad VM operator policy - ongoing Ansible administration"
+    nomad-vm-operator /tmp/nomad-vm-operator-policy.hcl
+  when: nomad_run_first_run_tasks
+  run_once: true
   no_log: true
+  environment:
+    NOMAD_ADDR: "https://127.0.0.1:4646"
+    NOMAD_CACERT: /etc/nomad.d/tls/ca.pem
+    NOMAD_CLIENT_CERT: /etc/nomad.d/tls/cert.pem
+    NOMAD_CLIENT_KEY: /etc/nomad.d/tls/key.pem
+    NOMAD_TOKEN: "{{ nomad_minting_token }}"
 
-- name: Create terraform-operator Nomad ACL token
+- name: Create nomad-vm-operator Token (First Run Or Recovery)
   ansible.builtin.command: >
     nomad acl token create
-    -name="terraform-operator"
-    -policy=terraform-operator
+    -name="nomad-vm-operator"
+    -policy=nomad-vm-operator
     -type=client
     -json
+  register: nomad_vm_operator_token_raw
+  when: nomad_run_first_run_tasks
+  run_once: true
+  no_log: true
   environment:
-    NOMAD_TOKEN: "{{ nomad_bootstrap_token }}"
-  register: nomad_operator_token_raw
-  no_log: true
+    NOMAD_ADDR: "https://127.0.0.1:4646"
+    NOMAD_CACERT: /etc/nomad.d/tls/ca.pem
+    NOMAD_CLIENT_CERT: /etc/nomad.d/tls/cert.pem
+    NOMAD_CLIENT_KEY: /etc/nomad.d/tls/key.pem
+    NOMAD_TOKEN: "{{ nomad_minting_token }}"
 
-- name: Extract terraform-operator Nomad token value
+- name: Extract nomad-vm-operator Token Value (First Run Or Recovery)
   ansible.builtin.set_fact:
-    nomad_operator_token: "{{ (nomad_operator_token_raw.stdout | from_json).SecretID }}"
+    nomad_vm_operator_token_fresh: "{{ (nomad_vm_operator_token_raw.stdout | from_json).SecretID }}"
+  when: nomad_run_first_run_tasks
+  run_once: true
   no_log: true
 
-- name: Push terraform-operator Nomad token to Secret Manager
+- name: Push nomad-vm-operator Token To Secret Manager (First Run Or Recovery)
   ansible.builtin.command: >
-    gcloud secrets versions add {{ secret_nomad_operator_token }}
-    --data-file=- --project={{ gcp_project }}
+    gcloud secrets versions add {{ secret_nomad_vm_operator_token }}
+    --data-file=- --project={{ gcp_project_id }}
   args:
-    stdin: "{{ nomad_operator_token }}"
+    stdin: "{{ nomad_vm_operator_token_fresh }}"
+  when: nomad_run_first_run_tasks
+  run_once: true
+  no_log: true
+  changed_when: true
+
+# Root/Recovery Token's Last Use, Ever, In This File. Everything Below
+# Uses effective_nomad_token: The Freshly-Minted nomad-vm-operator Token
+# If This Run Just Created One (First Run Or Recovery), Or The One
+# Already Sitting In Secret Manager From A Past Successful Run.
+
+- name: Read nomad-vm-operator Token From Secret Manager (Routine Reruns Only)
+  ansible.builtin.command: >
+    gcloud secrets versions access latest --secret={{ secret_nomad_vm_operator_token }} --project={{ gcp_project_id }}
+  register: nomad_vm_operator_token_from_secret
+  when: nomad_already_bootstrapped and not nomad_run_first_run_tasks
+  run_once: true
+  no_log: true
+  changed_when: false
+
+- name: Set Effective Nomad Token Fact
+  ansible.builtin.set_fact:
+    effective_nomad_token: >-
+      {{ nomad_vm_operator_token_fresh if nomad_run_first_run_tasks
+         else nomad_vm_operator_token_from_secret.stdout }}
+  run_once: true
   no_log: true
 
-- name: Remove local policy file
+# Add any future ongoing Nomad admin tasks here, using
+#   NOMAD_ADDR: "https://127.0.0.1:4646"
+#   NOMAD_CACERT / NOMAD_CLIENT_CERT / NOMAD_CLIENT_KEY: as above
+#   NOMAD_TOKEN: "{{ effective_nomad_token }}" — no new policy work
+# needed unless a task needs acl write or a namespace outside
+# nomad-vm-operator's current scope (in which case it likely belongs on
+# nomad-operator instead, not a widened nomad-vm-operator).
+
+- name: Set Bootstrap Outcome Message
+  ansible.builtin.set_fact:
+    nomad_outcome_msg: >-
+      {% if nomad_already_bootstrapped and not nomad_run_first_run_tasks %}
+      {{ nomad_root_token_secret }} already exists — skipped bootstrap, read nomad-vm-operator token from Secret Manager for this run.
+      {% elif nomad_already_bootstrapped and nomad_run_first_run_tasks %}
+      Nomad ({{ environment_name }}) already bootstrapped — resumed a previously partial first run via recovery token.
+      {% else %}
+      Nomad ({{ environment_name }}) bootstrapped for the first time. Root token archived (human-only, Owner-bypass read). nomad-operator token minted for personal login and Terraform use. nomad-vm-operator token minted for this playbook's ongoing runs.
+      {% endif %}
+  run_once: true
+
+- name: Report Bootstrap Outcome
+  ansible.builtin.debug:
+    msg: "{{ nomad_outcome_msg }}"
+  run_once: true
+
+- name: Remove Local Policy Files
   ansible.builtin.file:
-    path: /tmp/terraform-operator-policy.hcl
+    path: "{{ item }}"
     state: absent
+  loop:
+    - /tmp/nomad-operator-policy.hcl
+    - /tmp/nomad-vm-operator-policy.hcl
+  run_once: true

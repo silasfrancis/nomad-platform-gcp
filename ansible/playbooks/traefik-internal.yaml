@@ -9,7 +9,7 @@
   vars:
     traefik_active_instances:
       - mgmt
-      # - dev-internal
+      - dev-internal
       # - prod-internal
   roles:
     - traefik
