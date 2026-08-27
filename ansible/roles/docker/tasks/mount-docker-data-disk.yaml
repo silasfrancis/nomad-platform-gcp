@@ -28,7 +28,7 @@
       - docker_data_disk_name | length > 0
     fail_msg: >-
       docker_data_disk_name must be set by the caller (e.g.
-      "mgmt-vm-docker-data") — this task will not guess which disk to mount.
+      "docker-data") — this task will not guess which disk to mount.
 
 - name: Gather Service Facts To Check Docker's Current State
   ansible.builtin.service_facts:

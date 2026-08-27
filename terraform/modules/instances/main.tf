@@ -111,7 +111,4 @@ resource "google_compute_instance" "this" {
 
   allow_stopping_for_update = true
 
-  lifecycle {
-    ignore_changes = [attached_disk]
-  }
 }

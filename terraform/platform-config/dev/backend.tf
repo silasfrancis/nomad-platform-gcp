@@ -40,6 +40,11 @@ provider "nomad" {
   secret_id = var.nomad_token
 }
 
+provider "vault" {
+  address      = "https://vault.platform.lefrancis.org:8443"
+  token        = var.vault_token
+}
+
 provider "google" {
   project = var.project_id
   region  = var.region

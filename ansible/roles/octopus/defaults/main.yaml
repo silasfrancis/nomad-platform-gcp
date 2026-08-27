@@ -8,7 +8,7 @@
 octopus_compose_dir: /opt/octopus
 octopus_data_dir: /opt/octopus/data
 
-sql_data_disk_name: "mgmt-vm-sql-data"
+sql_data_disk_name: "sql-data"
 
 mssql_image: "mcr.microsoft.com/mssql/server:2022-latest"
 mssql_container_name: "octopus-mssql"
