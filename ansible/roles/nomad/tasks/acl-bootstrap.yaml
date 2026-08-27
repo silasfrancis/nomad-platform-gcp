@@ -6,14 +6,28 @@
 #   - Root/management token (from `nomad acl bootstrap`) — written to
 #     Secret Manager, used only to mint the two tokens below, then
 #     never touched again except recovery.
-#   - nomad-operator: full admin (namespace "*" write, acl write). Used
-#     for personal CLI/UI login AND for platform-config Terraform's
-#     Nomad provider.
-#   - nomad-vm-operator: broad ongoing scope (namespace "*" write),
-#     deliberately WITHOUT acl write — can't mint or modify its own
-#     tokens/policies. What this playbook (and anything added to it
-#     later) uses going forward, read back from Secret Manager on every
-#     rerun, so the root token is never touched again outside recovery.
+#   - nomad-operator: A REAL -type=management TOKEN, Not A Client Token
+#     With A Broad Policy — Nomad Has No "acl" Rule Block At All (Unlike
+#     Consul's acl = "write"), So ACL Policy/Token/Namespace/Sentinel-
+#     Policy Administration Is Gated Purely By Token TYPE, Never By
+#     Policy Content. A Management Token Cannot Have A Policy Attached
+#     (Nomad Rejects -policy Alongside -type=management) — It Bypasses
+#     Rules Entirely Rather Than Being Granted One. Used For Personal
+#     CLI/UI Login AND platform-config Terraform's Nomad Provider,
+#     Which Needs To Create nomad_acl_policy/nomad_namespace Resources —
+#     Operations Client Tokens Can Never Perform Regardless Of Rules.
+#   - nomad-vm-operator: -type=client, Broad Ongoing Scope — Every
+#     Non-ACL Rule Block Nomad Actually Supports
+#     (namespace/node/node_pool/agent/operator/quota/host_volume/plugin/
+#     sentinel, All "write") — The Practical Ceiling For A Client Token
+#     Short Of True Management. Still Can't Touch ACL Policies/Tokens/
+#     Namespaces Itself (No Client-Scoped Rule Grants That), So It
+#     Remains The "Everyday Admin" Tier, Not An Emergency Root
+#     Substitute For ACL/Namespace Work — Use nomad-operator For That.
+#     What This Playbook (And Anything Added To It Later) Uses Going
+#     Forward, Read Back From Secret Manager On Every Rerun, So The
+#     Root/Management Bootstrap Token Above Is Never Touched Again
+#     Outside Recovery.
 #
 # NOTE: This Only Produces These Two Tokens. Per-role/service tokens
 # (nomad-sentinel, octopus-deploy, github-runner, etc.) Are Created By
@@ -32,7 +46,7 @@
 #   ansible-playbook playbooks/nomad-acl-bootstrap.yaml --limit dev \
 #     -e gcp_project_id=$GCP_PROJECT_ID \
 #     -e nomad_manual_root_token="$(gcloud secrets versions access latest \
-#        --secret=nomad-acl-root-token-dev --project=$GCP_PROJECT_ID)"
+#        --secret=nomad-acl-root-token-{{ environment_name }} --project=$GCP_PROJECT_ID)"
 
 - name: Determine Secret Names For This Environment
   ansible.builtin.set_fact:
@@ -40,7 +54,7 @@
     secret_nomad_operator_token: "nomad-operator-token-{{ environment_name }}"
     secret_nomad_vm_operator_token: "nomad-vm-operator-token-{{ environment_name }}"
 
-- name: Check If Already Bootstrapped (Secret Existence Only)
+- name: Check If Already Bootstrapped (Existence Only, No Payload Read)
   ansible.builtin.command: >
     gcloud secrets versions list {{ nomad_root_token_secret }}
     --project={{ gcp_project_id }} --filter="state:ENABLED"
@@ -96,56 +110,11 @@
   run_once: true
   no_log: true
 
-# nomad-operator: Full Admin. Personal CLI/UI Login + Terraform's Token.
-
-- name: Write nomad-operator Policy (First Run Or Recovery)
-  ansible.builtin.copy:
-    dest: /tmp/nomad-operator-policy.hcl
-    content: |
-      namespace "*" {
-        policy = "write"
-      }
-
-      node {
-        policy = "write"
-      }
-
-      operator {
-        policy = "write"
-      }
-
-      agent {
-        policy = "read"
-      }
-
-      plugin {
-        policy = "read"
-      }
-    mode: "0600"
-  when: nomad_run_first_run_tasks
-  run_once: true
-
-- name: Apply nomad-operator Policy (First Run Or Recovery)
-  ansible.builtin.command: >
-    nomad acl policy apply
-    -description="Nomad operator policy - personal login + Terraform"
-    nomad-operator /tmp/nomad-operator-policy.hcl
-  when: nomad_run_first_run_tasks
-  run_once: true
-  # no_log: true
-  environment:
-    NOMAD_ADDR: "https://127.0.0.1:4646"
-    NOMAD_CACERT: /etc/nomad.d/tls/ca.pem
-    NOMAD_CLIENT_CERT: /etc/nomad.d/tls/cert.pem
-    NOMAD_CLIENT_KEY: /etc/nomad.d/tls/key.pem
-    NOMAD_TOKEN: "{{ nomad_minting_token }}"
-
-- name: Create nomad-operator Token (First Run Or Recovery)
+- name: Create nomad-operator Management Token (First Run Or Recovery)
   ansible.builtin.command: >
     nomad acl token create
     -name="nomad-operator"
-    -policy=nomad-operator
-    -type=client
+    -type=management
     -json
   register: nomad_operator_token_raw
   when: nomad_run_first_run_tasks
@@ -176,9 +145,11 @@
   no_log: true
   changed_when: true
 
-# nomad-vm-operator: Broad Ongoing Scope, No acl Write — What This
-# Playbook (And Any Future Tasks Added Here) Uses Going Forward, So The
-# Root/Management Token Above Is Never Touched Again Outside Recovery.
+# nomad-vm-operator: -type=client, Every Non-ACL Rule Block Nomad
+# Supports, All "write" — The Practical Ceiling For A Client Token.
+# Still Cannot Touch ACL Policies/Tokens/Namespaces.
+# It Remains The Everyday-Admin Tier, Not An ACL/Namespace-Capable
+# Root Substitute. Use nomad-operator For Anything In That Category.
 
 - name: Write nomad-vm-operator Policy (First Run Or Recovery)
   ansible.builtin.copy:
@@ -192,7 +163,31 @@
         policy = "write"
       }
 
+      node_pool "*" {
+        policy = "write"
+      }
+
+      agent {
+        policy = "write"
+      }
+
       operator {
+        policy = "write"
+      }
+
+      quota {
+        policy = "write"
+      }
+
+      host_volume "*" {
+        policy = "write"
+      }
+
+      plugin {
+        policy = "write"
+      }
+
+      sentinel {
         policy = "write"
       }
     mode: "0600"
@@ -275,10 +270,10 @@
 # Add any future ongoing Nomad admin tasks here, using
 #   NOMAD_ADDR: "https://127.0.0.1:4646"
 #   NOMAD_CACERT / NOMAD_CLIENT_CERT / NOMAD_CLIENT_KEY: as above
-#   NOMAD_TOKEN: "{{ effective_nomad_token }}" — no new policy work
-# needed unless a task needs acl write or a namespace outside
-# nomad-vm-operator's current scope (in which case it likely belongs on
-# nomad-operator instead, not a widened nomad-vm-operator).
+#   NOMAD_TOKEN: "{{ effective_nomad_token }}" — If A Future Task Needs
+# ACL Policy/Token/Namespace/Sentinel-Policy Administration, It Cannot
+# Use nomad-vm-operator No Matter How Its Policy Is Widened — That
+# Category Requires nomad-operator's Management Token, Full Stop.
 
 - name: Set Bootstrap Outcome Message
   ansible.builtin.set_fact:
@@ -288,7 +283,7 @@
       {% elif nomad_already_bootstrapped and nomad_run_first_run_tasks %}
       Nomad ({{ environment_name }}) already bootstrapped — resumed a previously partial first run via recovery token.
       {% else %}
-      Nomad ({{ environment_name }}) bootstrapped for the first time. Root token archived (human-only, Owner-bypass read). nomad-operator token minted for personal login and Terraform use. nomad-vm-operator token minted for this playbook's ongoing runs.
+      Nomad ({{ environment_name }}) bootstrapped for the first time. Root token archived (human-only, Owner-bypass read). nomad-operator management token minted for personal login and Terraform use. nomad-vm-operator client token minted for this playbook's ongoing runs.
       {% endif %}
   run_once: true
 
@@ -299,9 +294,6 @@
 
 - name: Remove Local Policy Files
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: /tmp/nomad-vm-operator-policy.hcl
     state: absent
-  loop:
-    - /tmp/nomad-operator-policy.hcl
-    - /tmp/nomad-vm-operator-policy.hcl
   run_once: true

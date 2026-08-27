@@ -32,7 +32,7 @@
 #   ansible-playbook playbooks/consul-acl-bootstrap.yaml --limit dev \
 #     -e gcp_project_id=$GCP_PROJECT_ID \
 #     -e consul_manual_root_token="$(gcloud secrets versions access latest \
-#        --secret=consul-acl-root-token-dev --project=$GCP_PROJECT_ID)"
+#        --secret=consul-acl-root-token-{{ environment_name }} --project=$GCP_PROJECT_ID)"
 
 - name: Determine Secret Names For This Environment
   ansible.builtin.set_fact:
@@ -117,7 +117,8 @@
       }
 
       service_prefix "" {
-        policy = "write"
+        policy     = "write"
+        intentions = "write"
       }
 
       session_prefix "" {

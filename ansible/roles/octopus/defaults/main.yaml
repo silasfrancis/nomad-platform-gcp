@@ -13,7 +13,7 @@ sql_data_disk_name: "sql-data"
 mssql_image: "mcr.microsoft.com/mssql/server:2022-latest"
 mssql_container_name: "octopus-mssql"
 
-octopus_server_tag: "2026.2"
+octopus_server_tag: "2026.2.13364"
 octopus_container_name: "octopus-server"
 octopus_web_port: 8080
 octopus_tentacle_port: 10943
