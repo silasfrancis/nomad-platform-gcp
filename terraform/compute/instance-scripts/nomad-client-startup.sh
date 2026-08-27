@@ -144,6 +144,7 @@ datacenter = "${DATACENTER}"
 node_name  = "${NODE_NAME}"
 
 bind_addr      = "0.0.0.0"
+client_addr    = "0.0.0.0"
 advertise_addr = "${PRIVATE_IP}"
 
 retry_join = ["${CONSUL_DISCOVER}"]

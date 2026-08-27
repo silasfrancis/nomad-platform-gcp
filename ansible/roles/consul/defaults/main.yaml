@@ -1,8 +1,6 @@
 ---
 consul_version: "2.0.2"
 
-consul_mode: "client"
-
 # true ONLY for mgmt-vm. Real Nomad server/client hosts get their TLS
 # materials, gossip key, and agent token from their own GCE startup
 # script at every boot (see nomad-client-mig's startup script) —
