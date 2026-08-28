@@ -75,6 +75,10 @@ resource "google_compute_health_check" "this" {
   tcp_health_check {
     port = 4646
   }
+
+  # log_config {
+  #   enable = true
+  # }
 }
 
 resource "google_compute_region_instance_group_manager" "this" {

@@ -163,6 +163,7 @@ chmod 0640 /etc/consul.d/99-instance.hcl
 # --- Nomad Instance Config ---
 cat > /etc/nomad.d/99-instance.hcl <<EOF
 datacenter = "${DATACENTER}"
+region     = "${ENVIRONMENT}"
 name       = "${NODE_NAME}"
 
 bind_addr = "0.0.0.0"

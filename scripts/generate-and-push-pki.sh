@@ -180,14 +180,14 @@ done
 
 # --- Nomad Server/Client Certs, Per Environment ---
 for env in dev prod; do
-  generate_leaf "nomad-server-${env}" "server.dc-${env}.nomad" \
-    "DNS:server.dc-${env}.nomad,DNS:localhost,IP:127.0.0.1${ZONE_SANS}" \
+  generate_leaf "nomad-server-${env}" "server.${env}.nomad" \
+    "DNS:server.${env}.nomad,DNS:server.dc-${env}.nomad,DNS:localhost,IP:127.0.0.1${ZONE_SANS}" \
     "${WORKDIR}/${env}-ca-cert.pem" "${WORKDIR}/${env}-ca-key.pem"
   push_secret "nomad-server-cert-${env}" "${WORKDIR}/nomad-server-${env}-cert.pem"
   push_secret "nomad-server-tls-key-${env}" "${WORKDIR}/nomad-server-${env}-key.pem"
 
-  generate_leaf "nomad-client-${env}" "client.dc-${env}.nomad" \
-    "DNS:client.dc-${env}.nomad,DNS:localhost,IP:127.0.0.1${ZONE_SANS}" \
+  generate_leaf "nomad-client-${env}" "client.${env}.nomad" \
+    "DNS:client.${env}.nomad,DNS:client.dc-${env}.nomad,DNS:localhost,IP:127.0.0.1${ZONE_SANS}" \
     "${WORKDIR}/${env}-ca-cert.pem" "${WORKDIR}/${env}-ca-key.pem"
   push_secret "nomad-client-cert-${env}" "${WORKDIR}/nomad-client-${env}-cert.pem"
   push_secret "nomad-client-tls-key-${env}" "${WORKDIR}/nomad-client-${env}-key.pem"

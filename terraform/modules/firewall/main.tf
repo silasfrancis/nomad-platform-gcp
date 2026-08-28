@@ -50,6 +50,15 @@ locals {
       deny                = []
     }
 
+    "health-check-nomad-clients" = {
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = ["35.191.0.0/16", "130.211.0.0/22"]
+      destination_ranges  = [local.cidr["subnet-dev-private"], local.cidr["subnet-prod-private"]]
+      allow               = [{ protocol = "tcp", ports = ["4646"] }]
+      deny                = []
+    }
+
     "deny-dev-to-prod" = {
       direction           = "INGRESS"
       priority            = 900

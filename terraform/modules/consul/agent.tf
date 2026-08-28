@@ -15,6 +15,9 @@ resource "consul_acl_policy" "agent" {
     service_prefix "" {
       policy = "write"
     }
+    agent_prefix "" {
+      policy = "read"
+    }
   EOT
 }
 
