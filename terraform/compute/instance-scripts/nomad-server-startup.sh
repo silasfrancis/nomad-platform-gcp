@@ -209,12 +209,14 @@ service {
   id      = "nomad-${NODE_NAME}"
   address = "${PRIVATE_IP}"
   port    = 4646
+  token   = "${CONSUL_AGENT_TOKEN}"
 
   check {
-    name     = "nomad-metrics"
-    http     = "http://127.0.0.1:4646/v1/metrics?format=prometheus"
-    interval = "10s"
-    timeout  = "5s"
+    name            = "nomad-metrics"
+    http            = "https://127.0.0.1:4646/v1/metrics?format=prometheus"
+    tls_skip_verify = true
+    interval        = "10s"
+    timeout         = "5s"
   }
 }
 EOF

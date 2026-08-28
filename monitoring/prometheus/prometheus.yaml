@@ -47,9 +47,24 @@ scrape_configs:
       - source_labels: [__meta_consul_service]
         target_label: service
 
+  # NOTE: Two separate tls_config blocks below, for two separate TLS
+  # connections this job makes:
+  #   - consul_sd_configs.tls_config — the DISCOVERY call, asking
+  #     Consul's catalog (localhost:8501) where the "nomad" service
+  #     lives. Dials the hostname "localhost", which the cert's SAN
+  #     list already covers — no server_name override needed here.
+  #   - the job-level tls_config — the actual SCRAPE of whatever
+  #     target Consul's catalog returns (the node's real private IP,
+  #     e.g. 10.0.1.6). The leaf cert's SAN list only covers
+  #     DNS names/wildcards and 127.0.0.1, never real private IPs
+  #     (see scripts/generate-and-push-pki.sh), so without server_name here,
+  #     TLS identity verification would fail even though the CA and
+  #     the cert itself are both genuinely correct.
+
   # Nomad's own /metrics endpoint, via Consul catalog SD against
   # the "nomad" service. Nomad API is registered as a consul service
   # on the nomad servers.
+
   - job_name: nomad
     consul_sd_configs:
       - server: "localhost:8501"
@@ -60,7 +75,8 @@ scrape_configs:
         services: ["nomad"]
     scheme: https
     tls_config:
-      ca_file: /etc/prometheus/tls/nomad-ca.pem
+      ca_file: /etc/prometheus/tls/ca.pem
+      server_name: "server.dc-${ENV}.nomad"
     metrics_path: /v1/metrics
     params:
       format: ["prometheus"]
@@ -76,6 +92,7 @@ scrape_configs:
     scheme: https
     tls_config:
       ca_file: /etc/prometheus/tls/ca.pem
+      server_name: "server.dc-${ENV}.consul"
     metrics_path: /v1/agent/metrics
     params:
       format: ["prometheus"]

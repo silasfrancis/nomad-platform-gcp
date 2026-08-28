@@ -16,11 +16,11 @@ entryPoints:
 {% endif %}
   websecure:
     address: ":{{ traefik_instance.https_port }}"
-{% if traefik_instance.tcp_entrypoint %}
+{% if traefik_instance.tcp_entrypoint is defined and traefik_instance.tcp_entrypoint %}
   {{ traefik_instance.tcp_entrypoint.name }}:
     address: ":{{ traefik_instance.tcp_entrypoint.port }}"
 {% endif %}
-{% if traefik_instance.internal_https_port %}
+{% if traefik_instance.internal_https_port is defined and traefik_instance.internal_https_port %}
   # A Second, Separate HTTPS Listener — Deliberately Not Named
   # "websecure" (Every Other Instance's Own Entrypoint Uses That Name)
   # So An Internal-Only Service Tagged Onto This Entrypoint Can Never
