@@ -24,8 +24,12 @@ client {
 
 plugin "docker" {
   config {
-    enabled    = true
-    allow_caps = ["chown", "net_raw", "net_bind_service"]
+    allow_caps = [
+      "chown",
+      "net_raw",
+      "net_bind_service",
+    ]
+
     volumes {
       enabled = true
     }
