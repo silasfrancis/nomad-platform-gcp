@@ -10,7 +10,7 @@ resource "octopusdeploy_process" "this" {
 }
 
 locals {
-  deploy_steps    = ["validate-nomad-job", "deploy-to-nomad", "wait-for-healthy", "smoke-test", "promote-deployment", "notify-slack"]
+  deploy_steps    = ["validate-nomad-job", "deploy-to-nomad", "wait-for-healthy", "promote-deployment", "notify-slack"]
   builtin_feed_id = data.octopusdeploy_feeds.builtin.feeds[0].id
 }
 

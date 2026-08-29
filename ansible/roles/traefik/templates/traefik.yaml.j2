@@ -50,6 +50,7 @@ providers:
   consulCatalog:
     endpoint:
       address: "{% if traefik_instance.catalog_env in ['dev', 'prod'] %}{{ resolved_instance_fqdns[0] }}:8501{% else %}localhost:8500{% endif %}"
+      scheme: "{% if traefik_instance.catalog_env in ['dev', 'prod'] %}https{% else %}http{% endif %}"
       token: "{{ _catalog_token_read.stdout }}"
       tls:
         ca: "{{ traefik_base_config_dir }}/{{ traefik_instance.name }}/tls/ca.pem"

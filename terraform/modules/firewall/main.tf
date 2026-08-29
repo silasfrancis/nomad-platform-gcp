@@ -135,7 +135,7 @@ locals {
         local.cidr["subnet-dev-private"],
         local.cidr["subnet-prod-private"],
       ]
-      allow = [{ protocol = "tcp", ports = ["21000-21255"] }]
+      allow = [{ protocol = "tcp", ports = ["20000-32000"] }] # Nomad dynamic port alloc range
       deny  = []
     }
 
@@ -171,7 +171,7 @@ locals {
       priority            = 1000
       source_ranges       = [local.cidr["subnet-dev-public"]]
       destination_ranges  = [local.cidr["subnet-dev-private"]]
-      allow               = [{ protocol = "tcp", ports = ["8080"] }]
+      allow               = [{ protocol = "tcp", ports = ["20000-32000"] }] # Nomad dynamic port alloc range
       deny                = []
     }
 
@@ -180,7 +180,7 @@ locals {
       priority            = 1000
       source_ranges       = [local.cidr["subnet-prod-public"]]
       destination_ranges  = [local.cidr["subnet-prod-private"]]
-      allow               = [{ protocol = "tcp", ports = ["8080"] }]
+      allow               = [{ protocol = "tcp", ports = ["20000-32000"] }] # Nomad dynamic port alloc range
       deny                = []
     }
 
