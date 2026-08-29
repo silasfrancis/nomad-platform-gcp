@@ -4,15 +4,11 @@
 # Promotes any canary deployment(s) from deploy-to-nomad.sh, and
 # cleanly no-ops for any job that wasn't a canary deploy in the first
 # place.
-
-# NOTE: this checks canary > 0 only, per the agreed design — it does
-# NOT currently check `update.auto_promote`. A job with canary > 0 but
-# auto_promote = true has Nomad promote itself automatically; calling
-# `nomad deployment promote` on one of those will error since it's not
-# awaiting a manual promotion. Worth deciding whether to add an
-# AutoPromote check here before this runs against a real auto-promote
-# job — flagging rather than silently adding untested logic beyond
-# what was asked for.
+# 
+# NOTE: skips both when there's no canary at all, and when there is one
+# but auto_promote = true — Nomad promotes those on its own, and
+# calling `nomad deployment promote` on one manually would error since
+# it's not awaiting a manual promotion.
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 
@@ -34,6 +30,11 @@ for job_id in ${DeployedJobIds}; do
 
   if ! job_has_canary "${job_id}"; then
     echo "[${job_id}] not a canary deployment — nothing to promote."
+    continue
+  fi
+
+  if job_auto_promotes "${job_id}"; then
+    echo "[${job_id}] canary with auto_promote=true — Nomad promotes this on its own, nothing to do here."
     continue
   fi
 

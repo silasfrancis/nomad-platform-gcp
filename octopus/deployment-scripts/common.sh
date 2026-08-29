@@ -63,3 +63,23 @@ job_has_canary() {
   canary_count="$(nomad job inspect -json "${job_id}" | jq -r '[.Job.TaskGroups[].Update.Canary // 0] | max')"
   [ "${canary_count}" -gt 0 ]
 }
+
+# True if any task group with canary > 0 also has auto_promote = true
+# — meaning Nomad promotes it on its own once healthy, with no manual
+# `nomad deployment promote` needed or accepted. Checked separately
+# from job_has_canary since a job can have canary > 0 with either
+# value here; conflating the two would either skip a job that
+# genuinely needs manual promotion, or call promote on one Nomad
+# already handled itself (which errors, since it's not awaiting one).
+#
+# VERIFY: AutoPromote is the PascalCase JSON field name matching the
+# HCL update.auto_promote key, per Nomad's Go-struct-to-JSON naming
+# convention seen elsewhere in this API (Canary, DesiredCanaries,
+# etc.) — not independently confirmed against real inspect output.
+job_auto_promotes() {
+  local job_id="$1"
+  local auto_promote
+  auto_promote="$(nomad job inspect -json "${job_id}" \
+    | jq -r '[.Job.TaskGroups[] | select((.Update.Canary // 0) > 0) | (.Update.AutoPromote // false)] | any')"
+  [ "${auto_promote}" = "true" ]
+}
