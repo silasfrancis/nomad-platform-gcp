@@ -38,6 +38,10 @@ tls {
   https {
     verify_incoming = false  # API accepts server-verified-only clients (Traefik's rootCAs config)
   }
+  grpc {
+    verify_incoming = false  # Consul does not support incoming TLS verification of Envoy sidecars
+  }
+
 }
 
 ui_config {

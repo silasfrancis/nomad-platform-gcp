@@ -6,7 +6,6 @@
 
 locals {
   dummy_token      = "hvs.CAESIJ_placeholder_token_for_testing"
-  dummy_ca_cert    = "-----BEGIN CERTIFICATE-----\nFAKE_CERTIFICATE_FOR_TESTING\n-----END CERTIFICATE-----"
   dummy_webhook    = "https://hooks.slack.com/services/T00/B00/XXXXX"
 }
 
@@ -18,11 +17,6 @@ resource "octopusdeploy_library_variable_set" "platform_shared" {
 data "google_secret_manager_secret_version" "octopus_deploy_token" {
   for_each = var.use_dummy_secrets ? [] : toset(["dev", "prod"])
   secret   = "octopus-deploy-token-${each.key}"
-}
-
-data "google_secret_manager_secret_version" "ca_cert" {
-  for_each = var.use_dummy_secrets ? [] : toset(["dev", "prod"])
-  secret   = "ca-cert-${each.key}"
 }
 
 data "google_secret_manager_secret_version" "slack_webhook_url" {
@@ -107,24 +101,6 @@ resource "octopusdeploy_variable" "nomad_acl_token" {
   }
 }
 
-resource "octopusdeploy_variable" "nomad_ca_cert" {
-  for_each     = toset(["dev", "prod"])
-  owner_id     = octopusdeploy_library_variable_set.platform_shared.id
-  name         = "NomadCaCert"
-  type         = "Sensitive"
-  is_sensitive = true
-
-  sensitive_value = var.use_dummy_secrets ? local.dummy_ca_cert : data.google_secret_manager_secret_version.ca_cert[each.key].secret_data
-
-  scope {
-    environments = [local.env_by_key[each.key]]
-  }
-
-  lifecycle {
-    ignore_changes = [sensitive_value]
-  }
-}
-
 resource "octopusdeploy_variable" "traefik_public_ip" {
   for_each = toset(["dev", "prod"])
 
@@ -196,6 +172,18 @@ resource "octopusdeploy_variable" "slack_webhook_url" {
     ignore_changes = [sensitive_value]
   }
 }
+
+resource "octopusdeploy_variable" "region" {
+  for_each = toset(["dev", "prod"])
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "Region"
+  type     = "String"
+  value    = each.key
+  scope {
+    environments = [local.env_by_key[each.key]]
+  }
+}
+
 
 resource "octopusdeploy_variable" "datacenter" {
   for_each = toset(["dev", "prod"])

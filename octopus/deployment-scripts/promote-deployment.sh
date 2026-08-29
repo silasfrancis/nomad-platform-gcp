@@ -1,52 +1,63 @@
 #!/bin/bash
 # promote-deployment.sh
 #
-# Promotes a canary deployment once wait-for-healthy.sh has confirmed
-# it's healthy. Required for every job using update { canary = N }
-# with auto_promote = false — that's frontend/checkoutservice/
-# cartservice/productcatalogservice (real canary) and metrics-api/
-# nomad-sentinel (native blue-green via canary = count, per this
-# session's redesign away from the earlier #{DeploymentSlot} approach).
-# All 6 set auto_promote = false deliberately — a human/Octopus
-# decides when to cut over, Nomad never does it automatically.
-#
-# Only wire this step into those 6 projects' own Octopus deployment
-# processes. Plain rolling-update jobs (the other 15 across boutique/
-# monitoring/security/operations) have no canary concept at all —
-# there's nothing to promote, and running this against one of them
-# would just fail against a deployment that was never waiting on a
-# promotion in the first place.
+# Promotes any canary deployment(s) from deploy-to-nomad.sh, and
+# cleanly no-ops for any job that wasn't a canary deploy in the first
+# place.
+
+# NOTE: this checks canary > 0 only, per the agreed design — it does
+# NOT currently check `update.auto_promote`. A job with canary > 0 but
+# auto_promote = true has Nomad promote itself automatically; calling
+# `nomad deployment promote` on one of those will error since it's not
+# awaiting a manual promotion. Worth deciding whether to add an
+# AutoPromote check here before this runs against a real auto-promote
+# job — flagging rather than silently adding untested logic beyond
+# what was asked for.
 set -euo pipefail
+source "$(dirname "$0")/common.sh"
 
-: "${NOMAD_ADDR:?NomadApiUrl deployment variable is required}"
-: "${NOMAD_TOKEN:?NomadAclToken deployment variable is required}"
-: "${DeploymentId:?DeploymentId set by deploy-to-nomad.sh is required}"
-
-echo "Promoting deployment ${DeploymentId}..."
-nomad deployment promote -no-color "${DeploymentId}"
-
-echo "Promotion submitted — polling for the old allocations to actually stop..."
+: "${DeployedJobIds:?DeployedJobIds set by deploy-to-nomad.sh is required}"
 
 MAX_ATTEMPTS=30
 SLEEP_SECONDS=10
+overall_status=0
 
-for i in $(seq 1 "${MAX_ATTEMPTS}"); do
-  status="$(nomad deployment status -json "${DeploymentId}" | jq -r '.Status')"
-  echo "Attempt ${i}/${MAX_ATTEMPTS}: deployment status = ${status}"
+for job_id in ${DeployedJobIds}; do
+  deployment_var="DeploymentId__${job_id}"
+  deployment_id="${!deployment_var:-}"
 
-  case "${status}" in
-    successful)
-      echo "Promotion complete — deployment successful."
-      exit 0
-      ;;
-    failed|cancelled)
-      echo "Deployment ${status} after promotion — aborting." >&2
-      exit 1
-      ;;
-  esac
+  if [ -z "${deployment_id}" ]; then
+    echo "No deployment ID recorded for ${job_id} — skipping." >&2
+    overall_status=1
+    continue
+  fi
 
-  sleep "${SLEEP_SECONDS}"
+  if ! job_has_canary "${job_id}"; then
+    echo "[${job_id}] not a canary deployment — nothing to promote."
+    continue
+  fi
+
+  echo "[${job_id}] promoting deployment ${deployment_id}..."
+  nomad deployment promote -no-color "${deployment_id}"
+
+  echo "[${job_id}] promotion submitted — polling for completion..."
+  for i in $(seq 1 "${MAX_ATTEMPTS}"); do
+    status="$(nomad deployment status -json "${deployment_id}" | jq -r '.Status')"
+    echo "  [${job_id}] attempt ${i}/${MAX_ATTEMPTS}: deployment status = ${status}"
+
+    case "${status}" in
+      successful)
+        echo "  [${job_id}] promotion complete."
+        break
+        ;;
+      failed|cancelled)
+        echo "  [${job_id}] deployment ${status} after promotion — aborting." >&2
+        overall_status=1
+        break
+        ;;
+    esac
+    sleep "${SLEEP_SECONDS}"
+  done
 done
 
-echo "Timed out waiting for promoted deployment to complete." >&2
-exit 1
+exit "${overall_status}"

@@ -22,14 +22,20 @@ client {
 {% endif %}
 }
 
+consul {
+  grpc_address = "127.0.0.1:8503"
+  grpc_ca_file = "{{ nomad_tls_dir }}/ca.pem"
+}
+
 plugin "docker" {
   config {
     allow_caps = [
       "chown",
-      "net_raw",
       "net_bind_service",
+      "setgid",
+      "setuid",
     ]
-
+    
     volumes {
       enabled = true
     }

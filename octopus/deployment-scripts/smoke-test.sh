@@ -1,54 +1,75 @@
 #!/bin/bash
 # smoke-test.sh
 #
-# Confirms the newly-deployed service actually responds before treating
-# the release as complete — a job reporting "healthy" to Nomad only
-# means the allocation is running, not that the application inside it
-# is actually serving traffic correctly.
-#
-# FIXED: the original version only ever did an HTTP curl. Checking
-# against the actual job specs, only frontend, metrics-api,
-# nomad-sentinel, and falco-webhook are HTTP — the other 8 boutique
-# services (cartservice, productcatalogservice, currencyservice,
-# paymentservice, shippingservice, checkoutservice, adservice,
-# recommendationservice) all use type = "grpc" health checks in their
-# Consul service registration. A plain curl against a gRPC port
-# doesn't get a meaningful response at all — this would have failed
-# every smoke test for 8 of the 11 boutique services. Now branches on
-# PROTOCOL, matching each service's own health check type.
+# Confirms every newly-deployed service actually responds before
+# treating the release as complete — Nomad reporting an allocation
+# "healthy" only means the process is running, not that it's serving
+# traffic correctly.
+
+# VERIFY: the jq paths below assume `nomad job inspect -json`'s
+# .Job.TaskGroups[].Services[].Checks[].Type field matches the HCL
+# check block's `type` value directly (e.g. "http"/"grpc") — this
+# matches the documented job spec shape but hasn't been checked here
+# against real inspect output; confirm before relying on it in
+# production.
 #
 # grpc_health_probe implements gRPC's standard health-checking
-# protocol (grpc.health.v1.Health) — needs to be present on the
-# runner; not bundled here.
+# protocol (grpc.health.v1.Health) — must be present on the runner;
+# not bundled here.
 set -euo pipefail
+source "$(dirname "$0")/common.sh"
 
-: "${SERVICE_NAME:?service name to check is required}"
-PROTOCOL="${PROTOCOL:-http}"
+: "${DeployedJobIds:?DeployedJobIds set by deploy-to-nomad.sh is required}"
 
-if [ "${PROTOCOL}" = "grpc" ]; then
-  : "${SERVICE_PORT:?SERVICE_PORT is required when PROTOCOL=grpc}"
-  target="${SERVICE_NAME}.service.consul:${SERVICE_PORT}"
-  echo "Smoke testing gRPC health on ${target}..."
+overall_status=0
 
-  if ! command -v grpc_health_probe &> /dev/null; then
-    echo "ERROR: grpc_health_probe not found on this runner." >&2
-    exit 1
+for job_id in ${DeployedJobIds}; do
+  service_names="$(nomad job inspect -json "${job_id}" \
+    | jq -r '[.Job.TaskGroups[].Services[]?.Name] | unique | .[]')"
+
+  if [ -z "${service_names}" ]; then
+    echo "[${job_id}] no Consul services registered by this job — nothing to smoke test."
+    continue
   fi
 
-  if ! grpc_health_probe -addr="${target}"; then
-    echo "Smoke test failed — gRPC health check against ${target} did not report SERVING." >&2
-    exit 1
-  fi
-else
-  url="http://${SERVICE_NAME}.service.consul/health"
-  echo "Smoke testing ${url}..."
+  while IFS= read -r service_name; do
+    protocol="$(nomad job inspect -json "${job_id}" \
+      | jq -r --arg svc "${service_name}" \
+        '[.Job.TaskGroups[].Services[]? | select(.Name == $svc) | .Checks[]?.Type] | first // "http"')"
 
-  status_code="$(curl -s -o /dev/null -w '%{http_code}' "${url}" || echo "000")"
+    if [ "${protocol}" = "grpc" ]; then
+      port="$(consul catalog service "${service_name}" -format=json 2>/dev/null | jq -r '.[0].ServicePort')"
 
-  if [ "${status_code}" != "200" ]; then
-    echo "Smoke test failed — ${url} returned ${status_code}." >&2
-    exit 1
-  fi
-fi
+      if [ -z "${port}" ] || [ "${port}" = "null" ]; then
+        echo "[${job_id}] could not determine port for ${service_name} from Consul catalog." >&2
+        overall_status=1
+        continue
+      fi
 
-echo "Smoke test passed."
+      target="${service_name}.service.consul:${port}"
+      echo "[${job_id}] smoke testing gRPC health on ${target}..."
+
+      if ! command -v grpc_health_probe &> /dev/null; then
+        echo "ERROR: grpc_health_probe not found on this runner." >&2
+        overall_status=1
+        continue
+      fi
+
+      if ! grpc_health_probe -addr="${target}"; then
+        echo "[${job_id}] smoke test failed — gRPC health check against ${target} did not report SERVING." >&2
+        overall_status=1
+      fi
+    else
+      url="http://${service_name}.service.consul/health"
+      echo "[${job_id}] smoke testing ${url}..."
+      status_code="$(curl -s -o /dev/null -w '%{http_code}' "${url}" || echo "000")"
+
+      if [ "${status_code}" != "200" ]; then
+        echo "[${job_id}] smoke test failed — ${url} returned ${status_code}." >&2
+        overall_status=1
+      fi
+    fi
+  done <<< "${service_names}"
+done
+
+exit "${overall_status}"

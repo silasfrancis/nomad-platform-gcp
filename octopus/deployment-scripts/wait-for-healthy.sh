@@ -1,47 +1,64 @@
 #!/bin/bash
 # wait-for-healthy.sh
 #
-# Polls the deployment started by deploy-to-nomad.sh until Nomad
-# reports it running/successful or failed, rather than assuming success
-# the moment the job was submitted.
-#
-# FIXED: the original awk '/^Status/ {print $2}' grabbed the literal
-# "=" sign, not the status value — confirmed against real Nomad output
-# ("Status      = running" splits as $1=Status, $2==, $3=running).
-# Every poll printed an empty/wrong value, so the case statement below
-# never matched anything and this always ran until timeout regardless
-# of the deployment's real outcome. Switched to -json + jq, which
-# doesn't depend on the CLI's column layout at all.
-set -euo pipefail
+# Polls every deployment started by deploy-to-nomad.sh until Nomad
+# reports it healthy or failed, rather than assuming success the
+# moment the jobs were submitted.
 
-: "${NOMAD_ADDR:?NomadApiUrl deployment variable is required}"
-: "${NOMAD_TOKEN:?NomadAclToken deployment variable is required}"
-: "${DeploymentId:?DeploymentId set by deploy-to-nomad.sh is required}"
+set -euo pipefail
+source "$(dirname "$0")/common.sh"
+
+: "${DeployedJobIds:?DeployedJobIds set by deploy-to-nomad.sh is required}"
 
 MAX_ATTEMPTS=30
 SLEEP_SECONDS=10
+overall_status=0
 
-for i in $(seq 1 "${MAX_ATTEMPTS}"); do
-  status="$(nomad deployment status -json "${DeploymentId}" | jq -r '.Status')"
-  echo "Attempt ${i}/${MAX_ATTEMPTS}: deployment status = ${status}"
+for job_id in ${DeployedJobIds}; do
+  deployment_var="DeploymentId__${job_id}"
+  deployment_id="${!deployment_var:-}"
 
-  case "${status}" in
-    successful)
-      echo "Deployment healthy."
-      exit 0
-      ;;
-    # "running" alone isn't terminal for a canary deployment — it
-    # means "waiting to be promoted," which promote-deployment.sh
-    # handles as its own separate step. Only actual terminal failure
-    # states stop this loop early.
-    failed|cancelled)
-      echo "Deployment ${status} — aborting." >&2
-      exit 1
-      ;;
-  esac
+  if [ -z "${deployment_id}" ]; then
+    echo "No deployment ID recorded for ${job_id} — skipping." >&2
+    overall_status=1
+    continue
+  fi
 
-  sleep "${SLEEP_SECONDS}"
+  echo "Watching deployment ${deployment_id} (job ${job_id})..."
+  job_healthy=0
+
+  for i in $(seq 1 "${MAX_ATTEMPTS}"); do
+    status="$(nomad deployment status -json "${deployment_id}" | jq -r '.Status')"
+    echo "  [${job_id}] attempt ${i}/${MAX_ATTEMPTS}: deployment status = ${status}"
+
+    case "${status}" in
+      successful)
+        echo "  [${job_id}] deployment healthy (successful)."
+        job_healthy=1
+        break
+        ;;
+      running)
+        if job_has_canary "${job_id}"; then
+          echo "  [${job_id}] canary healthy, awaiting promotion (handled by promote-deployment.sh next)."
+          job_healthy=1
+          break
+        fi
+        # Plain rolling update still finishing — not terminal, keep polling.
+        ;;
+      failed|cancelled)
+        echo "  [${job_id}] deployment ${status} — aborting." >&2
+        overall_status=1
+        break
+        ;;
+    esac
+
+    sleep "${SLEEP_SECONDS}"
+  done
+
+  if [ "${job_healthy}" -ne 1 ] && [ "${overall_status}" -eq 0 ]; then
+    echo "  [${job_id}] timed out waiting for deployment to report healthy." >&2
+    overall_status=1
+  fi
 done
 
-echo "Timed out waiting for deployment to report healthy." >&2
-exit 1
+exit "${overall_status}"

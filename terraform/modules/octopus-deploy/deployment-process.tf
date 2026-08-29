@@ -10,7 +10,7 @@ resource "octopusdeploy_process" "this" {
 }
 
 locals {
-  deploy_steps = ["validate-nomad-job", "deploy-to-nomad", "wait-for-healthy", "smoke-test", "notify-slack"]
+  deploy_steps    = ["validate-nomad-job", "deploy-to-nomad", "wait-for-healthy", "smoke-test", "promote-deployment", "notify-slack"]
   builtin_feed_id = data.octopusdeploy_feeds.builtin.feeds[0].id
 }
 
@@ -30,7 +30,7 @@ resource "octopusdeploy_process_step" "this" {
 
   primary_package = {
     package_id = each.value.project
-    feed_id = local.builtin_feed_id
+    feed_id    = local.builtin_feed_id
   }
 
   execution_properties = {
@@ -39,6 +39,7 @@ resource "octopusdeploy_process_step" "this" {
     "Octopus.Action.Script.ScriptFileName" = "scripts/${each.value.step}.sh"
   }
 }
+
 resource "octopusdeploy_process_steps_order" "this" {
   for_each   = local.projects
   process_id = octopusdeploy_process.this[each.key].id

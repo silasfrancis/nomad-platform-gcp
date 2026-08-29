@@ -10,7 +10,7 @@ variable "disk_cmek_key_id" {
 
 variable "zone" {
   type        = string
-  default     = "europe-west1-b"
+  default     = "europe-west1-c"
   description = "Zone for the ephemeral build VM. Doesn't need to match where the real instances run — this VM is torn down right after the image is created."
 }
 
