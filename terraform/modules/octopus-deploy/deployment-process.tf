@@ -20,9 +20,10 @@ resource "octopusdeploy_process_step" "this" {
     step    = pair[1]
   } }
 
-  process_id = octopusdeploy_process.this[each.value.project].id
-  name       = each.value.step
-  type       = "Octopus.Script"
+  process_id     = octopusdeploy_process.this[each.value.project].id
+  name           = each.value.step
+  type           = "Octopus.Script"
+  worker_pool_id = octopusdeploy_static_worker_pool.nomad_deployments.id
 
   properties = {
     "Octopus.Action.TargetRoles" = "nomad-cluster"
@@ -34,7 +35,7 @@ resource "octopusdeploy_process_step" "this" {
   }
 
   execution_properties = {
-    "Octopus.Action.RunOnServer"           = "True"
+    "Octopus.Action.RunOnServer"  = "True"
     "Octopus.Action.Script.ScriptSource"   = "Package"
     "Octopus.Action.Script.ScriptFileName" = "scripts/${each.value.step}.sh"
   }

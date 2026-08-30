@@ -22,12 +22,12 @@ terraform {
 }
 
 provider "vault" {
-  address      = var.vault_address
+  address      = "https://vault.platform.lefrancis.org:8443"
   token        = var.vault_token
 }
 
 provider "octopusdeploy" {
-  address = var.octopus_address
+  address = "https://octopus.platform.lefrancis.org:8443"
   api_key = var.octopus_api_key
   space_id = var.octopus_space_id
 }

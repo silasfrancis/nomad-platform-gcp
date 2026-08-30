@@ -5,26 +5,8 @@
 # project directly in projects.tf instead of duplicated here.
 
 locals {
-  dummy_token      = "hvs.CAESIJ_placeholder_token_for_testing"
-  dummy_webhook    = "https://hooks.slack.com/services/T00/B00/XXXXX"
-}
+  environments = toset(["dev"])
 
-resource "octopusdeploy_library_variable_set" "platform_shared" {
-  name        = "platform-shared"
-  description = "Nomad connection details and deployment configuration shared across every project's deployment process."
-}
-
-data "google_secret_manager_secret_version" "octopus_deploy_token" {
-  for_each = var.use_dummy_secrets ? [] : toset(["dev", "prod"])
-  secret   = "octopus-deploy-token-${each.key}"
-}
-
-data "google_secret_manager_secret_version" "slack_webhook_url" {
-  count  = var.use_dummy_secrets ? 0 : 1
-  secret = var.slack_webhook_secret_name
-}
-
-locals {
   env_by_key = {
     dev  = octopusdeploy_environment.dev.id
     prod = octopusdeploy_environment.prod.id
@@ -61,8 +43,29 @@ locals {
   artifact_registry_path = ""
 }
 
+locals {
+  dummy_token      = "hvs.CAESIJ_placeholder_token_for_testing"
+  dummy_webhook    = "https://hooks.slack.com/services/T00/B00/XXXXX"
+}
+
+resource "octopusdeploy_library_variable_set" "platform_shared" {
+  name        = "platform-shared"
+  description = "Nomad connection details and deployment configuration shared across every project's deployment process."
+}
+
+data "google_secret_manager_secret_version" "octopus_deploy_token" {
+  for_each = var.use_dummy_secrets ? [] : local.environments
+  secret   = "octopus-deploy-token-${each.key}"
+}
+
+data "google_secret_manager_secret_version" "slack_webhook_url" {
+  count  = var.use_dummy_secrets ? 0 : 1
+  secret = var.slack_webhook_secret_name
+}
+
+
 resource "octopusdeploy_variable" "environment" {
-  for_each = toset(["dev", "prod"])
+  for_each = local.environments
   owner_id = octopusdeploy_library_variable_set.platform_shared.id
   name     = "Environment"
   type     = "String"
@@ -73,7 +76,7 @@ resource "octopusdeploy_variable" "environment" {
 }
 
 resource "octopusdeploy_variable" "nomad_api_url" {
-  for_each = toset(["dev", "prod"])
+  for_each = local.environments
   owner_id = octopusdeploy_library_variable_set.platform_shared.id
   name     = "NomadApiUrl"
   type     = "String"
@@ -84,7 +87,7 @@ resource "octopusdeploy_variable" "nomad_api_url" {
 }
 
 resource "octopusdeploy_variable" "nomad_acl_token" {
-  for_each     = toset(["dev", "prod"])
+  for_each     = local.environments
   owner_id     = octopusdeploy_library_variable_set.platform_shared.id
   name         = "NomadAclToken"
   type         = "Sensitive"
@@ -102,7 +105,7 @@ resource "octopusdeploy_variable" "nomad_acl_token" {
 }
 
 resource "octopusdeploy_variable" "traefik_public_ip" {
-  for_each = toset(["dev", "prod"])
+  for_each = local.environments
 
   owner_id = octopusdeploy_library_variable_set.platform_shared.id
   name     = "TraefikPublicIp"
@@ -115,7 +118,7 @@ resource "octopusdeploy_variable" "traefik_public_ip" {
 }
 
 resource "octopusdeploy_variable" "traefik_public_port" {
-  for_each = toset(["dev", "prod"])
+  for_each = local.environments
 
   owner_id = octopusdeploy_library_variable_set.platform_shared.id
   name     = "TraefikPublicPort"
@@ -128,7 +131,7 @@ resource "octopusdeploy_variable" "traefik_public_port" {
 }
 
 resource "octopusdeploy_variable" "traefik_internal_ip" {
-  for_each = toset(["dev", "prod"])
+  for_each = local.environments
 
   owner_id = octopusdeploy_library_variable_set.platform_shared.id
   name     = "TraefikInternalIp"
@@ -141,7 +144,7 @@ resource "octopusdeploy_variable" "traefik_internal_ip" {
 }
 
 resource "octopusdeploy_variable" "traefik_internal_port" {
-  for_each = toset(["dev", "prod"])
+  for_each = local.environments
 
   owner_id = octopusdeploy_library_variable_set.platform_shared.id
   name     = "TraefikInternalPort"

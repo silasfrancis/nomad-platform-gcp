@@ -67,3 +67,23 @@ services:
       - {{ octopus_data_dir }}/cache:/cache
       - {{ octopus_data_dir }}/import:/import
       - {{ octopus_data_dir }}/eventExports:/eventExports
+
+  # Worker — Custom Image (worker/Dockerfile, Built/Pushed By
+  # worker/build-push.sh To The Platform Artifact Registry) Extending
+  # octopusdeploy/tentacle With nomad/consul CLI Tooling Baked In, So
+  # Deployment Scripts Calling Those Binaries Don't Have To Run Inside
+  # octopus-server's Own Container. Registers Itself As A Listening
+  # Tentacle (ListeningPort) Into The TargetWorkerPool Named Below.
+  octopus-worker:
+    image: {{ platform_docker_image_registry }}/octopus-worker:${OCTOPUS_WORKER_TAG}
+    container_name: {{ octopus_worker_container_name }}
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: ${ACCEPT_OCTOPUS_EULA}
+      ServerUrl: "http://octopus-server:8080"
+      ServerApiKey: ${ADMIN_API_KEY}
+      ListeningPort: "10933"
+      TargetWorkerPool: ${OCTOPUS_WORKER_POOL}
+      DISABLE_DIND: "Y"
+    depends_on:
+      - octopus-server

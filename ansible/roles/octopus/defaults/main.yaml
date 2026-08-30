@@ -15,6 +15,9 @@ mssql_container_name: "octopus-mssql"
 
 octopus_server_tag: "2026.2.13364"
 octopus_container_name: "octopus-server"
+octopus_worker_container_name: "octopus-worker"
+octopus_worker_tag: ""
+octopus_worker_pool: "nomad-deployments"
 octopus_web_port: 8080
 octopus_tentacle_port: 10943
 
@@ -32,3 +35,5 @@ octopus_privileged: "false"
 mssql_backup_gcs_bucket: " nomad-platform-gcp-europe-west1-platform-artifacts"
 mssql_backup_gcs_prefix: "sql-backups"
 mssql_backup_schedule: "*-*-* 03:00:00"
+
+platform_docker_image_registry: "europe-west1-docker.pkg.dev/nomad-platform-gcp/nomad-platform-gcp"

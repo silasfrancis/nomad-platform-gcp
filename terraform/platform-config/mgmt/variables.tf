@@ -18,21 +18,9 @@ variable "bootstrap_tfstate_key" {
   type = string
 }
 
-variable "vault_address" {
-  type        = string
-  description = "Reached via traefik-internal's mgmt instance (scripts/open-tunnel.sh mgmt tunnels localhost:8443 there)."
-  default     = "https://vault.platform.lefrancis.org:8443"
-}
-
 variable "vault_token" {
   type = string
   sensitive = true
-}
-
-variable "octopus_address" {
-  type    = string
-  description = "Reached via traefik-internal's mgmt instance (scripts/open-tunnel.sh mgmt tunnels localhost:8443 there)."
-  default = "https://octopus.platform.lefrancis.org:8443"
 }
 
 variable "octopus_api_key" {
