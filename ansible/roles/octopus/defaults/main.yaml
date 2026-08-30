@@ -16,7 +16,7 @@ mssql_container_name: "octopus-mssql"
 octopus_server_tag: "2026.2.13364"
 octopus_container_name: "octopus-server"
 octopus_worker_container_name: "octopus-worker"
-octopus_worker_tag: ""
+octopus_worker_tag: "0.0.1"
 octopus_worker_pool: "nomad-deployments"
 octopus_web_port: 8080
 octopus_tentacle_port: 10943

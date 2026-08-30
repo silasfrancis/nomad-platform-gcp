@@ -1,97 +1,83 @@
 variable "project_id" {
-  description = "GCP project ID"
-  type        = string
+  type = string
 }
 
 variable "region" {
-  description = "Primary GCP region for all resources"
-  type        = string
+  type = string
 }
 
 variable "additional_labels" {
-  type        = map(string)
-  description = "Additional labels to apply to the repository."
-  default     = {}
+  type    = map(string)
+  default = {}
 }
 
 variable "environment" {
-  description = <<-EOT
-    Environment label applied to resources as a label fallback.
-    Bootstrap resources are shared across dev and prod so this defaults
-    to "shared". Override per bucket in the buckets map if needed.
-  EOT
-  type        = string
-  default     = "shared"
+  type    = string
+  default = "shared"
 }
 
-
 variable "storage_cmek" {
-  description = <<-EOT
-    Full resource ID of the KMS key used for storage encryption.
-    Format: projects/<project>/locations/<region>/keyRings/<ring>/cryptoKeys/<key>
-    Output from the kms module after bootstrap applies.
-    Passed in after first apply or read from remote state in subsequent layers.
-  EOT
-  type        = string
-  default     = ""
-  # Default empty so bootstrap can create the key and bucket in one apply.
-  # The bucket resource depends_on the KMS IAM binding so ordering is safe.
-  # If you want to pass an existing key from a previous apply, set this.
+  type    = string
+  default = ""
 }
 
 variable "backup_retention_days" {
-  description = <<-EOT
-    Default number of days to retain objects across all buckets.
-    Individual buckets override this via backup_retention_days in the buckets map.
-  EOT
-  type        = number
-  default     = 30
+  type    = number
+  default = 30
 }
 
-# ── Bucket IAM members ────────────────────────────────────────────────────────
-# These are passed as variables rather than hardcoded so that:
-#   - SA emails (known only after bootstrap creates them) can be passed in
-#   - Additional members can be added via tfvars without touching locals
-#   - CI pipelines can inject members at apply time
-#
-# All default to empty list — no members are bound unless explicitly set.
-
-variable "platform_artifacts_creator_members" {
+variable "buckets" {
   description = <<-EOT
-    IAM members granted roles/storage.objectCreator on the platform-artifacts bucket.
-    Typically: management-vm-sa (backup writes) and nomad-client-sa (pg_dump writes).
-    Format: ["serviceAccount:x@project.iam.gserviceaccount.com"]
-  EOT
-  type        = list(string)
-  default     = []
-}
+    Map of GCS buckets configurations, properties, and IAM policies.
+    Each bucket key acts as the resource name unless 'name_override' is specified.
 
-variable "platform_artifacts_viewer_members" {
-  description = <<-EOT
-    IAM members granted roles/storage.objectViewer on the platform-artifacts bucket.
-    Typically: management-vm-sa (backup reads for restore).
-    Format: ["serviceAccount:x@project.iam.gserviceaccount.com"]
-  EOT
-  type        = list(string)
-  default     = []
-}
+    Example — defining buckets with distinct retention periods and custom IAM roles:
+      buckets = {
+        "my-project-us-central1-platform-artifacts" = {
+          backup_retention_days = 90
+          enable_tiering        = true
+          labels = {
+            environment = "shared"
+            purpose     = "platform-backups"
+          }
+          iam = {
+            "roles/storage.objectCreator" = {
+              members = ["serviceAccount:management-vm-sa@project.iam.gserviceaccount.com"]
+            }
+            "roles/storage.objectViewer" = {
+              members = ["serviceAccount:management-vm-sa@project.iam.gserviceaccount.com"]
+            }
+          }
+        }
+      }
 
-variable "cicd_artifacts_creator_members" {
-  description = <<-EOT
-    IAM members granted roles/storage.objectCreator on the ci-cd-artifacts bucket.
-    Typically: management-vm-sa (GitHub runner pushes build artifacts).
-    Format: ["serviceAccount:x@project.iam.gserviceaccount.com"]
+    Custom roles or conditions can also be supplied per IAM binding map entry.
   EOT
-  type        = list(string)
-  default     = []
-}
-
-variable "cicd_artifacts_viewer_members" {
-  description = <<-EOT
-    IAM members granted roles/storage.objectViewer on the ci-cd-artifacts bucket.
-    Typically: nomad-client-sa (client nodes read build artifacts).
-    Format: ["serviceAccount:x@project.iam.gserviceaccount.com"]
-  EOT
-  type        = list(string)
-  default     = []
+  type = map(object({
+    name_override             = optional(string)
+    storage_class             = optional(string)
+    kms_key_id                = optional(string)
+    versioning_enabled        = optional(bool)
+    soft_delete_retention     = optional(number)
+    force_destroy             = optional(bool)
+    deletion_policy           = optional(string)
+    backup_retention_days     = optional(number)
+    enable_tiering            = optional(bool)
+    override_default_iam      = optional(bool)
+    logging = optional(object({
+      enabled    = bool
+      log_bucket = string
+      prefix     = string
+    }))
+    labels = optional(map(string))
+    iam = optional(map(object({
+      members   = list(string)
+      condition = optional(object({
+        title       = string
+        description = optional(string)
+        expression  = string
+      }))
+    })))
+  }))
+  default = {}
 }

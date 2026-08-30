@@ -1,38 +1,13 @@
 locals {    
-  artifact_registry_iam = {
-    "roles/artifactregistry.writer" = {
-      members = toset(concat(
-        # Default members — always granted writer on this repo
-        [],
-        # Explicit members from tfvars — typically management-vm-sa (GitHub runner)
-        var.artifact_registry_writer_members
-      ))
-    }
-    "roles/artifactregistry.reader" = {
-      members = toset(concat(
-        # Default members — always granted reader on this repo
-        [],
-        # Explicit members from tfvars — typically nomad-client-sa (image pulls)
-        var.artifact_registry_reader_members
-      ))
-    }
-  }
-
-  # Merge with any additional roles passed in via variable.
-  # Allows adding roles like artifactregistry.repoAdmin without touching locals.
-  artifact_registry_iam_merged = merge(
-    local.artifact_registry_iam,
-    var.additional_registry_iam
-  )
-
-  # Flatten to (role, member) pairs for for_each on iam_member resource.
-  # Key format: "<role_short>/<member>" — readable in state file.
-  artifact_registry_iam_flat = merge([
-    for role, config in local.artifact_registry_iam_merged : {
+  # Flatten var.repository_iam from role -> {members, condition}
+  # into individual (role, member) pairs for google_artifact_registry_repository_iam_member.
+  repository_iam_flat = merge([
+    for role, config in var.repository_iam : {
       for member in config.members :
-      "${replace(role, "roles/artifactregistry.", "")}/${replace(member, "serviceAccount:", "")}" => {
-        role   = role
-        member = member
+      "${replace(role, "roles/artifactregistry.", "")}/${replace(replace(member, "serviceAccount:", ""), "user:", "")}" => {
+        role      = role
+        member    = member
+        condition = config.condition
       }
     }
   ]...)
@@ -45,7 +20,7 @@ resource "google_artifact_registry_repository" "platform" {
   format        = "DOCKER"
   description   = "Platform Docker images — nomad-sentinel, metrics-api, Online Boutique services (13 total)"
 
-  kms_key_name = var.storage_cmek
+  kms_key_name    = var.storage_cmek
   deletion_policy = "PREVENT"
 
   docker_config {
@@ -68,11 +43,20 @@ resource "google_artifact_registry_repository" "platform" {
 }
 
 resource "google_artifact_registry_repository_iam_member" "platform" {
-  for_each = local.artifact_registry_iam_flat
+  for_each = local.repository_iam_flat
 
   project    = var.project_id
   location   = var.region
   repository = google_artifact_registry_repository.platform.name
   role       = each.value.role
   member     = each.value.member
+
+  dynamic "condition" {
+    for_each = each.value.condition != null ? [each.value.condition] : []
+    content {
+      title       = condition.value.title
+      description = condition.value.description
+      expression  = condition.value.expression
+    }
+  }
 }

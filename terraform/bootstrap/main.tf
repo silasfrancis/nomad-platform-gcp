@@ -136,31 +136,61 @@ module "kms" {
 }
 
 # GCS Buckets
-
 module "gcs_bucket" {
   source = "../modules/gcs"
 
-  project_id                         = var.project_id
-  region                             = var.region
-  additional_labels                  = local.labels
-  environment                        = var.environment
-  storage_cmek                       = module.kms.kms_keys["platform/storage-cmek"].id
-  platform_artifacts_creator_members = [
-    module.service_account.service_accounts["management-vm-sa"].member,
-    module.service_account.service_accounts["nomad-client-sa-prod"].member,
-    module.service_account.service_accounts["nomad-client-sa-dev"].member,
-  ]
-  platform_artifacts_viewer_members = [
-    module.service_account.service_accounts["management-vm-sa"].member,
-    module.service_account.service_accounts["nomad-client-sa-prod"].member,
-    module.service_account.service_accounts["nomad-client-sa-dev"].member,
-  ]
-  cicd_artifacts_creator_members = [
-    module.service_account.service_accounts["management-vm-sa"].member
-  ]
-  cicd_artifacts_viewer_members = [
-    module.service_account.service_accounts["management-vm-sa"].member
-  ]
+  project_id        = var.project_id
+  region            = var.region
+  additional_labels = local.labels
+  environment       = var.environment
+  storage_cmek      = module.kms.kms_keys["platform/storage-cmek"].id
+
+  buckets = {
+    "${var.project_id}-${var.region}-platform-artifacts" = {
+      backup_retention_days = 90
+      enable_tiering        = true
+      labels = {
+        environment = "shared"
+        purpose     = "platform-backups"
+      }
+      iam = {
+        "roles/storage.objectCreator" = {
+          members = [
+            module.service_account.service_accounts["management-vm-sa"].member,
+            module.service_account.service_accounts["nomad-client-sa-prod"].member,
+            module.service_account.service_accounts["nomad-client-sa-dev"].member,
+          ]
+        }
+        "roles/storage.objectViewer" = {
+          members = [
+            module.service_account.service_accounts["management-vm-sa"].member,
+            module.service_account.service_accounts["nomad-client-sa-prod"].member,
+            module.service_account.service_accounts["nomad-client-sa-dev"].member,
+          ]
+        }
+      }
+    }
+
+    "${var.project_id}-${var.region}-ci-cd-artifacts" = {
+      backup_retention_days = 30
+      enable_tiering        = false
+      labels = {
+        purpose = "ci-cd-artifacts"
+      }
+      iam = {
+        "roles/storage.objectCreator" = {
+          members = [
+            module.service_account.service_accounts["management-vm-sa"].member
+          ]
+        }
+        "roles/storage.objectViewer" = {
+          members = [
+            module.service_account.service_accounts["management-vm-sa"].member
+          ]
+        }
+      }
+    }
+  }
 
   depends_on = [ 
     google_project_service.apis,
@@ -169,32 +199,36 @@ module "gcs_bucket" {
 }
 
 # Artifact Registry
-
 module "artifact_registry" {
   source = "../modules/artifact-registry"
 
-  project_id                       = var.project_id
-  region                           = var.region
-  artifact_registry_repo           = local.project
-  storage_cmek                     = module.kms.kms_keys["platform/storage-cmek"].id
-  artifact_registry_writer_members = [
-    module.service_account.service_accounts["management-vm-sa"].member
-  ]
-  artifact_registry_reader_members = [
-    module.service_account.service_accounts["management-vm-sa"].member,
-    module.service_account.service_accounts["nomad-client-sa-prod"].member,
-    module.service_account.service_accounts["nomad-client-sa-dev"].member,
-  ]
-  additional_registry_iam          = {}
-  immutable_tags                   = true
-  additional_labels                = local.labels
+  project_id             = var.project_id
+  region                 = var.region
+  artifact_registry_repo = local.project
+  storage_cmek           = module.kms.kms_keys["platform/storage-cmek"].id
+  immutable_tags         = true
+  additional_labels      = local.labels
+
+  repository_iam = {
+    "roles/artifactregistry.writer" = {
+      members = [
+        module.service_account.service_accounts["management-vm-sa"].member
+      ]
+    }
+    "roles/artifactregistry.reader" = {
+      members = [
+        module.service_account.service_accounts["management-vm-sa"].member,
+        module.service_account.service_accounts["nomad-client-sa-prod"].member,
+        module.service_account.service_accounts["nomad-client-sa-dev"].member,
+      ]
+    }
+  }
 
   depends_on = [ 
     google_project_service.apis,
     module.kms 
   ]
 }
-
 # Secret Manager
 #
 # Four tiers, split by who actually reads a secret rather than by vague
