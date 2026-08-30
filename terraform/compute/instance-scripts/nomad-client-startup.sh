@@ -46,15 +46,30 @@ get_metadata() {
 }
 
 # --- Values Supplied By Terraform Via Instance Metadata ---
-ENVIRONMENT="$(get_metadata env)"                 # "dev" or "prod"
-DATACENTER="$(get_metadata datacenter)"           # "dc-dev" or "dc-prod"
-NODE_POOL_TYPE="$(get_metadata node_pool_type)"   # "on-demand" or "spot"
-NODE_CLASS="$(get_metadata node_class)"           # "critical" or "preemptible"
+ENVIRONMENT="$(get_metadata env)"
+DATACENTER="$(get_metadata datacenter)"
+NODE_POOL_TYPE="$(get_metadata node_pool_type)"
+NODE_CLASS="$(get_metadata node_class)"
+
+# --- Values Supplied By the Compute Engine Metadata Server ---
+ZONE="$(curl -sf -H "${METADATA_HEADER}" \
+  "${METADATA_URL}/zone" | awk -F/ '{print $NF}')"
+
+REGION="${ZONE%-[a-z]}"
 
 PRIVATE_IP="$(curl -sf -H "${METADATA_HEADER}" \
   "${METADATA_URL}/network-interfaces/0/ip")"
 
 NODE_NAME="$(hostname)"
+
+printf 'environment=%s\n' "$ENVIRONMENT"
+printf 'datacenter=%s\n' "$DATACENTER"
+printf 'node_pool_type=%s\n' "$NODE_POOL_TYPE"
+printf 'node_class=%s\n' "$NODE_CLASS"
+printf 'zone=%s\n' "$ZONE"
+printf 'region=%s\n' "$REGION"
+printf 'private_ip=%s\n' "$PRIVATE_IP"
+printf 'node_name=%s\n' "$NODE_NAME"
 
 GCP_PROJECT="$(curl -sf -H "${METADATA_HEADER}" \
   "http://metadata.google.internal/computeMetadata/v1/project/project-id")"
@@ -232,5 +247,8 @@ FALCO_WEBHOOK_URL="https://falco-webhook-${ENVIRONMENT}.platform.lefrancis.org:$
 sed -i "s|__FALCO_WEBHOOK_URL__|${FALCO_WEBHOOK_URL}|g" /etc/falco/falco.yaml
 
 systemctl restart falco
+
+# Configure Docker to use gcloud as a credential helper for Artifact Registry
+gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
 
 echo "[nomad-client-startup] Done."
