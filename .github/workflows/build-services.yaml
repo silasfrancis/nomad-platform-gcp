@@ -65,7 +65,7 @@ jobs:
           file: "Dockerfile"
           push: false
           load: true
-          tags: "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
+          tags: "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -74,7 +74,7 @@ jobs:
         id: trivy-scan
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
-          image-ref: "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
+          image-ref: "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
           format: "json"
           output: "${{ matrix.items.name }}-trivy-results.json"
           exit-code: "1"
@@ -88,7 +88,7 @@ jobs:
         if: failure() && steps.trivy-scan.outcome == 'failure'
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
-          image-ref: "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
+          image-ref: "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
           format: "table"
           exit-code: "0"
           ignore-unfixed: true
@@ -110,7 +110,7 @@ jobs:
           context: "${{ matrix.items.path }}"
           file: "Dockerfile"
           push: true
-          tags: "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
+          tags: "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -125,12 +125,12 @@ jobs:
           echo "IMAGE_DIGEST=$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Sign image with Cosign
-        run: cosign sign --yes "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
+        run: cosign sign --yes "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
 
       - name: Verify Image Signature
         run: |
           for i in 1 2 3 4 5; do
-            if cosign verify "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
+            if cosign verify "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
               --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
               --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
               exit 0
@@ -146,12 +146,12 @@ jobs:
           cosign attest --yes \
           --predicate '${{ matrix.items.name }}-trivy-results.json' \
           --type vuln \
-          "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
+          "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
 
       - name: Verify scan attestation
         run: |
           for i in 1 2 3 4 5; do
-            if cosign verify-attestation "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
+            if cosign verify-attestation "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
               --type vuln \
               --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
               --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
@@ -169,7 +169,7 @@ jobs:
           cat > /tmp/build-metadata/${{ matrix.items.name }}-metadata.json << EOF
           {
             "service": "${{ matrix.items.name }}",
-            "image_repo": "${ARTIFACT_REGISTRY}/${{ matrix.items.name }}",
+            "image_repo": "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}",
             "image_tag": "${{ env.SHORT_SHA }}",
             "image_digest": "${{ steps.get_digest.outputs.IMAGE_DIGEST }}",
             "scan_report": "gs://${{ env.CICD_BUCKET }}/security-scans/trivy/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ matrix.items.name }}-trivy-results.json"
