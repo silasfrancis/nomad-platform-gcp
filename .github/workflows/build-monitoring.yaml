@@ -31,7 +31,7 @@ jobs:
 
   split-nomad-sentinel:
     needs: get-matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       other_tools: ${{ steps.split.outputs.other_tools }}
       nomad_sentinel_changed: ${{ steps.split.outputs.nomad_sentinel_changed }}
@@ -48,7 +48,7 @@ jobs:
   test-nomad-sentinel:
     needs: split-nomad-sentinel
     if: needs.split-nomad-sentinel.outputs.nomad_sentinel_changed == 'true'
-    runs-on: nomad-platform-runner
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
 
@@ -101,7 +101,7 @@ jobs:
   build:
     needs: split-nomad-sentinel
     if: fromJson(needs.split-nomad-sentinel.outputs.other_tools).items[0] != null
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x64]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.split-nomad-sentinel.outputs.other_tools) }}
@@ -350,7 +350,7 @@ jobs:
     if: |
       needs.split-nomad-sentinel.outputs.nomad_sentinel_changed == 'true' &&
       needs.test-nomad-sentinel.result == 'success'
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x64]
     env:
       TOOL_NAME: nomad-sentinel
       TOOL_PATH: monitoring/nomad-sentinel
@@ -585,7 +585,7 @@ jobs:
       always() &&
       (contains(fromJson('["success", "failure"]'), needs.build.result) ||
        contains(fromJson('["success", "failure"]'), needs.build-nomad-sentinel.result))
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x64]
     env:
       CICD_BUCKET: ${{ vars.CICD_ARTIFACT_BUCKET }}
     steps:

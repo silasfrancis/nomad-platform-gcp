@@ -24,7 +24,7 @@ jobs:
   build:
     needs: get-matrix
     if: fromJson(needs.get-matrix.outputs.matrix).items[0] != null
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x64]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.get-matrix.outputs.matrix) }}
@@ -260,7 +260,7 @@ jobs:
   publish-build-manifest:
     needs: build
     if: ${{ contains(fromJson('["success", "failure"]'), needs.build.result) }}
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x64]
     env:
       CICD_BUCKET: ${{ vars.CICD_ARTIFACT_BUCKET }}
     steps:

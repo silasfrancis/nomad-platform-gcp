@@ -14,7 +14,7 @@ on:
 
 jobs:
   filter-matrix:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -93,7 +93,7 @@ jobs:
             fi
           done
 
-          FINAL_MATRIX=$(jq -n --argjson items "$CHANGED_ITEMS" '{items: $items}')
+          FINAL_MATRIX=$(jq -cn --argjson items "$CHANGED_ITEMS" '{items: $items}')
 
           echo "Generated Matrix: $FINAL_MATRIX"
           echo "matrix=$FINAL_MATRIX" >> "$GITHUB_OUTPUT"
