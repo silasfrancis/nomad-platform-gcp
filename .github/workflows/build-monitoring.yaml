@@ -83,6 +83,7 @@ jobs:
         with:
           url: ${{ vars.VAULT_ADDRESS }}
           method: jwt
+          path: ${{ vars.VAULT_JWT_PATH }}
           role: ${{ vars.VAULT_CI_ROLE }}
           secrets: |
             kv/data/cicd/nomad-sentinel gemini_api_key | GEMINI_API_KEY ;
@@ -121,6 +122,7 @@ jobs:
         with:
           url: ${{ vars.VAULT_ADDRESS }}
           method: jwt
+          path: ${{ vars.VAULT_JWT_PATH }}
           role: ${{ vars.VAULT_CI_ROLE }}
           secrets: |
             kv/data/cicd/octopus service_account_id | OCTOPUS_SERVICE_ACCOUNT_ID ;
@@ -133,6 +135,7 @@ jobs:
         with:
           url: ${{ vars.VAULT_ADDRESS }}
           method: jwt
+          path: ${{ vars.VAULT_JWT_PATH }}
           role: ${{ vars.VAULT_CI_ROLE }}
           secrets: |
             kv/data/cicd/slack webhook_url | SLACK_WEBHOOK_URL
@@ -370,6 +373,7 @@ jobs:
         with:
           url: ${{ vars.VAULT_ADDRESS }}
           method: jwt
+          path: ${{ vars.VAULT_JWT_PATH }}
           role: ${{ vars.VAULT_CI_ROLE }}
           secrets: |
             kv/data/cicd/octopus service_account_id | OCTOPUS_SERVICE_ACCOUNT_ID ;

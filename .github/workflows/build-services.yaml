@@ -43,6 +43,7 @@ jobs:
         with:
           url: ${{ vars.VAULT_ADDRESS }}
           method: jwt
+          path: ${{ vars.VAULT_JWT_PATH }}
           role: ${{ vars.VAULT_CI_ROLE }}
           secrets: |
             kv/data/cicd/octopus service_account_id | OCTOPUS_SERVICE_ACCOUNT_ID ;
