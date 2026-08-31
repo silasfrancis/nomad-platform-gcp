@@ -41,7 +41,7 @@ jobs:
           secrets: |
             kv/data/cicd/octopus service_account_id | OCTOPUS_SERVICE_ACCOUNT_ID ;
             kv/data/cicd/octopus space | OCTOPUS_SPACE
-            kv/data/cicd/slack webhook | SLACK_WEBHOOK_URL
+            kv/data/cicd/slack webhook_url | SLACK_WEBHOOK_URL
 
       - name: Set short SHA
         run: |
@@ -53,41 +53,41 @@ jobs:
           cp octopus/deployment-scripts/*.sh release-package/scripts/
           cp "${{ matrix.items.job_spec }}" release-package/
 
-      - name: Login To Octopus
-        uses: OctopusDeploy/login@e39e03d07630f363bdccd6c7ad4eb28e0ea8a184
-        with:
-          server: ${{ vars.OCTOPUS_DEPLOY_SERVER }}
-          service_account_id: ${{ env.OCTOPUS_SERVICE_ACCOUNT_ID }}
+      # - name: Login To Octopus
+      #   uses: OctopusDeploy/login@e39e03d07630f363bdccd6c7ad4eb28e0ea8a184
+      #   with:
+      #     server: ${{ vars.OCTOPUS_DEPLOY_SERVER }}
+      #     service_account_id: ${{ env.OCTOPUS_SERVICE_ACCOUNT_ID }}
 
-      - name: Create Zip Package
-        id: zip
-        uses: OctopusDeploy/create-zip-package-action@18a23ace1d3d51bc21429a1628e50acc36080400
-        with:
-          package_id: "${{ matrix.items.octopus_project }}"
-          version: "${{ matrix.items.name }}-${{ env.SHORT_SHA }}"
-          base_path: release-package
-          output_folder: packaged
-          files: |
-            **/*
+      # - name: Create Zip Package
+      #   id: zip
+      #   uses: OctopusDeploy/create-zip-package-action@18a23ace1d3d51bc21429a1628e50acc36080400
+      #   with:
+      #     package_id: "${{ matrix.items.octopus_project }}"
+      #     version: "${{ matrix.items.name }}-${{ env.SHORT_SHA }}"
+      #     base_path: release-package
+      #     output_folder: packaged
+      #     files: |
+      #       **/*
 
-      - name: Push Package To Octopus
-        uses: OctopusDeploy/push-package-action@39ed2af62de5aeb10692eb62cae1e3a333f0c2f5
-        with:
-          packages: "${{ steps.zip.outputs.package_file_path }}"
+      # - name: Push Package To Octopus
+      #   uses: OctopusDeploy/push-package-action@39ed2af62de5aeb10692eb62cae1e3a333f0c2f5
+      #   with:
+      #     packages: "${{ steps.zip.outputs.package_file_path }}"
 
-      - name: Create Octopus Release
-        uses: OctopusDeploy/create-release-action@4bd7d595da7f803e467d41c32fa0b5dbb9f222dc
-        with:
-          project: "${{ matrix.items.octopus_project }}"
-          release_number: "${{ env.SHORT_SHA }}" # Release number is used as an octopus deploy variable in nomad job templates (#{ImageTag})
-          packages: "${{ matrix.items.octopus_project }}:${{ matrix.items.name }}-${{ env.SHORT_SHA }}"
-        # No deploy step: Dev's lifecycle phase has
-        # automatic_deployment_targets = [dev], so release creation alone
-        # triggers an automatic deploy to Dev. Production is manual
-        # approval in the Octopus UI only. Applies even for the 3
-        # periodic batch jobs — autodeploy to Dev just means the job
-        # gets (re-)registered with Nomad's scheduler immediately rather
-        # than waiting for a human.
+      # - name: Create Octopus Release
+      #   uses: OctopusDeploy/create-release-action@4bd7d595da7f803e467d41c32fa0b5dbb9f222dc
+      #   with:
+      #     project: "${{ matrix.items.octopus_project }}"
+      #     release_number: "${{ env.SHORT_SHA }}" # Release number is used as an octopus deploy variable in nomad job templates (#{ImageTag})
+      #     packages: "${{ matrix.items.octopus_project }}:${{ matrix.items.name }}-${{ env.SHORT_SHA }}"
+      #   # No deploy step: Dev's lifecycle phase has
+      #   # automatic_deployment_targets = [dev], so release creation alone
+      #   # triggers an automatic deploy to Dev. Production is manual
+      #   # approval in the Octopus UI only. Applies even for the 3
+      #   # periodic batch jobs — autodeploy to Dev just means the job
+      #   # gets (re-)registered with Nomad's scheduler immediately rather
+      #   # than waiting for a human.
 
       - name: Send Slack notification on release failure
         if: failure()
