@@ -124,7 +124,7 @@ jobs:
           role: ${{ vars.VAULT_CI_ROLE }}
           secrets: |
             kv/data/cicd/octopus service_account_id | OCTOPUS_SERVICE_ACCOUNT_ID ;
-            kv/data/cicd/octopus space | OCTOPUS_SPACE
+            kv/data/cicd/octopus space | OCTOPUS_SPACE ;
             kv/data/cicd/slack webhook_url | SLACK_WEBHOOK_URL
 
       - name: Fetch Slack Webhook Only (grafana build report - not deployed via octopus)
@@ -373,7 +373,7 @@ jobs:
           role: ${{ vars.VAULT_CI_ROLE }}
           secrets: |
             kv/data/cicd/octopus service_account_id | OCTOPUS_SERVICE_ACCOUNT_ID ;
-            kv/data/cicd/octopus space | OCTOPUS_SPACE
+            kv/data/cicd/octopus space | OCTOPUS_SPACE ;
             kv/data/cicd/slack webhook_url | SLACK_WEBHOOK_URL
 
       - name: Set short SHA and Build ID

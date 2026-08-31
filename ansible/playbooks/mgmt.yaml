@@ -9,12 +9,12 @@
   vars:
     docker_extra_group_users: ["gh-runner"]
     common_install_gcloud_cli: true
-  # roles:
+  roles:
   #   - common
-  #   - docker
-  #   - vault
-  #   - github-runner
-  tasks:
+    # - docker
+    # - vault
+    - github-runner
+  # tasks:
     # - name: Mount Docker Data Disk On mgmt-vm
     #   ansible.builtin.include_role:
     #     name: docker
@@ -27,9 +27,9 @@
     #     name: vault
     #     tasks_from: backup
 
-    - name: Octopus Deploy Setup And Configuration
-      ansible.builtin.include_role:
-        name: octopus
+    # - name: Octopus Deploy Setup And Configuration
+    #   ansible.builtin.include_role:
+    #     name: octopus
 
     # - name: Octopus Deploy Backup Service On mgmt-vm
     #   ansible.builtin.include_role:

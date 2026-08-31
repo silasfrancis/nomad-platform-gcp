@@ -1,9 +1,4 @@
 ---
-# Registration Tokens Are ~1 Hour-Lived And Fetched Fresh Every Run — Never
-# Stored. The Long-Lived github-bot-pat Secret (Manually Seeded Into
-# Secret Manager Per Francis's Instruction) Is What's Actually Persisted,
-# And Only In Secret Manager, Never On Disk On The VM.
-
 - name: Create Github Runner Group
   ansible.builtin.group:
     name: "{{ github_runner_user }}"
@@ -98,16 +93,21 @@
   ansible.builtin.command: "./svc.sh status"
   args:
     chdir: "{{ github_runner_home }}"
+  become_user: "{{ github_runner_user }}"
   register: runner_svc_status
   failed_when: false
   changed_when: false
 
-- name: Install And Start The Runner Service (Only If Not Already Installed)
-  ansible.builtin.command: "{{ item }}"
+- name: Install The Runner Service As gh-runner (Only If Not Already Installed)
+  ansible.builtin.command: "./svc.sh install {{ github_runner_user }}"
   args:
     chdir: "{{ github_runner_home }}"
-  loop:
-    - "./svc.sh install"
-    - "./svc.sh start"
+  when: "'active' not in runner_svc_status.stdout"
+  changed_when: true
+
+- name: Start The Runner Service (Only If Not Already Installed)
+  ansible.builtin.command: "./svc.sh start"
+  args:
+    chdir: "{{ github_runner_home }}"
   when: "'active' not in runner_svc_status.stdout"
   changed_when: true
