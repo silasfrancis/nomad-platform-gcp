@@ -145,6 +145,10 @@ jobs:
           echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
           echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
 
+      - name: Configure Docker Auth for Artifact Registry
+        run: |
+          gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://europe-west1-docker.pkg.dev
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
@@ -385,6 +389,10 @@ jobs:
         run: |
           echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
           echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
+
+      - name: Configure Docker Auth for Artifact Registry
+        run: |
+          gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://europe-west1-docker.pkg.dev
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
