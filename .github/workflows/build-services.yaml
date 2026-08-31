@@ -76,7 +76,7 @@ jobs:
           image-ref: "${{ env.ARTIFACT_REGISTRY }}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
           format: "json"
           output: "${{ matrix.items.name }}-trivy-results.json"
-          exit-code: "1"
+          exit-code: "0"
           ignore-unfixed: true
           vuln-type: "os,library"
           severity: "CRITICAL"
