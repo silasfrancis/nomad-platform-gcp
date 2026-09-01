@@ -146,3 +146,25 @@ resource "google_storage_bucket" "buckets" {
     }
   }
 }
+
+resource "google_storage_bucket_iam_member" "bucket_iam" {
+  for_each = local.bucket_iam_bindings
+
+  bucket = each.value.bucket_name
+  role   = each.value.role
+  member = each.value.member
+
+  dynamic "condition" {
+    for_each = each.value.condition != null ? [each.value.condition] : []
+
+    content {
+      title       = condition.value.title
+      description = try(condition.value.description, null)
+      expression  = condition.value.expression
+    }
+  }
+
+  depends_on = [
+    google_storage_bucket.buckets
+  ]
+}

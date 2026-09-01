@@ -1,0 +1,51 @@
+name: "Slack Failure Notification"
+description: "Posts a failure notification to Slack via incoming webhook"
+
+inputs:
+  webhook-url:
+    required: true
+  item-label:
+    description: "Field label, e.g. Tool, Service, Project"
+    required: true
+  item-name:
+    description: "The failed item's name, e.g. matrix.items.name"
+    required: true
+  sha:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Send Slack notification on failure
+      uses: slackapi/slack-github-action@af78098f536edbc4de71162a307590698245be95
+      with:
+        payload: |
+          {
+            "text": "❌ *${{ github.workflow }}* — `${{ inputs.item-name }}` failed on `${{ github.ref_name }}`",
+            "attachments": [{
+              "color": "danger",
+              "fields": [
+                {
+                  "title": "${{ inputs.item-label }}",
+                  "value": "${{ inputs.item-name }}",
+                  "short": true
+                },
+                {
+                  "title": "SHA",
+                  "value": "${{ inputs.sha }}",
+                  "short": true
+                },
+                {
+                  "title": "Actor",
+                  "value": "${{ github.actor }}",
+                  "short": true
+                },
+                {
+                  "title": "Run",
+                  "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              ]
+            }]
+          }
+        webhook: ${{ inputs.webhook-url }}
+        webhook-type: incoming-webhook

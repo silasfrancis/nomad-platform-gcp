@@ -154,14 +154,7 @@ module "gcs_bucket" {
         purpose     = "platform-backups"
       }
       iam = {
-        "roles/storage.objectCreator" = {
-          members = [
-            module.service_account.service_accounts["management-vm-sa"].member,
-            module.service_account.service_accounts["nomad-client-sa-prod"].member,
-            module.service_account.service_accounts["nomad-client-sa-dev"].member,
-          ]
-        }
-        "roles/storage.objectViewer" = {
+        "roles/storage.objectUser" = {
           members = [
             module.service_account.service_accounts["management-vm-sa"].member,
             module.service_account.service_accounts["nomad-client-sa-prod"].member,
@@ -178,12 +171,7 @@ module "gcs_bucket" {
         purpose = "ci-cd-artifacts"
       }
       iam = {
-        "roles/storage.objectCreator" = {
-          members = [
-            module.service_account.service_accounts["management-vm-sa"].member
-          ]
-        }
-        "roles/storage.objectViewer" = {
+        "roles/storage.objectUser" = {
           members = [
             module.service_account.service_accounts["management-vm-sa"].member
           ]

@@ -1,0 +1,69 @@
+name: "Publish Build Manifest"
+description: "Downloads trivy/build-metadata artifacts from the matrix jobs, combines them into one manifest, and publishes both to GCS"
+
+inputs:
+  cicd-bucket:
+    required: true
+  short-sha:
+    required: true
+  run-id:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download trivy scan artifacts
+      if: always()
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        pattern: "*-trivy-results"
+        path: /tmp/trivy-scan
+        merge-multiple: true
+      continue-on-error: true
+
+    - name: Download build metadata artifacts
+      if: always()
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        pattern: "*-build-metadata"
+        path: /tmp/build-metadata
+        merge-multiple: true
+      continue-on-error: true
+
+    - name: Combine build metadata into single manifest
+      if: always()
+      shell: bash
+      run: |
+        if ls /tmp/build-metadata/*.json 1>/dev/null 2>&1; then
+          IMAGE_DETAILS=$(ls /tmp/build-metadata/*.json | xargs jq -s '.')
+        else
+          IMAGE_DETAILS="[]"
+        fi
+        cat > build-manifest.json << EOF
+        {
+          "build_id": "${{ github.sha }}",
+          "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "branch": "${{ github.ref_name }}",
+          "triggered_by": "${{ github.actor }}",
+          "image_details": $IMAGE_DETAILS
+        }
+        EOF
+        cat build-manifest.json
+
+    - name: Push trivy scan results to GCS
+      if: always()
+      shell: bash
+      run: |
+        if [ -d /tmp/trivy-scan ] && [ "$(ls -A /tmp/trivy-scan)" ]; then
+          gsutil -m cp -z json -h "Content-Type:application/json" \
+            /tmp/trivy-scan/* "gs://${{ inputs.cicd-bucket }}/security-scans/trivy/${{ inputs.run-id }}/${{ inputs.short-sha }}/"
+        else
+          echo "No trivy scan results to upload"
+        fi
+
+    - name: Publish build manifest to GCS
+      if: always()
+      shell: bash
+      run: |
+        gsutil cp build-manifest.json \
+          "gs://${{ inputs.cicd-bucket }}/manifests/${{ inputs.run-id }}/${{ inputs.short-sha }}/build-manifest.json"

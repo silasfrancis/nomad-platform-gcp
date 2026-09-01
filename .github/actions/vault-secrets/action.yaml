@@ -1,0 +1,28 @@
+name: "Fetch Vault Secrets"
+description: "Fetches secrets from Vault via JWT auth and exports them as env vars"
+
+inputs:
+  vault-url:
+    description: "Vault server URL"
+    required: true
+  vault-jwt-path:
+    description: "Vault JWT auth mount path (e.g. jwt-github-actions)"
+    required: true
+  vault-role:
+    description: "Vault JWT role name"
+    required: true
+  secrets:
+    description: "vault-action secrets spec, one 'path key | ENV_VAR' entry per line, semicolon-separated"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch Secrets From Vault
+      uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc
+      with:
+        url: ${{ inputs.vault-url }}
+        method: jwt
+        path: ${{ inputs.vault-jwt-path }}
+        role: ${{ inputs.vault-role }}
+        secrets: ${{ inputs.secrets }}

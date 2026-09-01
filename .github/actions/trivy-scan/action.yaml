@@ -1,0 +1,52 @@
+name: "Trivy Vulnerability Scan"
+description: "Scans an image with Trivy, prints a human-readable table on failure, and uploads the JSON results as an artifact"
+
+inputs:
+  image-ref:
+    description: "Full image reference to scan, e.g. registry/name:tag"
+    required: true
+  results-name:
+    description: "Basename for the results file and artifact, e.g. matrix.items.name"
+    required: true
+
+outputs:
+  results-file:
+    description: "Path to the generated JSON results file"
+    value: ${{ inputs.results-name }}-trivy-results.json
+
+runs:
+  using: composite
+  steps:
+    - name: Trivy vulnerability scan
+      id: trivy-scan
+      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+      with:
+        image-ref: ${{ inputs.image-ref }}
+        format: "json"
+        output: "${{ inputs.results-name }}-trivy-results.json"
+        exit-code: "1"
+        ignore-unfixed: true
+        vuln-type: "os,library"
+        severity: "CRITICAL"
+        trivyignores: .trivyignore
+        cache: true
+
+    - name: Display Trivy vulnerabilities
+      if: failure() && steps.trivy-scan.outcome == 'failure'
+      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+      with:
+        image-ref: ${{ inputs.image-ref }}
+        format: "table"
+        exit-code: "0"
+        ignore-unfixed: true
+        vuln-type: "os,library"
+        severity: "CRITICAL"
+        trivyignores: .trivyignore
+        cache: true
+
+    - name: Upload Trivy results
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+      with:
+        name: "${{ inputs.results-name }}-trivy-results"
+        path: "${{ inputs.results-name }}-trivy-results.json"

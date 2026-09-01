@@ -1,0 +1,81 @@
+name: "Cosign Sign, Attest, And Verify"
+description: "Installs Cosign, resolves the image digest, keylessly signs the image, attests the Trivy scan results, and verifies both"
+
+inputs:
+  image-repo:
+    description: "Image repo without tag, e.g. IMAGE_REGISTRY_PATH/name"
+    required: true
+  image-tag:
+    description: "Image tag to resolve the digest for, e.g. SHORT_SHA"
+    required: true
+  trivy-results-file:
+    description: "Path to the Trivy JSON results file to attest as the vuln predicate"
+    required: true
+
+outputs:
+  image-digest:
+    description: "Resolved image digest (sha256:...)"
+    value: ${{ steps.get_digest.outputs.IMAGE_DIGEST }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22
+
+    - name: Verify Cosign install
+      shell: bash
+      run: cosign version
+
+    - name: Get image digest
+      id: get_digest
+      shell: bash
+      run: |
+        DIGEST=$(gcloud artifacts docker images describe \
+          "${{ inputs.image-repo }}:${{ inputs.image-tag }}" \
+          --format='value(image_summary.digest)')
+
+        echo "IMAGE_DIGEST=$DIGEST" >> "$GITHUB_OUTPUT"
+
+    - name: Sign image with Cosign
+      shell: bash
+      run: cosign sign --yes "${{ inputs.image-repo }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
+
+    - name: Verify Image Signature
+      shell: bash
+      run: |
+        for i in 1 2 3 4 5; do
+          if cosign verify "${{ inputs.image-repo }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
+            --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
+            exit 0
+          fi
+          echo "Attempt $i failed, retrying in 5s..."
+          sleep 5
+        done
+        echo "All verification attempts failed"
+        exit 1
+
+    - name: Attest scan results with Cosign
+      shell: bash
+      run: |
+        cosign attest --yes \
+        --predicate "${{ inputs.trivy-results-file }}" \
+        --type vuln \
+        "${{ inputs.image-repo }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}"
+
+    - name: Verify scan attestation
+      shell: bash
+      run: |
+        for i in 1 2 3 4 5; do
+          if cosign verify-attestation "${{ inputs.image-repo }}@${{ steps.get_digest.outputs.IMAGE_DIGEST }}" \
+            --type vuln \
+            --certificate-identity "${{ github.server_url }}/${{ github.workflow_ref }}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
+            exit 0
+          fi
+          echo "Attempt $i failed, retrying in 5s..."
+          sleep 5
+        done
+        echo "All verification attempts failed"
+        exit 1
