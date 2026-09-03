@@ -71,6 +71,7 @@ jobs:
             NAME=$(jq -r ".items[$i].name" "$CONFIG_FILE")
             PATH_VAL=$(jq -r ".items[$i].path" "$CONFIG_FILE")
             JOB_SPEC=$(jq -r ".items[$i].job_spec" "$CONFIG_FILE")
+            OCTOPUS_PROJECT=$(jq -r ".items[$i].octopus_project" "$CONFIG_FILE")
 
             # Check if any changed file starts with this item's path OR
             # matches its job spec exactly. Path-only matching missed a
@@ -85,7 +86,8 @@ jobs:
                 --arg name "$NAME" \
                 --arg path "$PATH_VAL" \
                 --arg job_spec "$JOB_SPEC" \
-                '{name: $name, path: $path, job_spec: $job_spec}')
+                --arg octopus_project "$OCTOPUS_PROJECT" \
+                '{name: $name, path: $path, job_spec: $job_spec, octopus_project: $octopus_project}')
 
               CHANGED_ITEMS=$(echo "$CHANGED_ITEMS" | jq --argjson item "$ITEM" '. + [$item]')
             else
