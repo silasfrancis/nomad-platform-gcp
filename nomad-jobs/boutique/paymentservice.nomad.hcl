@@ -19,7 +19,7 @@ job "paymentservice" {
   }
 
   group "paymentservice" {
-    count = #{ReplicaCount}
+    count = 1
 
     constraint {
       attribute = "${meta.node_pool_type}"
@@ -53,8 +53,6 @@ job "paymentservice" {
       connect {
         sidecar_service {}
 
-        # Receiving-only sidecar (no upstreams of its own) — 100/128
-        # is a workable floor. Hardcoded per your ask, not an Octopus var.
         sidecar_task {
           resources {
             cpu    = 100
@@ -78,8 +76,8 @@ job "paymentservice" {
       }
 
       resources {
-        cpu    = #{Cpu}
-        memory = #{Memory}
+        cpu    = 200
+        memory = 300
       }
     }
   }
