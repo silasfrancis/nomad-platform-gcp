@@ -23,6 +23,7 @@ variable "instances" {
     shutdown_script       = optional(string, "")
     boot_disk_image       = optional(string, "debian-cloud/debian-12")
     boot_disk_size_gb     = optional(number, 20)
+    boot_disk_type        = optional(string, "pd-balanced")
     labels                = optional(map(string), {})
     additional_disks = optional(list(object({
       name      = string

@@ -62,7 +62,7 @@ resource "google_compute_instance" "this" {
     initialize_params {
       image = each.value.boot_disk_image
       size  = each.value.boot_disk_size_gb
-      type  = "pd-balanced"
+      type  = each.value.boot_disk_type
     }
     kms_key_self_link = var.disk_cmek_key
   }

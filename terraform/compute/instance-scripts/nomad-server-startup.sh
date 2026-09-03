@@ -251,8 +251,13 @@ consul {
 }
 
 vault {
-  address                = "https://vault.platform.lefrancis.org:8443"
-  jwt_auth_backend_path  = "jwt-nomad-${ENVIRONMENT}"
+  enabled = true
+  
+  default_identity {
+    aud  = ["vault.io"]
+    ttl  = "1h"
+    file = true
+  }
 }
 EOF
 chown nomad:nomad /etc/nomad.d/99-instance.hcl

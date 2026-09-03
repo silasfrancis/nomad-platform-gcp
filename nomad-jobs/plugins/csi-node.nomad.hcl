@@ -29,15 +29,12 @@ job "csi-node" {
       driver = "docker"
 
       config {
-        image      = "registry.k8s.io/cloud-provider-gcp/gcp-compute-persistent-disk-csi-driver:v1.20.0"
+        image = "registry.k8s.io/cloud-provider-gcp/gcp-compute-persistent-disk-csi-driver:v1.26.0"
         privileged = true
         args = [
-          "--endpoint=unix://csi/csi.sock",
+          "--endpoint=unix:/csi/csi.sock",
           "--run-controller-service=false",
           "--run-node-service=true",
-        ]
-        volumes = [
-          "/dev:/dev",
         ]
       }
 

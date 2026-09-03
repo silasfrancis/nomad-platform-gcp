@@ -16,5 +16,7 @@ resource "vault_mount" "database" {
 }
 
 resource "vault_gcp_secret_backend" "gcp" {
-  path = "gcp"
+  path    = "gcp"
+  ttl     = 3600    # 1h
+  max_ttl = 86400   # 24h
 }

@@ -24,7 +24,7 @@ resource "vault_policy" "consumer" {
 
   policy = <<-EOT
     %{ if each.value.service == "nomad-autoscaler" }
-    path "gcp/impersonated-account/nomad-autoscaler-${each.value.environment}/token" {
+    path "gcp/static-account/nomad-autoscaler-${each.value.environment}/key" {
       capabilities = ["read"]
     }
     %{ else }

@@ -1,7 +1,4 @@
-# monitoring/loki/loki.yml
-#
-# Filesystem-backed, single-instance (replication_factor 1) — matches
-# this project's scale. Same image runs unchanged in dev and prod.
+# loki.yml
 
 auth_enabled: false
 
@@ -28,6 +25,13 @@ schema_config:
       index:
         prefix: index_
         period: 24h
+        
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  delete_request_store: filesystem
+  retention_delete_delay: 2h
 
 limits_config:
   retention_period: 720h

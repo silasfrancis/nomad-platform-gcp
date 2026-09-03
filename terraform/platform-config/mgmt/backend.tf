@@ -16,6 +16,10 @@ terraform {
       source = "hashicorp/random", 
       version = "3.9.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "3.3.1"
+    }
   }
 
   backend "gcs" {}
@@ -35,4 +39,6 @@ provider "octopusdeploy" {
 provider "google" {
   project = var.project_id
   region  = var.region
+  user_project_override = true
+  billing_project = var.project_id
 }

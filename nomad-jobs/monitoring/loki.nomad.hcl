@@ -67,6 +67,31 @@ job "loki" {
       }
     }
 
+    task "loki-permissions" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
+      }
+
+      config {
+        image   = "busybox:latest"
+        command = "sh"
+        args    = ["-c", "chown -R 10001:10001 /loki"]
+      }
+
+      volume_mount {
+        volume      = "loki-data"
+        destination = "/loki"
+      }
+
+      resources {
+        cpu    = 50
+        memory = 64
+      }
+    }
+
     task "loki" {
       driver = "docker"
 

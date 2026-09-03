@@ -115,10 +115,10 @@ EOF
       change_mode = "restart"
     }
 
-      resources {
-        cpu    = #{Cpu}
-        memory = #{Memory}
-      }
+    resources {
+      cpu    = #{Cpu}
+      memory = #{Memory}
     }
   }
 }
+

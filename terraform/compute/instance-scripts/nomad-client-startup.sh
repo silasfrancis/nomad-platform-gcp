@@ -206,6 +206,7 @@ consul {
 }
 
 vault {
+  enabled = true
   address                = "https://vault.platform.lefrancis.org:8443"
   jwt_auth_backend_path  = "jwt-nomad-${ENVIRONMENT}"
 }

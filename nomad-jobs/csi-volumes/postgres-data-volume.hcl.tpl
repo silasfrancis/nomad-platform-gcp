@@ -1,11 +1,5 @@
-# nomad-jobs/csi-volumes/postgres-data-volume.hcl.tpl
-#
-# NOT valid HCL on its own — $ENVIRONMENT/$MIN_CAPACITY/$MAX_CAPACITY/
-# $DISK_TYPE get substituted by apply.sh (via envsubst) before this
-# ever reaches `nomad volume create`. Same architecture Octopus uses
-# for job specs' #{} tokens, just one layer earlier and much simpler,
-# since this never goes through Octopus at all — see apply.sh.
-#
+# postgres-data-volume.hcl.tpl
+
 # id must exactly match whatever the consuming job's volume.source
 # resolves to (postgres.nomad.hcl's "postgres-data-#{Environment}").
 # plugin_id must match plugins/csi-controller.nomad.hcl /
@@ -21,6 +15,22 @@ capacity_max = "$MAX_CAPACITY"
 capability {
   access_mode     = "single-node-writer"
   attachment_mode = "file-system"
+}
+
+topology_request {
+  preferred {
+    topology {
+      segments {
+        "topology.gke.io/zone" = "$ZONE_1"
+      }
+      segments {
+        "topology.gke.io/zone" = "$ZONE_2"
+      }
+      segments {
+        "topology.gke.io/zone" = "$ZONE_3"
+      }
+    }
+  }
 }
 
 parameters {

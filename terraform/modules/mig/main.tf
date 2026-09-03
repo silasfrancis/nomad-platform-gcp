@@ -89,6 +89,7 @@ resource "google_compute_region_instance_group_manager" "this" {
   region               = var.region
   base_instance_name   = each.key
   distribution_policy_zones = var.zones
+  distribution_policy_target_shape = "EVEN"
 
   version {
     instance_template = google_compute_instance_template.this[each.key].id

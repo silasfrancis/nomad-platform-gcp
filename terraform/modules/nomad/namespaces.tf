@@ -33,3 +33,8 @@ resource "nomad_namespace" "operations" {
   name        = "operations"
   description = "Scheduled periodic backup jobs and other operations tasks."
 }
+
+resource "nomad_namespace" "plugins" {
+  name        = "plugins"
+  description = "CSI driver and autoscaler plugin jobs"
+}

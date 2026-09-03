@@ -29,6 +29,7 @@ consul {
 
 plugin "docker" {
   config {
+    allow_privileged = true
     allow_caps = [
       "chown",
       "net_bind_service",

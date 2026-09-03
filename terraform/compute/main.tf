@@ -87,6 +87,7 @@ locals {
         subnetwork            = local.network.subnets["subnet-dev-private"].self_link
         external_ip           = false
         service_account_email = local.nomad_server_sa_email_dev
+        boot_disk_type =  "pd-standard"
         boot_disk_image       = "${var.project_id}/nomad-server"
         boot_disk_size_gb     = 20
         tags                  = ["nomad-server-dev", "consul-server-dev"]

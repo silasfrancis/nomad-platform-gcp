@@ -3,12 +3,32 @@ variable "environment" {
   default = "dev"
 }
 
-variable "project"{
+variable "gcp_project"{
   type = string
 }
 
-variable "zone"{
+variable "gcp_region"{
   type = string
+}
+
+variable "min_ondemand_instances"{
+  type = number
+  default = 1
+}
+
+variable "max_ondemand_instances"{
+  type = number
+  default = 10
+}
+
+variable "min_spot_instances"{
+  type = number
+  default = 0
+}
+
+variable "max_spot_instances"{
+  type = number
+  default = 10
 }
 
 locals {
@@ -45,12 +65,12 @@ job "nomad-autoscaler" {
       driver = "docker"
 
       config {
-        image = "hashicorp/nomad-autoscaler:v0.5.0"
+        image = "hashicorp/nomad-autoscaler:0.5.0"
         ports = ["http"]
         args = [
             "agent",
             "-config", "/local/config.hcl",
-            "-config", "/local/policies.hcl",
+            "-policy-dir", "/local",
           ]
       }
 
@@ -64,7 +84,7 @@ job "nomad-autoscaler" {
 
       template {
         data = <<EOF
-{{ with secret "gcp/impersonated-account/nomad-autoscaler-${var.environment}/token" }}
+{{ with secret "gcp/static-account/nomad-autoscaler-${var.environment}/key" }}
 {{ .Data.private_key_data | base64Decode }}
 {{ end }}
 EOF
@@ -108,8 +128,8 @@ EOF
         data = <<EOF
 scaling "cluster_policy_ondemand" {
   enabled = true
-  min     = 1
-  max     = 10
+  min     = ${var.min_ondemand_instances}
+  max     = ${var.max_ondemand_instances}
 
   policy {
     default_cooldown             = "10m"
@@ -125,17 +145,18 @@ scaling "cluster_policy_ondemand" {
     }
 
     target "gce-mig" {
-      project  = "${var.project}"
-      zone     = "${var.zone}"
+      project  = "${var.gcp_project}"
+      region     = "${var.gcp_region}"
       mig_name = "nomad-${var.environment}-ondemand" 
+      datacenter = "dc-${var.environment}"
     }
   }
 }
 
 scaling "cluster_policy_spot" {
   enabled = true
-  min     = 0
-  max     = 10
+  min     = ${var.min_spot_instances}
+  max     = ${var.max_spot_instances}
 
   policy {
     default_cooldown             = "10m"
@@ -151,9 +172,10 @@ scaling "cluster_policy_spot" {
     }
 
     target "gce-mig" {
-      project  = "${var.project}"
-      zone     = "${var.zone}"
+      project  = "${var.gcp_project}"
+      region     = "${var.gcp_region}"
       mig_name = "nomad-${var.environment}-spot"
+      datacenter = "dc-${var.environment}"
     }
   }
 }

@@ -18,10 +18,6 @@ nomad_docker_driver_enabled: "{{ true if nomad_mode == 'client' else false }}"
 nomad_acl_enabled: true
 nomad_telemetry_prometheus_enabled: true
 
-# Vault Address Is Static (Single Vault Node On mgmt-vm, Reachable By Both
-# Environments). vault_jwt_auth_backend_path Comes From group_vars/dev.yaml
-# Or prod.yaml.
-nomad_vault_address: ""
 nomad_vault_enabled: true
 
 nomad_manual_root_token: ""

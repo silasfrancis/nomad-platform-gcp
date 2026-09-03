@@ -30,11 +30,6 @@ consul {
 
 vault {
   enabled = {{ nomad_vault_enabled | lower }}
-  address = "{{ nomad_vault_address }}"
-  ca_file = "{{ nomad_tls_dir }}/vault-ca.pem"
-  {% if vault_jwt_auth_backend_path is defined %}
-  jwt_auth_backend_path = "{{ vault_jwt_auth_backend_path }}"
-  {% endif %}
 }
 
 telemetry {

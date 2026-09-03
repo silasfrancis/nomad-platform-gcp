@@ -36,9 +36,9 @@ job "csi-controller" {
       driver = "docker"
 
       config {
-        image = "registry.k8s.io/cloud-provider-gcp/gcp-compute-persistent-disk-csi-driver:v1.20.0"
+        image = "registry.k8s.io/cloud-provider-gcp/gcp-compute-persistent-disk-csi-driver:v1.26.0"
         args = [
-          "--endpoint=unix://csi/csi.sock",
+          "--endpoint=unix:/csi/csi.sock",
           "--run-controller-service=true",
           "--run-node-service=false",
         ]

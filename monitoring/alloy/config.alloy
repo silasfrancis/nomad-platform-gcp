@@ -1,51 +1,53 @@
-// monitoring/alloy/config.alloy
+// config.alloy
 //
 // Tails every Nomad task's stdout/stderr and ships to this
-// environment's own Loki. NOT YET VERIFIED against a real running
-// Nomad client: /var/nomad/alloc/*/alloc/logs/* is Nomad's documented
-// log directory layout (<alloc_id>/alloc/logs/<task>.std{out,err}.<N>),
-// but worth confirming against an actual client node before trusting
-// this glob pattern blindly.
+// environment's own Loki. data_dir is /opt/nomad/data per
+// /etc/nomad.d/nomad.hcl, giving the layout
+// /opt/nomad/data/alloc/<alloc_id>/alloc/logs/<task>.std{out,err}.<N>
 
 local.file_match "nomad_logs" {
   path_targets = [
-    {"__path__" = "/var/nomad/alloc/*/alloc/logs/*"},
+    {"__path__" = "/opt/nomad/data/alloc/*/alloc/logs/*"},
   ]
 }
 
 loki.source.file "nomad_logs" {
-  targets      = local.file_match.nomad_logs.targets
-  forward_to   = [loki.process.nomad_logs.receiver]
+  targets       = local.file_match.nomad_logs.targets
+  forward_to    = [loki.relabel.nomad_logs.receiver]
   tail_from_end = true
 }
 
-loki.process "nomad_logs" {
+// Pulls alloc_id/task_name/stream out of the file path so they're
+// queryable as real Loki labels. 
+loki.relabel "nomad_logs" {
   forward_to = [loki.write.default.receiver]
 
-  // Pulls alloc_id/task_name/stream out of the file path itself so
-  // they're queryable as real Loki labels, not just buried in the
-  // filename string.
-  stage.regex {
-    expression = ".*/(?P<alloc_id>[^/]+)/alloc/logs/(?P<task_name>[^.]+)\\.(?P<stream>stdout|stderr)\\.\\d+$"
-    source     = "filename"
+  rule {
+    source_labels = ["filename"]
+    regex         = ".*/(?P<alloc_id>[^/]+)/alloc/logs/(?P<task_name>[^.]+)\\.(?P<stream>stdout|stderr)\\.\\d+$"
+    target_label  = "alloc_id"
+    replacement   = "$1"
   }
-
-  stage.labels {
-    values = {
-      alloc_id  = "",
-      task_name = "",
-      stream    = "",
-    }
+  rule {
+    source_labels = ["filename"]
+    regex         = ".*/(?P<alloc_id>[^/]+)/alloc/logs/(?P<task_name>[^.]+)\\.(?P<stream>stdout|stderr)\\.\\d+$"
+    target_label  = "task_name"
+    replacement   = "$2"
+  }
+  rule {
+    source_labels = ["filename"]
+    regex         = ".*/(?P<alloc_id>[^/]+)/alloc/logs/(?P<task_name>[^.]+)\\.(?P<stream>stdout|stderr)\\.\\d+$"
+    target_label  = "stream"
+    replacement   = "$3"
   }
 }
 
 loki.write "default" {
   endpoint {
-    // NOT localhost — Alloy runs on every client node (system job),
+    // Alloy runs on every client node (system job),
     // but Loki is a single Nomad-scheduled workload on exactly one of
-    // them. They're only co-located by coincidence, never by design,
-    // so this has to resolve via Consul DNS rather than assume
-    // they're on the same host.
+    // them. So this address has to resolve via Consul DNS 
+    // since they might not be scheduled on the same nodes
     url = "http://loki.service.consul:3100/loki/api/v1/push"
   }
 }

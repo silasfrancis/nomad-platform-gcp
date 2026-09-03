@@ -1,7 +1,9 @@
-# nomad-jobs/csi-volumes/loki-data-volume.hcl.tpl
+# loki-data-volume.hcl.tpl
 #
-# Same mechanism as postgres-data-volume.hcl.tpl. id matches
-# loki.nomad.hcl's volume.source after substitution.
+# id must exactly match whatever the consuming job's volume.source
+# resolves to (loki.nomad.hcl's "loki-data-#{Environment}").
+# plugin_id must match plugins/csi-controller.nomad.hcl /
+# csi-node.nomad.hcl's own id ("gce-pd").
 
 id           = "loki-data-$ENVIRONMENT"
 name         = "loki-data-$ENVIRONMENT"
@@ -13,6 +15,22 @@ capacity_max = "$MAX_CAPACITY"
 capability {
   access_mode     = "single-node-writer"
   attachment_mode = "file-system"
+}
+
+topology_request {
+  preferred {
+    topology {
+      segments {
+        "topology.gke.io/zone" = "$ZONE_1"
+      }
+      segments {
+        "topology.gke.io/zone" = "$ZONE_2"
+      }
+      segments {
+        "topology.gke.io/zone" = "$ZONE_3"
+      }
+    }
+  }
 }
 
 parameters {
