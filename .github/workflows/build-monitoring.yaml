@@ -74,7 +74,13 @@ jobs:
 
       - name: Collect Nomad Fixture Data
         run: |
-          ./scripts/collect-nomad-data.sh "${NOMAD_ADDR}" --stdout > monitoring/nomad-sentinel/tests/fixtures/nomad-dev-data.json
+          ./scripts/run-nomad-test-jobs.sh "${NOMAD_ADDR}" --stdout > nomad-test-data.json
+
+      - name: Upload Nomad Fixture Data
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: "nomad-test-data"
+          path: nomad-test-data.json
 
       - name: Fetch Test Credentials From Vault
         uses: ./.github/actions/vault-secrets
