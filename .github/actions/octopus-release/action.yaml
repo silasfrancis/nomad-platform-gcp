@@ -18,9 +18,9 @@ inputs:
   job-spec-path:
     description: "Path to the .nomad.hcl job spec to package"
     required: true
-  image-tag:
-    description: "Docker image tag to pass to the Octopus deployment as ImageTag"
-    required: true
+  # image-tag:
+  #   description: "Docker image tag to pass to the Octopus deployment as ImageTag"
+  #   required: true
 
 runs:
   using: composite
@@ -62,12 +62,12 @@ runs:
         release_number: "${{ inputs.release-number }}"
         packages: "${{ inputs.octopus-project }}:${{ inputs.package-version }}"
 
-    - name: Deploy Octopus Release
-      uses: OctopusDeploy/deploy-release-action@a7630b7e2d308f6dec4339fdcd4b6a79b978380e
-      with:
-        project: ${{ inputs.octopus-project }}
-        release_number: ${{ steps.create-release.outputs.release_number }}
-        environments: |
-          Development
-        variables: |
-          ImageTag: ${{ inputs.image-tag }}
+    # - name: Deploy Octopus Release
+    #   uses: OctopusDeploy/deploy-release-action@a7630b7e2d308f6dec4339fdcd4b6a79b978380e
+    #   with:
+    #     project: ${{ inputs.octopus-project }}
+    #     release_number: ${{ steps.create-release.outputs.release_number }}
+    #     environments: |
+    #       Development
+    #     variables: |
+    #       ImageTag: ${{ inputs.image-tag }}

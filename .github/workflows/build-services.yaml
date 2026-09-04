@@ -120,7 +120,7 @@ jobs:
           package-version: "1.0.0-${{ matrix.items.name }}.${{ env.SHORT_SHA }}"
           release-number: "1.0.0-${{ matrix.items.name }}.${{ env.SHORT_SHA }}"
           job-spec-path: "${{ matrix.items.job_spec }}"
-          image-tag: "${{ env.SHORT_SHA }}"
+          # image-tag: "${{ env.SHORT_SHA }}"
 
       - name: Send Slack notification on build failure
         if: failure()

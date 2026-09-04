@@ -191,6 +191,13 @@ resource "octopusdeploy_variable" "datacenter" {
   }
 }
 
+resource "octopusdeploy_variable" "image_tag" {
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "ImageTag"
+  type     = "String"
+  value    = "#{Octopus.Release.Number | Replace \"^.*\\.\" \"\"}"
+}
+
 resource "octopusdeploy_variable" "artifact_registry" {
   owner_id = octopusdeploy_library_variable_set.platform_shared.id
   name     = "ArtifactRegistry"

@@ -1,8 +1,7 @@
 # Deployment Lifecycle
 #
 # Development promotes automatically on release creation. Production is
-# an optional phase reached only through manual approval in the Octopus
-# UI — no automatic_deployment_targets entry for it.
+# an optional phase reached only through manual approval in the Octopus UI
 
 resource "octopusdeploy_lifecycle" "main" {
   name        = "main"
@@ -22,7 +21,7 @@ resource "octopusdeploy_lifecycle" "main" {
 
   phase {
     name                         = "Development"
-    optional_deployment_targets = [octopusdeploy_environment.dev.id]
+    automatic_deployment_targets = [octopusdeploy_environment.dev.id]
   }
 
   phase {
