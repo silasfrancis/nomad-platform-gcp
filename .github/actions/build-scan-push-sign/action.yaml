@@ -1,0 +1,90 @@
+name: "Build, Scan, Push, And Sign Image"
+description: "Sets SHORT_SHA/RUN_ID, builds+scans+pushes+signs an image via Buildx/Trivy/Cosign, then saves and uploads build metadata"
+
+inputs:
+  build-context:
+    description: "Docker build context path"
+    required: true
+  image-name:
+    description: "Image name, e.g. matrix.items.name or a fixed tool name"
+    required: true
+  registry-host:
+    required: true
+  image-registry-path:
+    required: true
+  cicd-bucket:
+    required: true
+
+outputs:
+  image-digest:
+    description: "Resolved image digest (sha256:...)"
+    value: ${{ steps.cosign.outputs.image-digest }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set short SHA and Build ID
+      shell: bash
+      run: |
+        echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+        echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
+
+    - name: Set Up Docker Buildx
+      uses: ./.github/actions/docker-buildx-setup
+      with:
+        registry-host: ${{ inputs.registry-host }}
+
+    - name: Build Image
+      uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+      with:
+        context: "${{ inputs.build-context }}"
+        push: false
+        load: true
+        tags: "${{ inputs.image-registry-path }}/${{ inputs.image-name }}:${{ env.SHORT_SHA }}"
+        platforms: linux/amd64
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Trivy Scan
+      uses: ./.github/actions/trivy-scan
+      with:
+        image-ref: "${{ inputs.image-registry-path }}/${{ inputs.image-name }}:${{ env.SHORT_SHA }}"
+        results-name: "${{ inputs.image-name }}"
+
+    - name: Push Image
+      uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+      with:
+        context: "${{ inputs.build-context }}"
+        push: true
+        tags: "${{ inputs.image-registry-path }}/${{ inputs.image-name }}:${{ env.SHORT_SHA }}"
+        platforms: linux/amd64
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Cosign Sign, Attest, And Verify
+      id: cosign
+      uses: ./.github/actions/cosign-sign-attest
+      with:
+        image-repo: "${{ inputs.image-registry-path }}/${{ inputs.image-name }}"
+        image-tag: "${{ env.SHORT_SHA }}"
+        trivy-results-file: "${{ inputs.image-name }}-trivy-results.json"
+
+    - name: Save build metadata
+      shell: bash
+      run: |
+        mkdir -p /tmp/build-metadata
+        cat > /tmp/build-metadata/${{ inputs.image-name }}-metadata.json << MANIFESTEOF
+        {
+          "service": "${{ inputs.image-name }}",
+          "image_repo": "${{ inputs.image-registry-path }}/${{ inputs.image-name }}",
+          "image_tag": "${{ env.SHORT_SHA }}",
+          "image_digest": "${{ steps.cosign.outputs.image-digest }}",
+          "scan_report": "gs://${{ inputs.cicd-bucket }}/security-scans/trivy/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ inputs.image-name }}-trivy-results.json"
+        }
+        MANIFESTEOF
+
+    - name: Upload build metadata artifact
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+      with:
+        name: ${{ inputs.image-name }}-build-metadata
+        path: /tmp/build-metadata/${{ inputs.image-name }}-metadata.json

@@ -47,69 +47,15 @@ jobs:
             kv/data/cicd/octopus space | OCTOPUS_SPACE ;
             kv/data/cicd/slack webhook_url | SLACK_WEBHOOK_URL
 
-      - name: Set short SHA and Build ID
-        run: |
-          echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
-          echo "RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
-
-      - name: Set Up Docker Buildx
-        uses: ./.github/actions/docker-buildx-setup
+      - name: Build, Scan, Push, And Sign Image
+        id: build
+        uses: ./.github/actions/build-scan-push-sign
         with:
+          build-context: "${{ matrix.items.path }}"
+          image-name: "${{ matrix.items.name }}"
           registry-host: ${{ env.REGISTRY_HOST }}
-
-      - name: Build Image
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
-        with:
-          context: "${{ matrix.items.path }}"
-          push: false
-          load: true
-          tags: "${{ env.IMAGE_REGISTRY_PATH }}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Trivy Scan
-        uses: ./.github/actions/trivy-scan
-        with:
-          image-ref: "${{ env.IMAGE_REGISTRY_PATH }}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
-          results-name: "${{ matrix.items.name }}"
-
-      - name: Push Image
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
-        with:
-          context: "${{ matrix.items.path }}"
-          push: true
-          tags: "${{ env.IMAGE_REGISTRY_PATH }}/${{ matrix.items.name }}:${{ env.SHORT_SHA }}"
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Cosign Sign, Attest, And Verify
-        id: cosign
-        uses: ./.github/actions/cosign-sign-attest
-        with:
-          image-repo: "${{ env.IMAGE_REGISTRY_PATH }}/${{ matrix.items.name }}"
-          image-tag: "${{ env.SHORT_SHA }}"
-          trivy-results-file: "${{ matrix.items.name }}-trivy-results.json"
-
-      - name: Save build metadata
-        run: |
-          mkdir -p /tmp/build-metadata
-          cat > /tmp/build-metadata/${{ matrix.items.name }}-metadata.json << EOF
-          {
-            "service": "${{ matrix.items.name }}",
-            "image_repo": "${{ env.IMAGE_REGISTRY_PATH }}/${{ matrix.items.name }}",
-            "image_tag": "${{ env.SHORT_SHA }}",
-            "image_digest": "${{ steps.cosign.outputs.image-digest }}",
-            "scan_report": "gs://${{ env.CICD_BUCKET }}/security-scans/trivy/${{ env.RUN_ID }}/${{ env.SHORT_SHA }}/${{ matrix.items.name }}-trivy-results.json"
-          }
-          EOF
-
-      - name: Upload build metadata artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
-        with:
-          name: ${{ matrix.items.name }}-build-metadata
-          path: /tmp/build-metadata/${{ matrix.items.name }}-metadata.json
+          image-registry-path: ${{ env.IMAGE_REGISTRY_PATH }}
+          cicd-bucket: ${{ env.CICD_BUCKET }}
 
       - name: Package And Release To Octopus
         uses: ./.github/actions/octopus-release
@@ -117,10 +63,8 @@ jobs:
           octopus-server: ${{ vars.OCTOPUS_DEPLOY_SERVER }}
           octopus-service-account-id: ${{ env.OCTOPUS_SERVICE_ACCOUNT_ID }}
           octopus-project: "${{ matrix.items.octopus_project }}"
-          package-version: "1.0.0-${{ matrix.items.name }}.${{ env.SHORT_SHA }}"
-          release-number: "1.0.0-${{ matrix.items.name }}.${{ env.SHORT_SHA }}"
+          release-version: "1.0.0-${{ matrix.items.name }}.${{ env.SHORT_SHA }}"
           job-spec-path: "${{ matrix.items.job_spec }}"
-          # image-tag: "${{ env.SHORT_SHA }}"
 
       - name: Send Slack notification on build failure
         if: failure()

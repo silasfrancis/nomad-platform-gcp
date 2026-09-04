@@ -1,0 +1,60 @@
+name: test-nomad-sentinel
+
+on:
+  workflow_call:
+
+permissions:
+  id-token: write # Vault OIDC
+  contents: read
+
+jobs:
+  test-nomad-sentinel:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
+
+      - name: Install Nomad
+        run: |
+          NOMAD_VERSION="1.11.0"
+          curl -fsSL "https://releases.hashicorp.com/nomad/${NOMAD_VERSION}/nomad_${NOMAD_VERSION}_linux_amd64.zip" -o nomad.zip
+          unzip -o nomad.zip -d /tmp/nomad-bin
+          echo "/tmp/nomad-bin" >> "$GITHUB_PATH"
+
+      - name: Start Nomad In Dev Mode
+        run: |
+          nohup nomad agent -dev > nomad-dev.log 2>&1 &
+          echo "NOMAD_ADDR=http://127.0.0.1:4646" >> "$GITHUB_ENV"
+          for i in $(seq 1 15); do
+            curl -sf http://127.0.0.1:4646/v1/status/leader > /dev/null && break
+            sleep 1
+          done
+
+      - name: Collect Nomad Fixture Data
+        run: |
+          ./scripts/run-nomad-test-jobs.sh "${NOMAD_ADDR}" --stdout > nomad-test-data.json
+
+      - name: Upload Nomad Fixture Data
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: "nomad-test-data"
+          path: nomad-test-data.json
+
+      - name: Fetch Test Credentials From Vault
+        uses: ./.github/actions/vault-secrets
+        with:
+          vault-url: ${{ vars.VAULT_ADDRESS }}
+          vault-jwt-path: ${{ vars.VAULT_JWT_PATH }}
+          vault-role: ${{ vars.VAULT_CI_ROLE }}
+          secrets: |
+            kv/data/cicd/nomad-sentinel gemini_api_key | GEMINI_API_KEY ;
+            kv/data/cicd/slack webhook_url | SLACK_WEBHOOK_URL
+
+      - name: Run Tests
+        working-directory: monitoring/nomad-sentinel
+        env:
+          GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_URL }}
+          NOMAD_ADDR: ${{ env.NOMAD_ADDR }}
+        run: |
+          pip install -r requirements.txt --break-system-packages
+          pytest tests/ -v

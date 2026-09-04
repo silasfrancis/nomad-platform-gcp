@@ -55,7 +55,7 @@ runs:
       shell: bash
       run: |
         if [ -d /tmp/trivy-scan ] && [ "$(ls -A /tmp/trivy-scan)" ]; then
-          gsutil -m cp -z json -h "Content-Type:application/json" \
+          gsutil -m -h "Content-Type:application/json" cp -z json \
             /tmp/trivy-scan/* "gs://${{ inputs.cicd-bucket }}/security-scans/trivy/${{ inputs.run-id }}/${{ inputs.short-sha }}/"
         else
           echo "No trivy scan results to upload"
