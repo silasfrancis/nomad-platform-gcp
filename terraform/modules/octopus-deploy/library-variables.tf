@@ -40,7 +40,7 @@ locals {
   # everything else that's split dev/prod. One repo, images promoted
   # through environments by tag, not rebuilt — per the architecture
   # doc's CI/CD design (GitHub Actions builds once per commit).
-  artifact_registry_path = ""
+  artifact_registry_path = var.artifact_registry_path
 }
 
 locals {
@@ -154,14 +154,6 @@ resource "octopusdeploy_variable" "traefik_internal_port" {
   scope {
     environments = [local.env_by_key[each.key]]
   }
-}
-
-resource "octopusdeploy_variable" "image_tag" {
-  owner_id    = octopusdeploy_library_variable_set.platform_shared.id
-  name        = "ImageTag"
-  type        = "String"
-  value       = "#{Octopus.Release.Number}"
-  description = "Alias for the release number GitHub Actions sets when it calls octo create-release — the same image tag is promoted through every environment, never rebuilt."
 }
 
 resource "octopusdeploy_variable" "slack_webhook_url" {

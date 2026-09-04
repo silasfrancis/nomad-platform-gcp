@@ -13,10 +13,13 @@ inputs:
     description: "Package version, e.g. <name>-<short_sha>"
     required: true
   release-number:
-    description: "Octopus release number, used as #{ImageTag} in Nomad job templates"
+    description: "Unique Octopus release number"
     required: true
   job-spec-path:
     description: "Path to the .nomad.hcl job spec to package"
+    required: true
+  image-tag:
+    description: "Docker image tag to pass to the Octopus deployment as ImageTag"
     required: true
 
 runs:
@@ -52,13 +55,19 @@ runs:
         packages: "${{ steps.zip.outputs.package_file_path }}"
 
     - name: Create Octopus Release
+      id: create-release
       uses: OctopusDeploy/create-release-action@4bd7d595da7f803e467d41c32fa0b5dbb9f222dc
       with:
         project: "${{ inputs.octopus-project }}"
         release_number: "${{ inputs.release-number }}"
         packages: "${{ inputs.octopus-project }}:${{ inputs.package-version }}"
 
-    # No deploy step: Dev's lifecycle phase has
-    # automatic_deployment_targets = [dev], so release creation alone
-    # triggers an automatic deploy to Dev. Production is manual
-    # approval in the Octopus UI only - CI stops at release creation.
+    - name: Deploy Octopus Release
+      uses: OctopusDeploy/deploy-release-action@a7630b7e2d308f6dec4339fdcd4b6a79b978380e
+      with:
+        project: ${{ inputs.octopus-project }}
+        release_number: ${{ steps.create-release.outputs.release_number }}
+        environments: |
+          Development
+        variables: |
+          ImageTag: ${{ inputs.image-tag }}

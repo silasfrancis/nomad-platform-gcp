@@ -52,3 +52,7 @@ variable "github_repository" {
   type    = string
   default = "silasfrancis/nomad-platform-gcp"
 }
+
+variable "artifact_registry_path" {
+  type = string
+}

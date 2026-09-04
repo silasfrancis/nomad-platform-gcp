@@ -118,8 +118,9 @@ jobs:
           octopus-service-account-id: ${{ env.OCTOPUS_SERVICE_ACCOUNT_ID }}
           octopus-project: "${{ matrix.items.octopus_project }}"
           package-version: "1.0.0-${{ matrix.items.name }}.${{ env.SHORT_SHA }}"
-          release-number: "${{ env.SHORT_SHA }}"
+          release-number: "1.0.0-${{ matrix.items.name }}.${{ env.SHORT_SHA }}"
           job-spec-path: "${{ matrix.items.job_spec }}"
+          image-tag: "${{ env.SHORT_SHA }}"
 
       - name: Send Slack notification on build failure
         if: failure()

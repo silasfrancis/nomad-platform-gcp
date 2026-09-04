@@ -22,7 +22,7 @@ resource "octopusdeploy_lifecycle" "main" {
 
   phase {
     name                         = "Development"
-    automatic_deployment_targets = [octopusdeploy_environment.dev.id]
+    optional_deployment_targets = [octopusdeploy_environment.dev.id]
   }
 
   phase {
