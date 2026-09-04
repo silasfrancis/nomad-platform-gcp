@@ -43,4 +43,7 @@ resource "octopusdeploy_project" "this" {
   project_group_id  = each.value.group == "boutique" ? octopusdeploy_project_group.online_boutique.id : octopusdeploy_project_group.platform.id
   lifecycle_id      = octopusdeploy_lifecycle.main.id
   description       = "Deploys every service/tool routed here (via octopus_project in .github/configs/*.json) to the ${each.value.namespace} Nomad namespace."
+  included_library_variable_sets = [
+    octopusdeploy_library_variable_set.platform_shared.id
+  ]
 }
