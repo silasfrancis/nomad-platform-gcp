@@ -15,11 +15,16 @@
 # also means they can never drift out of sync with what's actually
 # deployed the way a hand-maintained variable could.
 
+echo "DEBUG: raw NomadApiUrl='$(get_octopusvariable "NomadApiUrl")'"
+
+NomadApiUrl="$(get_octopusvariable "NomadApiUrl")"
+NomadAclToken="$(get_octopusvariable "NomadAclToken")"
+
 : "${NomadApiUrl:?NomadApiUrl is required}"
 : "${NomadAclToken:?NomadAclToken is required}"
-NOMAD_ADDR="${NomadApiUrl}"
-NOMAD_TOKEN="${NomadAclToken}"
-export NOMAD_ADDR NOMAD_TOKEN
+
+export NOMAD_ADDR="$NomadApiUrl"
+export NOMAD_TOKEN="$NomadAclToken"
 
 # Discover every .nomad.hcl file in the package root. Usually one —
 # each CI matrix item packages its own service's job spec — but this
