@@ -13,7 +13,10 @@ source "$(dirname "$0")/common.sh"
 # only exist under that step's own output namespace, so they're read
 # back with get_octopusvariable "Octopus.Action[<step name>].Output.<var>"
 # rather than as plain environment variables.
-
+#
+# VERIFY: "deploy-to-nomad" below must match that step's exact name in
+# the Octopus deployment process (case-sensitive) — update it here if
+# the step is ever renamed.
 DEPLOY_STEP_NAME="deploy-to-nomad"
 
 DeployedJobIds="$(get_octopusvariable "Octopus.Action[${DEPLOY_STEP_NAME}].Output.DeployedJobIds")"
@@ -28,6 +31,7 @@ for job_id in ${DeployedJobIds}; do
 
   if [ -z "${deployment_id}" ]; then
     echo "No deployment ID recorded for ${job_id} — skipping." >&2
+    set_octopusvariable "NomadFailureDetail" "No deployment ID recorded for ${job_id} in wait-for-healthy."
     overall_status=1
     continue
   fi
@@ -36,7 +40,10 @@ for job_id in ${DeployedJobIds}; do
   job_healthy=0
 
   for i in $(seq 1 "${MAX_ATTEMPTS}"); do
-    status_response="$(nomad deployment status -json "${deployment_id}")"
+    # Captured separately from the jq parse below so a failed/cancelled
+    # outcome can be debugged from the full response, not just the
+    # single extracted status field.
+    status_response="$(nomad deployment status -namespace "${NOMAD_NAMESPACE}" -json "${deployment_id}")"
     status="$(echo "${status_response}" | jq -r '.Status')"
     echo "  [${job_id}] attempt ${i}/${MAX_ATTEMPTS}: deployment status = ${status}"
 
@@ -52,10 +59,16 @@ for job_id in ${DeployedJobIds}; do
           job_healthy=1
           break
         fi
+        # Plain rolling update still finishing — not terminal, keep polling.
         ;;
       failed|cancelled)
         echo "  [${job_id}] deployment ${status} — aborting. Raw status response:" >&2
         echo "${status_response}" >&2
+        # This loop continues to other jobs rather than exiting
+        # immediately, so this calls set_octopusvariable directly
+        # (not fail_with_reason, which would exit here and skip
+        # checking any remaining jobs).
+        set_octopusvariable "NomadFailureDetail" "Deployment ${deployment_id} for ${job_id} ${status}: $(echo "${status_response}" | jq -c '{Status, StatusDescription}')"
         overall_status=1
         break
         ;;
@@ -66,6 +79,7 @@ for job_id in ${DeployedJobIds}; do
 
   if [ "${job_healthy}" -ne 1 ] && [ "${overall_status}" -eq 0 ]; then
     echo "  [${job_id}] timed out waiting for deployment to report healthy." >&2
+    set_octopusvariable "NomadFailureDetail" "Deployment ${deployment_id} for ${job_id} timed out waiting for healthy status."
     overall_status=1
   fi
 done

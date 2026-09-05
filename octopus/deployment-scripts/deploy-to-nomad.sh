@@ -13,26 +13,41 @@ source "$(dirname "$0")/common.sh"
 # subshell and would swallow a "no file found" failure silently.
 mapfile -t job_files < <(discover_job_files)
 if [ "${#job_files[@]}" -eq 0 ]; then
-  exit 1
+  fail_with_reason "No .nomad.hcl file found in package root."
 fi
 
 deployed_job_ids=()
 
 for job_file in "${job_files[@]}"; do
   job_id="$(job_id_from_file "${job_file}")"
-  echo "Submitting ${job_file} (job \"${job_id}\") to ${NOMAD_ADDR}..."
-  nomad job run -detach -no-color "${job_file}"
+  echo "Submitting ${job_file} (job \"${job_id}\") to ${NOMAD_ADDR} (namespace ${NOMAD_NAMESPACE})..."
 
-  # Give Nomad a moment to create the deployment record server-side 
+  set +e
+  run_output="$(nomad job run -namespace "${NOMAD_NAMESPACE}" -detach -no-color "${job_file}" 2>&1)"
+  run_exit=$?
+  set -e
+  echo "${run_output}"
+
+  if [ "${run_exit}" -ne 0 ]; then
+    fail_with_reason "Nomad job run failed for ${job_id}: $(echo "${run_output}" | tail -n 5)"
+  fi
+
+  # Give Nomad a moment to create the deployment record server-side —
+  # job run returning doesn't guarantee it exists yet.
   sleep 2
 
-  deployments_response="$(nomad job deployments -json "${job_id}")"
+  # Captured separately from the jq parse below so a missing/null ID
+  # can be debugged from the raw response instead of just the
+  # generic "could not determine" message.
+  deployments_response="$(nomad job deployments -namespace "${NOMAD_NAMESPACE}" -json "${job_id}")"
   deployment_id="$(echo "${deployments_response}" | jq -r '.[0].ID')"
+  # NOTE: relies on the API returning deployments newest-first, matching
+  # the CLI table's confirmed ordering — not independently checked
+  # against the raw JSON schema here, so worth a quick sanity check
+  # against real output before trusting this blindly.
 
   if [ -z "${deployment_id}" ] || [ "${deployment_id}" = "null" ]; then
-    echo "Could not determine deployment ID from 'nomad job deployments ${job_id}'. Raw response:" >&2
-    echo "${deployments_response}" >&2
-    exit 1
+    fail_with_reason "Could not determine deployment ID from 'nomad job deployments ${job_id}'. Raw response: ${deployments_response}"
   fi
 
   echo "Deployment ID for ${job_id}: ${deployment_id}"
@@ -47,5 +62,4 @@ done
 # steps know which per-job DeploymentId__<job_id> variables to look up.
 echo "Deployed job IDs:"
 printf '  - %s\n' "${deployed_job_ids[@]}"
-
 set_octopusvariable "DeployedJobIds" "${deployed_job_ids[*]}"
