@@ -36,7 +36,9 @@ echo $NOMAD_TOKEN
 # `namespace = "boutique"` explicitly — this env var and the
 # -namespace flag are reinforcement, not a substitute for that.
 export NOMAD_NAMESPACE="$DeploymentNamespace"
-echo $NOMAD_NAMESPACE
+echo "nomadAddress:{$NOMAD_ADDR}"
+echo "nomadToken:{$NOMAD_TOKEN}"
+echo "namespace:{$NOMAD_NAMESPACE}"
 
 # Absolute path to the package root. Calamari runs each step's script
 # from inside package_root/scripts (this script's own directory), but
