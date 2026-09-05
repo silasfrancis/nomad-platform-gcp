@@ -30,3 +30,11 @@ resource "octopusdeploy_variable" "remediation_mode" {
     environments = [local.env_by_key[each.key]]
   }
 }
+
+resource "octopusdeploy_variable" "fail_on_substitution_error" {
+  for_each = local.projects
+  owner_id = octopusdeploy_project.this[each.key].id
+  name     = "OctopusShouldFailDeploymentOnSubstitutionFails"
+  type     = "String"
+  value    = "True"
+}

@@ -26,9 +26,17 @@ resource "octopusdeploy_process_step" "this" {
   condition = each.value.step == "notify-slack" ? "Always" : "Success"
   worker_pool_id = octopusdeploy_static_worker_pool.nomad_deployments.id
 
-  properties = {
-    "Octopus.Action.TargetRoles" = "nomad-cluster"
-  }
+  properties = merge(
+    {
+      "Octopus.Action.TargetRoles" = "nomad-cluster"
+    },
+
+    contains(["validate-nomad-job", "deploy-to-nomad"], each.value.step) ? {
+      "Octopus.Action.EnabledFeatures" = "Octopus.Features.SubstituteInFiles"
+      "Octopus.Action.SubstituteInFiles.TargetFiles" = "*.nomad.hcl"
+      "Octopus.Action.SubstituteInFiles.EnableNoMatchWarning" = "True"
+    } : {}
+  )
 
   primary_package = {
     package_id = each.value.project

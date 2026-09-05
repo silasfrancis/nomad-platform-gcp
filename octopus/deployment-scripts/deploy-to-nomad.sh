@@ -60,6 +60,4 @@ done
 
 # Space-separated list of every job ID this step deployed, so later
 # steps know which per-job DeploymentId__<job_id> variables to look up.
-echo "Deployed job IDs:"
-printf '  - %s\n' "${deployed_job_ids[@]}"
 set_octopusvariable "DeployedJobIds" "${deployed_job_ids[*]}"

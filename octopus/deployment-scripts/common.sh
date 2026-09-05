@@ -3,14 +3,15 @@
 #
 # Sourced by every deployment script — not runnable on its own.
 #
-# Three jobs: bridge Octopus's project-scoped variables to the names
+# Four jobs: bridge Octopus's project-scoped variables to the names
 # these scripts use internally, discover what's actually in the
-# package rather than expecting Octopus to tell us, and give every
-# script one place to report ITS OWN meaningful failure text — Octopus
-# only ever exposes Octopus.Deployment.Error/.ErrorDetail, which is
-# Octopus's own internal exception trace, never the real stdout/stderr
-# of a failed script. If Slack (or anything else) needs the real
-# Nomad error, the script has to capture and expose it itself.
+# package rather than expecting Octopus to tell us, replace #{...}
+# template tokens in job spec files ourselves (see
+# substitute_job_file_variables below), and give every script one
+# place to report ITS OWN meaningful failure text — Octopus only ever
+# exposes Octopus.Deployment.Error/.ErrorDetail, which is Octopus's own
+# internal exception trace, never the real stdout/stderr of a failed
+# script.
 
 NomadApiUrl="$(get_octopusvariable "NomadApiUrl")"
 NomadAclToken="$(get_octopusvariable "NomadAclToken")"
@@ -22,23 +23,16 @@ DeploymentNamespace="$(get_octopusvariable "DeploymentNamespace")"
 
 export NOMAD_ADDR="$NomadApiUrl"
 export NOMAD_TOKEN="$NomadAclToken"
-echo $NOMAD_ADDR
-echo $NOMAD_TOKEN
 
 # Set for anything that reads the env var (query/status/promote
-# commands honor this already). Belt-and-suspenders: every direct
-# `nomad job validate/plan/run` call in these scripts should ALSO pass
-# `-namespace "${NOMAD_NAMESPACE}"` explicitly rather than relying
-# solely on this — whether an unset job spec `namespace` field falls
-# back to this env var or to Nomad's hardcoded "default" is version-
-# dependent, and which namespace a job lands in shouldn't hinge on
-# that. The job spec itself should also declare
-# `namespace = "boutique"` explicitly — this env var and the
-# -namespace flag are reinforcement, not a substitute for that.
+# commands honor this already). Also passed explicitly as -namespace
+# on every direct `nomad job validate/plan/run` call in these scripts
+# as reinforcement — but note neither of those is what actually makes
+# a job land in the right namespace when the job SPEC's own
+# `namespace = "..."` field is a literal, unsubstituted
+# "#{DeploymentNamespace}" string; see substitute_job_file_variables
+# below for what actually fixes that.
 export NOMAD_NAMESPACE="$DeploymentNamespace"
-echo "nomadAddress:{$NOMAD_ADDR}"
-echo "nomadToken:{$NOMAD_TOKEN}"
-echo "namespace:{$NOMAD_NAMESPACE}"
 
 # Absolute path to the package root. Calamari runs each step's script
 # from inside package_root/scripts (this script's own directory), but
@@ -70,7 +64,58 @@ fail_with_reason() {
   exit 1
 }
 
-# Discover every .nomad.hcl file in the package root. Usually one —
+# Replaces every #{VariableName} token found in a job spec file with
+# that Octopus variable's actual (fully resolved) value, in place.
+#
+# This exists instead of relying on Octopus's own built-in
+# "Substitute Variables in Files" step feature because that feature
+# has to be separately enabled, with a matching file-name pattern, on
+# EVERY step that references this package (validate-nomad-job AND
+# deploy-to-nomad both extract their own fresh copy of it) — the same
+# class of easy-to-silently-miss per-step/per-project configuration
+# that bit the platform-shared library variable set earlier. Doing it
+# here means it can never be forgotten on a step, now or in the
+# future, and only depends on get_octopusvariable, which every other
+# value in this script already uses.
+#
+# Only matches the literal #{...} Octopus template syntax — HCL's own
+# native ${...} interpolation (e.g. ${meta.node_pool_type} for
+# constraints) uses a dollar sign, not a hash, so it's untouched here.
+# get_octopusvariable already returns a variable's fully resolved
+# value even when that variable's own definition uses a filter
+# expression (e.g. ImageTag defined as
+# "#{Octopus.Release.Number | Replace ...}") — Octopus resolves that
+# internally, so a plain get_octopusvariable("ImageTag") call is
+# sufficient; no filter-parsing needed here.
+# substitute_job_file_variables() {
+#   local file="$1"
+#   local content
+#   content="$(cat "${file}")"
+
+#   # NOTE: POSIX bracket expressions don't support backslash-escaping —
+#   # a literal ']' inside [...] must be the FIRST character right after
+#   # '[' to be treated literally, not escaped with '\'. An earlier
+#   # version of this pattern used \[\] here, which silently matched
+#   # nothing at all (the stray unescaped ']' terminated the character
+#   # class one position early, leaving a dangling literal "]+" outside
+#   # it that could never match real tokens) — caught by testing against
+#   # a real job spec before shipping this.
+#   local tokens
+#   mapfile -t tokens < <(grep -oE '#\{[]A-Za-z0-9_.[]+\}' "${file}" | sort -u)
+
+#   local token var_name value
+#   for token in "${tokens[@]}"; do
+#     var_name="${token#\#\{}"
+#     var_name="${var_name%\}}"
+#     value="$(get_octopusvariable "${var_name}")"
+#     content="${content//${token}/${value}}"
+#   done
+
+#   printf '%s' "${content}" > "${file}"
+# }
+
+# Discover every .nomad.hcl file in the package root, substituting its
+# #{Variable} tokens in place before returning it. Usually one file —
 # each CI matrix item packages its own service's job spec — but this
 # doesn't assume that; a package containing more than one job spec is
 # looped over, not silently dropped to the first match.
@@ -85,6 +130,14 @@ fail_with_reason() {
 # that same pipe, corrupting the job-file list. The caller checks
 # `${#job_files[@]}` itself, at its own top level, and calls
 # fail_with_reason there instead.
+#
+# substitute_job_file_variables's own get_octopusvariable calls are
+# safe to run in here even though this whole function executes inside
+# the mapfile process-substitution subshell — get_octopusvariable is a
+# read, returning its value through its OWN separate, independently
+# captured command substitution ($(...)), which never touches this
+# function's own stdout. Only set_octopusvariable (a write) is unsafe
+# in this context — see fail_with_reason's note above.
 discover_job_files() {
   local files=()
   while IFS= read -r -d '' f; do
@@ -95,6 +148,12 @@ discover_job_files() {
     echo "No .nomad.hcl file found in package root (${PACKAGE_ROOT})." >&2
     return 1
   fi
+
+  local f
+  # for f in "${files[@]}"; do
+  #   substitute_job_file_variables "${f}"
+  # done
+
   printf '%s\n' "${files[@]}"
 }
 

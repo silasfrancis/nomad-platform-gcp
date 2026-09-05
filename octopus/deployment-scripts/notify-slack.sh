@@ -18,12 +18,6 @@ SlackWebhookUrl="$(get_octopusvariable "SlackWebhookUrl")"
 PROJECT_NAME="$(get_octopusvariable "Octopus.Project.Name")"
 ENVIRONMENT_NAME="$(get_octopusvariable "Octopus.Environment.Name")"
 RELEASE_NUMBER="$(get_octopusvariable "Octopus.Release.Number")"
-DEPLOYMENT_STEPS=(
-  "validate-nomad-job"
-  "deploy-to-nomad"
-  "wait-for-healthy"
-  "promote-deployment"
-)
 
 # Octopus.Deployment.Error is populated the moment ANY step in this
 # deployment fails — not just one named step — so this doesn't need
@@ -52,7 +46,7 @@ TEXT="${PROJECT_NAME} ${RELEASE_NUMBER} ${OUTCOME} in ${ENVIRONMENT_NAME}"
 # step's variable will actually be set, since Octopus only reaches
 # these steps in order and typically stops at the first failure).
 DETAIL=""
-for step in "${DEPLOYMENT_STEPS[@]}"; do
+for step in validate-nomad-job deploy-to-nomad wait-for-healthy promote-deployment; do
   step_detail="$(get_octopusvariable "Octopus.Action[${step}].Output.NomadFailureDetail")"
   if [ -n "${step_detail}" ]; then
     DETAIL="${step_detail}"
