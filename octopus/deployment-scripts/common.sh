@@ -22,6 +22,8 @@ DeploymentNamespace="$(get_octopusvariable "DeploymentNamespace")"
 
 export NOMAD_ADDR="$NomadApiUrl"
 export NOMAD_TOKEN="$NomadAclToken"
+echo $NOMAD_ADDR
+echo $NOMAD_TOKEN
 
 # Set for anything that reads the env var (query/status/promote
 # commands honor this already). Belt-and-suspenders: every direct
@@ -34,6 +36,7 @@ export NOMAD_TOKEN="$NomadAclToken"
 # `namespace = "boutique"` explicitly — this env var and the
 # -namespace flag are reinforcement, not a substitute for that.
 export NOMAD_NAMESPACE="$DeploymentNamespace"
+echo $NOMAD_NAMESPACE
 
 # Absolute path to the package root. Calamari runs each step's script
 # from inside package_root/scripts (this script's own directory), but
