@@ -3,21 +3,23 @@
 #
 # Sourced by every deployment script — not runnable on its own.
 
+
 NomadApiUrl="$(get_octopusvariable "NomadApiUrl")"
 NomadAclToken="$(get_octopusvariable "NomadAclToken")"
+DeploymentNamespace="$(get_octopusvariable "DeploymentNamespace")"
 
 : "${NomadApiUrl:?NomadApiUrl is required}"
 : "${NomadAclToken:?NomadAclToken is required}"
+: "${DeploymentNamespace:?DeploymentNamespace is required}"
 
 export NOMAD_ADDR="$NomadApiUrl"
 export NOMAD_TOKEN="$NomadAclToken"
+export NOMAD_NAMESPACE="$DeploymentNamespace"
 
-# Absolute path to the package root. Calamari runs each step's script
-# from inside package_root/scripts (this script's own directory), but
-# the .nomad.hcl file(s) ship one level up, at the package root
-# alongside scripts
+# Absolute path to the package root. 
 PACKAGE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Discover every .nomad.hcl file in the package root.
 discover_job_files() {
   local files=()
   while IFS= read -r -d '' f; do
@@ -33,8 +35,7 @@ discover_job_files() {
 
 # Pulls the job ID straight out of `job "<id>" {` in the file itself —
 # this always matches Nomad's own understanding of the job, so it can
-# never drift out of sync the way a separately-maintained variable
-# could.
+# never drift out of sync with a separately-maintained variable could.
 job_id_from_file() {
   local file="$1"
   local id
@@ -47,7 +48,7 @@ job_id_from_file() {
 }
 
 # True if this job's spec was configured for canary deploys (any task
-# group's update.canary > 0) — checked against the JOB SPEC itself,
+# group's update.canary > 0) — checked against the Job spec itself,
 # not deployment runtime state, so it reflects what was actually
 # declared regardless of what stage the deployment is currently in.
 job_has_canary() {

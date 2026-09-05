@@ -4,9 +4,14 @@
 # Promotes any canary deployment(s) from deploy-to-nomad.sh, and
 # cleanly no-ops for any job that wasn't a canary deploy in the first
 # place.
-
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
+
+# DeployedJobIds and DeploymentId__<job_id> are output variables set by
+# deploy-to-nomad.sh in an earlier step, not project variables — they
+# only exist under that step's own output namespace, so they're read
+# back with get_octopusvariable "Octopus.Action[<step name>].Output.<var>"
+# rather than as plain environment variables.
 
 DEPLOY_STEP_NAME="deploy-to-nomad"
 
@@ -41,7 +46,8 @@ for job_id in ${DeployedJobIds}; do
 
   echo "[${job_id}] promotion submitted — polling for completion..."
   for i in $(seq 1 "${MAX_ATTEMPTS}"); do
-    status="$(nomad deployment status -json "${deployment_id}" | jq -r '.Status')"
+    status_response="$(nomad deployment status -json "${deployment_id}")"
+    status="$(echo "${status_response}" | jq -r '.Status')"
     echo "  [${job_id}] attempt ${i}/${MAX_ATTEMPTS}: deployment status = ${status}"
 
     case "${status}" in
@@ -50,7 +56,8 @@ for job_id in ${DeployedJobIds}; do
         break
         ;;
       failed|cancelled)
-        echo "  [${job_id}] deployment ${status} after promotion — aborting." >&2
+        echo "  [${job_id}] deployment ${status} after promotion — aborting. Raw status response:" >&2
+        echo "${status_response}" >&2
         overall_status=1
         break
         ;;

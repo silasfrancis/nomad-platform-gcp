@@ -23,12 +23,15 @@ for job_file in "${job_files[@]}"; do
   echo "Submitting ${job_file} (job \"${job_id}\") to ${NOMAD_ADDR}..."
   nomad job run -detach -no-color "${job_file}"
 
+  # Give Nomad a moment to create the deployment record server-side 
   sleep 2
 
-  deployment_id="$(nomad job deployments -json "${job_id}" | jq -r '.[0].ID')"
+  deployments_response="$(nomad job deployments -json "${job_id}")"
+  deployment_id="$(echo "${deployments_response}" | jq -r '.[0].ID')"
 
   if [ -z "${deployment_id}" ] || [ "${deployment_id}" = "null" ]; then
-    echo "Could not determine deployment ID from 'nomad job deployments ${job_id}'." >&2
+    echo "Could not determine deployment ID from 'nomad job deployments ${job_id}'. Raw response:" >&2
+    echo "${deployments_response}" >&2
     exit 1
   fi
 
@@ -44,4 +47,5 @@ done
 # steps know which per-job DeploymentId__<job_id> variables to look up.
 echo "Deployed job IDs:"
 printf '  - %s\n' "${deployed_job_ids[@]}"
+
 set_octopusvariable "DeployedJobIds" "${deployed_job_ids[*]}"

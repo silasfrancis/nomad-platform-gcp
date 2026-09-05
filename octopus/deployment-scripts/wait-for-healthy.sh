@@ -36,7 +36,8 @@ for job_id in ${DeployedJobIds}; do
   job_healthy=0
 
   for i in $(seq 1 "${MAX_ATTEMPTS}"); do
-    status="$(nomad deployment status -json "${deployment_id}" | jq -r '.Status')"
+    status_response="$(nomad deployment status -json "${deployment_id}")"
+    status="$(echo "${status_response}" | jq -r '.Status')"
     echo "  [${job_id}] attempt ${i}/${MAX_ATTEMPTS}: deployment status = ${status}"
 
     case "${status}" in
@@ -51,10 +52,10 @@ for job_id in ${DeployedJobIds}; do
           job_healthy=1
           break
         fi
-        # Plain rolling update still finishing — not terminal, keep polling.
         ;;
       failed|cancelled)
-        echo "  [${job_id}] deployment ${status} — aborting." >&2
+        echo "  [${job_id}] deployment ${status} — aborting. Raw status response:" >&2
+        echo "${status_response}" >&2
         overall_status=1
         break
         ;;

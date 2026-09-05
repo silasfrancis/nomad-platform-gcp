@@ -26,10 +26,12 @@ for job_file in "${job_files[@]}"; do
   plan_exit=$?
   set -e
 
-  # Exit 1 = changes present, nothing destructive — expected, not a
-  # failure. Exit 2 = the plan itself failed to compute — a real
-  # failure, worth aborting the whole deploy over.
-  if [ "${plan_exit}" -eq 2 ]; then
+  # Nomad's own documented exit codes for `job plan`:
+  #   0   = no allocations created or destroyed
+  #   1   = allocations created or destroyed — expected, not a failure
+  #   255 = error determining plan results — a real failure (auth
+  #         errors, unreachable server, invalid job, etc.)
+  if [ "${plan_exit}" -eq 255 ]; then
     echo "Nomad job plan failed for ${job_id} — aborting deployment." >&2
     exit 1
   fi
