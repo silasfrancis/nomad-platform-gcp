@@ -25,6 +25,10 @@ runs:
         mkdir -p release-package/scripts
         cp octopus/deployment-scripts/*.sh release-package/scripts/
         cp "${{ inputs.job-spec-path }}" release-package/
+        
+    - name: List package contents
+      shell: bash
+      run: find release-package -type f
 
     - name: Login To Octopus
       uses: OctopusDeploy/login@e39e03d07630f363bdccd6c7ad4eb28e0ea8a184

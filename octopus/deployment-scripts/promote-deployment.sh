@@ -4,14 +4,13 @@
 # Promotes any canary deployment(s) from deploy-to-nomad.sh, and
 # cleanly no-ops for any job that wasn't a canary deploy in the first
 # place.
-# 
-# NOTE: skips both when there's no canary at all, and when there is one
-# but auto_promote = true — Nomad promotes those on its own, and
-# calling `nomad deployment promote` on one manually would error since
-# it's not awaiting a manual promotion.
+
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 
+DEPLOY_STEP_NAME="deploy-to-nomad"
+
+DeployedJobIds="$(get_octopusvariable "Octopus.Action[${DEPLOY_STEP_NAME}].Output.DeployedJobIds")"
 : "${DeployedJobIds:?DeployedJobIds set by deploy-to-nomad.sh is required}"
 
 MAX_ATTEMPTS=30
@@ -19,8 +18,7 @@ SLEEP_SECONDS=10
 overall_status=0
 
 for job_id in ${DeployedJobIds}; do
-  deployment_var="DeploymentId__${job_id}"
-  deployment_id="${!deployment_var:-}"
+  deployment_id="$(get_octopusvariable "Octopus.Action[${DEPLOY_STEP_NAME}].Output.DeploymentId__${job_id}")"
 
   if [ -z "${deployment_id}" ]; then
     echo "No deployment ID recorded for ${job_id} — skipping." >&2

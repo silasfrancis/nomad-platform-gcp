@@ -2,20 +2,6 @@
 # common.sh
 #
 # Sourced by every deployment script — not runnable on its own.
-#
-# Two jobs: bridge Octopus's project-scoped variables to the names
-# these scripts use internally, and discover what's actually in the
-# package rather than expecting Octopus to tell us. Project variables
-# (DeploymentNamespace, PublicHostname, RemediationMode, ...) are
-# scoped to the whole project — shared by every service Nomad-routed
-# there since the 23-projects-to-5 consolidation — so there is no
-# variable scope left that could hold one specific service's own job
-# ID, protocol, or port. Those facts come from the package's own
-# .nomad.hcl file(s) and from Nomad/Consul's live state instead, which
-# also means they can never drift out of sync with what's actually
-# deployed the way a hand-maintained variable could.
-
-echo "DEBUG: raw NomadApiUrl='$(get_octopusvariable "NomadApiUrl")'"
 
 NomadApiUrl="$(get_octopusvariable "NomadApiUrl")"
 NomadAclToken="$(get_octopusvariable "NomadAclToken")"
@@ -26,19 +12,21 @@ NomadAclToken="$(get_octopusvariable "NomadAclToken")"
 export NOMAD_ADDR="$NomadApiUrl"
 export NOMAD_TOKEN="$NomadAclToken"
 
-# Discover every .nomad.hcl file in the package root. Usually one —
-# each CI matrix item packages its own service's job spec — but this
-# doesn't assume that; a package containing more than one job spec is
-# looped over, not silently dropped to the first match.
+# Absolute path to the package root. Calamari runs each step's script
+# from inside package_root/scripts (this script's own directory), but
+# the .nomad.hcl file(s) ship one level up, at the package root
+# alongside scripts
+PACKAGE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
 discover_job_files() {
   local files=()
   while IFS= read -r -d '' f; do
     files+=("${f}")
-  done < <(find . -maxdepth 1 -type f -name '*.nomad.hcl' -print0)
+  done < <(find "${PACKAGE_ROOT}" -maxdepth 1 -type f -name '*.nomad.hcl' -print0)
 
   if [ "${#files[@]}" -eq 0 ]; then
-    echo "No .nomad.hcl file found in package." >&2
-    exit 1
+    echo "No .nomad.hcl file found in package root (${PACKAGE_ROOT})." >&2
+    return 1
   fi
   printf '%s\n' "${files[@]}"
 }
@@ -76,11 +64,7 @@ job_has_canary() {
 # value here; conflating the two would either skip a job that
 # genuinely needs manual promotion, or call promote on one Nomad
 # already handled itself (which errors, since it's not awaiting one).
-#
-# VERIFY: AutoPromote is the PascalCase JSON field name matching the
-# HCL update.auto_promote key, per Nomad's Go-struct-to-JSON naming
-# convention seen elsewhere in this API (Canary, DesiredCanaries,
-# etc.) — not independently confirmed against real inspect output.
+
 job_auto_promotes() {
   local job_id="$1"
   local auto_promote

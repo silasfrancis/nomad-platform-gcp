@@ -16,7 +16,7 @@ on:
       - "nomad-jobs/security/falco-webhook.nomad.hcl"
 
 permissions:
-  id-token: write # Cosign keyless signing + Vault OIDC + Octopus OIDC login
+  id-token: write
   contents: read
 
 env:
@@ -104,7 +104,7 @@ jobs:
           octopus-server: ${{ vars.OCTOPUS_DEPLOY_SERVER }}
           octopus-service-account-id: ${{ env.OCTOPUS_SERVICE_ACCOUNT_ID }}
           octopus-project: "${{ matrix.items.octopus_project }}"
-          release-version: "1.0.0-${{ matrix.items.name }}.${{ env.SHORT_SHA }}"
+          release-version: "0.0.0-${{ matrix.items.name }}.${{ env.SHORT_SHA }}"
           job-spec-path: "${{ matrix.items.job_spec }}"
 
       - name: Send Slack notification on build failure
@@ -157,7 +157,7 @@ jobs:
           octopus-server: ${{ vars.OCTOPUS_DEPLOY_SERVER }}
           octopus-service-account-id: ${{ env.OCTOPUS_SERVICE_ACCOUNT_ID }}
           octopus-project: "${{ env.TOOL_OCTOPUS_PROJECT }}"
-          release-version: "1.0.0-${{ env.TOOL_NAME }}.${{ env.SHORT_SHA }}"
+          release-version: "0.0.0-${{ env.TOOL_NAME }}.${{ env.SHORT_SHA }}"
           job-spec-path: "${{ env.JOB_SPEC }}"
 
       - name: Send Slack notification on build failure

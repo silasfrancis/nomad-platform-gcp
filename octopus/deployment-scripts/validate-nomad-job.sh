@@ -7,7 +7,15 @@
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 
-while IFS= read -r job_file; do
+# mapfile (not `while read < <(discover_job_files)`) so discover_job_files'
+# own exit status is visible here — a process substitution runs in a
+# subshell and would swallow a "no file found" failure silently.
+mapfile -t job_files < <(discover_job_files)
+if [ "${#job_files[@]}" -eq 0 ]; then
+  exit 1
+fi
+
+for job_file in "${job_files[@]}"; do
   job_id="$(job_id_from_file "${job_file}")"
   echo "Validating ${job_file} (job \"${job_id}\") against ${NOMAD_ADDR}..."
 
@@ -27,4 +35,4 @@ while IFS= read -r job_file; do
   fi
 
   echo "Validation passed for ${job_id}."
-done < <(discover_job_files)
+done

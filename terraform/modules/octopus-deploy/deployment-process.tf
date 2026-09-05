@@ -23,6 +23,7 @@ resource "octopusdeploy_process_step" "this" {
   process_id     = octopusdeploy_process.this[each.value.project].id
   name           = each.value.step
   type           = "Octopus.Script"
+  condition = each.value.step == "notify-slack" ? "Always" : "Success"
   worker_pool_id = octopusdeploy_static_worker_pool.nomad_deployments.id
 
   properties = {

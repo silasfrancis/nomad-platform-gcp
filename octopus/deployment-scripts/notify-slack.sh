@@ -2,20 +2,44 @@
 # notify-slack.sh
 #
 # Posts a deployment outcome to Slack. Never fails the release on its
-# own account — a Slack outage should not block a deployment that
-# otherwise succeeded.
+# own account because a Slack outage should not block a deployment that
+# otherwise succeeded. 
 set -uo pipefail
 
+SlackWebhookUrl="$(get_octopusvariable "SlackWebhookUrl")"
 : "${SlackWebhookUrl:?SlackWebhookUrl deployment variable is required}"
-PROJECT_NAME="${OCTOPUS_PROJECT_NAME:-unknown project}"
-ENVIRONMENT_NAME="${OCTOPUS_ENVIRONMENT_NAME:-unknown environment}"
-RELEASE_NUMBER="${OCTOPUS_RELEASE_NUMBER:-unknown release}"
-OUTCOME="${DEPLOYMENT_OUTCOME:-completed}"
 
-payload=$(cat <<EOF
-{"text": "${PROJECT_NAME} ${RELEASE_NUMBER} ${OUTCOME} in ${ENVIRONMENT_NAME}"}
-EOF
-)
+# Built-in Octopus system variables 
+PROJECT_NAME="$(get_octopusvariable "Octopus.Project.Name")"
+ENVIRONMENT_NAME="$(get_octopusvariable "Octopus.Environment.Name")"
+RELEASE_NUMBER="$(get_octopusvariable "Octopus.Release.Number")"
+
+
+# .Error is the short exit code/message; .ErrorDetail adds Octopus's
+# own stack trace on top of it. 
+DEPLOYMENT_ERROR="$(get_octopusvariable "Octopus.Deployment.Error")"
+DEPLOYMENT_ERROR_DETAIL="$(get_octopusvariable "Octopus.Deployment.ErrorDetail")"
+
+if [ -n "${DEPLOYMENT_ERROR}" ]; then
+  OUTCOME="failed: ${DEPLOYMENT_ERROR}"
+else
+  OUTCOME="succeeded"
+fi
+
+TEXT="${PROJECT_NAME} ${RELEASE_NUMBER} ${OUTCOME} in ${ENVIRONMENT_NAME}"
+
+# ErrorDetail is a raw stack trace and can contain quotes, 
+# backslashes, and newlines  that would otherwise produce
+# invalid JSON or truncate the payload. --arg escapes all of that
+# safely regardless of content. ErrorDetail is only added to the
+# payload when non-empty, so a successful deployment's message stays
+# a single short line.
+if [ -n "${DEPLOYMENT_ERROR_DETAIL}" ]; then
+  payload="$(jq -n --arg text "${TEXT}" --arg detail "${DEPLOYMENT_ERROR_DETAIL}" \
+    '{text: ($text + "\n```" + $detail + "```")}')"
+else
+  payload="$(jq -n --arg text "${TEXT}" '{text: $text}')"
+fi
 
 curl -s -X POST -H 'Content-Type: application/json' -d "${payload}" "${SlackWebhookUrl}" \
   || echo "Slack notification failed to send — continuing, this step never blocks the release."

@@ -8,6 +8,15 @@
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 
+# DeployedJobIds and DeploymentId__<job_id> are output variables set by
+# deploy-to-nomad.sh in an earlier step, not project variables — they
+# only exist under that step's own output namespace, so they're read
+# back with get_octopusvariable "Octopus.Action[<step name>].Output.<var>"
+# rather than as plain environment variables.
+
+DEPLOY_STEP_NAME="deploy-to-nomad"
+
+DeployedJobIds="$(get_octopusvariable "Octopus.Action[${DEPLOY_STEP_NAME}].Output.DeployedJobIds")"
 : "${DeployedJobIds:?DeployedJobIds set by deploy-to-nomad.sh is required}"
 
 MAX_ATTEMPTS=30
@@ -15,8 +24,7 @@ SLEEP_SECONDS=10
 overall_status=0
 
 for job_id in ${DeployedJobIds}; do
-  deployment_var="DeploymentId__${job_id}"
-  deployment_id="${!deployment_var:-}"
+  deployment_id="$(get_octopusvariable "Octopus.Action[${DEPLOY_STEP_NAME}].Output.DeploymentId__${job_id}")"
 
   if [ -z "${deployment_id}" ]; then
     echo "No deployment ID recorded for ${job_id} — skipping." >&2
