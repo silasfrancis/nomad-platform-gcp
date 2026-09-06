@@ -106,6 +106,7 @@ chmod 0600 /etc/consul.d/tls/key.pem
 
 CONSUL_GOSSIP_KEY="$(fetch_secret "consul-gossip-key-${ENVIRONMENT}")"
 CONSUL_AGENT_TOKEN="$(fetch_token_optional "consul-server-agent-token-${ENVIRONMENT}" "Consul server agent token")"
+CONSUL_DNS_TOKEN="$(fetch_token_optional "consul-dns-token-${ENVIRONMENT}" "Consul DNS default token")"
 
 # nomad-server-consul-token-{env} — NOMAD'S OWN Token For Its consul{}
 # Block (Server Variant — Broader Than The Client Variant, Includes
@@ -196,6 +197,7 @@ encrypt = "${CONSUL_GOSSIP_KEY}"
 acl {
   tokens {
     agent = "${CONSUL_AGENT_TOKEN}"
+    dns     = "${CONSUL_DNS_TOKEN}"
   }
 }
 EOF

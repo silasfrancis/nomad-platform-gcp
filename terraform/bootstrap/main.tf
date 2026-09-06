@@ -698,6 +698,23 @@ module "secrets" {
             }
         }
     }
+
+    "consul-dns-token-dev"   = { 
+        labels = { purpose = "consul", tier = "scoped", environment = "dev" } 
+        iam = {
+            "roles/secretmanager.secretAccessor" = {
+            members = [local.nomad_server_dev_member, local.nomad_client_dev_member]
+            }
+        }
+    }
+    "consul-dns-token-prod"  = { 
+        labels = { purpose = "consul", tier = "scoped", environment = "prod" } 
+        iam = {
+            "roles/secretmanager.secretAccessor" = {
+            members = [local.nomad_server_prod_member, local.nomad_client_prod_member]
+            }
+        }
+    }
     
     # Nomad agents consul tokens
     "nomad-server-consul-token-dev"   = { 

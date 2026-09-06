@@ -74,6 +74,9 @@ printf 'node_name=%s\n' "$NODE_NAME"
 GCP_PROJECT="$(curl -sf -H "${METADATA_HEADER}" \
   "http://metadata.google.internal/computeMetadata/v1/project/project-id")"
 
+# Configure Docker to use gcloud as a credential helper for Artifact Registry
+gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
 # Required Secret — Hard-Fails The Script (Via set -e) If Missing. Use
 # For Certs/Gossip Keys, Which Must Always Exist By The Time A Client
 # Boots (Pushed By generate-and-push-pki.sh Before Any Instance Is
@@ -127,6 +130,7 @@ CONSUL_GOSSIP_KEY="$(fetch_secret "consul-gossip-key-${ENVIRONMENT}")"
 # (acl.tokens.agent), Narrow Node-Identity Scope. Distinct From Nomad's
 # Own Consul Token Below.
 CONSUL_AGENT_TOKEN="$(fetch_token_optional "consul-client-agent-token-${ENVIRONMENT}" "Consul client agent token")"
+CONSUL_DNS_TOKEN="$(fetch_token_optional "consul-dns-token-${ENVIRONMENT}" "Consul DNS default token")"
 
 # nomad-client-consul-token-{env} — NOMAD'S OWN Token For Its consul{}
 # Block (Client Variant — Narrower Than The Server Variant, No acl/mesh
@@ -169,6 +173,7 @@ encrypt = "${CONSUL_GOSSIP_KEY}"
 acl {
   tokens {
     agent = "${CONSUL_AGENT_TOKEN}"
+    dns     = "${CONSUL_DNS_TOKEN}"
   }
 }
 EOF
@@ -248,8 +253,5 @@ FALCO_WEBHOOK_URL="https://falco-webhook-${ENVIRONMENT}.platform.lefrancis.org:$
 sed -i "s|__FALCO_WEBHOOK_URL__|${FALCO_WEBHOOK_URL}|g" /etc/falco/falco.yaml
 
 systemctl restart falco
-
-# Configure Docker to use gcloud as a credential helper for Artifact Registry
-gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
 
 echo "[nomad-client-startup] Done."
