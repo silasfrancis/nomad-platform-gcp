@@ -287,4 +287,20 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
+# Configure Systemd-Resolved To Route *.Consul DNS Queries To Consul's
+# Own DNS Interface (127.0.0.1:8600) Rather Than The Default Upstream
+# (GCE Metadata Server), Which Has No Knowledge Of Consul-Registered
+# Names.
+mkdir -p /etc/systemd/resolved.conf.d
+cat > /etc/systemd/resolved.conf.d/consul.conf <<'EOF'
+[Resolve]
+DNS=127.0.0.1:8600
+Domains=~consul
+EOF
+systemctl restart systemd-resolved
+
+# Force /Etc/Resolv.Conf To Point At Systemd-Resolved's Stub Listener
+# (127.0.0.53) 
+ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+
 echo "[nomad-server-startup] Done." 

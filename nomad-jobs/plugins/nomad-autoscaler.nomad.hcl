@@ -59,6 +59,9 @@ job "nomad-autoscaler" {
       port "http" {
         to = 8080
       }
+      dns {
+        servers = ["${attr.driver.docker.bridge_ip}"]
+      }
     }
 
     task "nomad-autoscaler" {
