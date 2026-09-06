@@ -185,10 +185,25 @@ job_id_from_file() {
 # group's update.canary > 0) — checked against the JOB SPEC itself,
 # not deployment runtime state, so it reflects what was actually
 # declared regardless of what stage the deployment is currently in.
+#
+# `nomad job inspect -json` output is NOT consistently shaped — Nomad's
+# own maintainers have publicly acknowledged this: sometimes the job
+# fields come wrapped under a top-level "Job" key, sometimes they're
+# at the root with no wrapper at all, depending on which internal code
+# path produced the JSON. An earlier version of this jq expression
+# assumed the wrapped shape unconditionally (`.Job.TaskGroups[]`),
+# which crashes with "Cannot iterate over null" whenever that
+# assumption is wrong — exactly what happened here. `(.Job // .)`
+# unwraps it if present and falls back to the root object if not;
+# `TaskGroups[]?` (with `?`) turns a missing/null TaskGroups into an
+# empty result instead of an error; `max // 0` turns an empty result
+# into a plain 0 instead of jq's literal "null" string, which would
+# otherwise blow up the bash `-gt` comparison below the same way.
 job_has_canary() {
   local job_id="$1"
   local canary_count
-  canary_count="$(nomad job inspect -namespace "${NOMAD_NAMESPACE}" -json "${job_id}" | jq -r '[.Job.TaskGroups[].Update.Canary // 0] | max')"
+  canary_count="$(nomad job inspect -namespace "${NOMAD_NAMESPACE}" -json "${job_id}" \
+    | jq -r '(.Job // .) as $job | ([$job.TaskGroups[]? | .Update.Canary // 0]) | (max // 0)')"
   [ "${canary_count}" -gt 0 ]
 }
 
@@ -204,10 +219,15 @@ job_has_canary() {
 # HCL update.auto_promote key, per Nomad's Go-struct-to-JSON naming
 # convention seen elsewhere in this API (Canary, DesiredCanaries,
 # etc.) — not independently confirmed against real inspect output.
+#
+# Same defensive (.Job // .) / TaskGroups[]? pattern as job_has_canary
+# above, for the same reason — see its comment for the full
+# explanation of why `nomad job inspect -json`'s shape can't be
+# trusted to be one specific structure.
 job_auto_promotes() {
   local job_id="$1"
   local auto_promote
   auto_promote="$(nomad job inspect -namespace "${NOMAD_NAMESPACE}" -json "${job_id}" \
-    | jq -r '[.Job.TaskGroups[] | select((.Update.Canary // 0) > 0) | (.Update.AutoPromote // false)] | any')"
+    | jq -r '(.Job // .) as $job | ([$job.TaskGroups[]? | select((.Update.Canary // 0) > 0) | (.Update.AutoPromote // false)]) | any')"
   [ "${auto_promote}" = "true" ]
 }

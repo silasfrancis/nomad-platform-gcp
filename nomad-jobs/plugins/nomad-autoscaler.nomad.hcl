@@ -70,7 +70,7 @@ job "nomad-autoscaler" {
         args = [
             "agent",
             "-config", "/local/config.hcl",
-            "-policy-dir", "/local",
+            "-policy-dir", "local/policies",
           ]
       }
 
@@ -99,7 +99,7 @@ http {
 }
 
 nomad {
-  address = "http://localhost:4646"
+  address = "http://nomad.service.consul:4646"
 }
 
 apm "prometheus" {
@@ -119,6 +119,12 @@ target "gce-mig" {
 strategy "target-value" {
   driver = "target-value"
 }
+
+policy {
+  default_cooldown            = "10m"
+  default_evaluation_interval = "1m"
+  dir = "/local/policies"
+}
 EOF
         destination = "local/config.hcl"
       }
@@ -132,8 +138,8 @@ scaling "cluster_policy_ondemand" {
   max     = ${var.max_ondemand_instances}
 
   policy {
-    default_cooldown             = "10m"
-    default_evaluation_interval  = "1m"
+    cooldown             = "10m"
+    evaluation_interval  = "1m"
 
     check "blocked_evaluations" {
       source = "prometheus"
@@ -159,8 +165,8 @@ scaling "cluster_policy_spot" {
   max     = ${var.max_spot_instances}
 
   policy {
-    default_cooldown             = "10m"
-    default_evaluation_interval  = "1m"
+    cooldown             = "10m"
+    evaluation_interval  = "1m"
 
     check "blocked_evaluations" {
       source = "prometheus"
@@ -180,7 +186,7 @@ scaling "cluster_policy_spot" {
   }
 }
 EOF
-        destination = "local/policies.hcl"
+        destination = "local/policies/policies.hcl"
       }
 
       resources {

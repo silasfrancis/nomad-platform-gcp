@@ -185,7 +185,7 @@ locals {
       machine_type            = "e2-standard-2"
       environment             = "dev"
       subnetwork               = local.network.subnets["subnet-dev-private"].self_link
-      min_replicas             = 0
+      min_replicas             = 1
       max_replicas             = 5
       spot                     = true
       service_account_email    = local.nomad_client_sa_email_dev
@@ -199,7 +199,7 @@ locals {
       machine_type            = "e2-standard-2"
       environment             = "prod"
       subnetwork               = local.network.subnets["subnet-prod-private"].self_link
-      min_replicas             = 2
+      min_replicas             = 1
       max_replicas             = 10
       spot                     = false
       service_account_email    = local.nomad_client_sa_email_prod
