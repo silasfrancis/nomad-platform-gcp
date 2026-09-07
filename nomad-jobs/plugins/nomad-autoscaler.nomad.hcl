@@ -57,10 +57,7 @@ job "nomad-autoscaler" {
 
     network {
       port "http" {
-        to = 8080
-      }
-      dns {
-        servers = ["${attr.driver.docker.bridge_ip}"]
+        static = 8080
       }
     }
 
@@ -69,7 +66,7 @@ job "nomad-autoscaler" {
 
       config {
         image = "hashicorp/nomad-autoscaler:0.5.0"
-        ports = ["http"]
+        network_mode = "host"
         args = [
             "agent",
             "-config", "/local/config.hcl",
@@ -96,13 +93,24 @@ EOF
 
       template {
         data = <<EOF
+{{ with secret "kv/data/pki/${var.environment}/nomad-ca" }}
+{{ .Data.data.ca_cert }}
+{{ end }}
+EOF
+        destination = "local/tls/ca.pem"
+      }
+
+      template {
+        data = <<EOF
 http {
   bind_address = "0.0.0.0"
   bind_port    = 8080
 }
 
 nomad {
-  address = "http://nomad.service.consul:4646"
+  address     = "https://nomad.service.consul:4646"
+  ca_cert     = "/local/tls/ca.pem"
+  tls_server_name = "server.${var.environment}.nomad"
 }
 
 apm "prometheus" {

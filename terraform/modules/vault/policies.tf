@@ -27,7 +27,7 @@ resource "vault_policy" "consumer" {
     path "gcp/static-account/nomad-autoscaler-${each.value.environment}/key" {
       capabilities = ["read"]
     }
-    %{ else }
+    %{ endif }
     %{~ for p in each.value.config.kv_paths ~}
     %{~ if startswith(p, "shared/") ~}
     path "kv/data/${p}" {
@@ -39,12 +39,16 @@ resource "vault_policy" "consumer" {
     }
     %{~ endif ~}
     %{~ endfor ~}
+    %{~ for p in each.value.config.pki_paths ~}
+    path "kv/data/pki/${each.value.environment}/${p}" {
+      capabilities = ["read"]
+    }
+    %{~ endfor ~}
     %{~ if each.value.config.db_role != null ~}
     path "database/creds/${each.value.environment == "prod" ? "${each.value.config.db_role}-prod" : "${each.value.config.db_role}-dev"}" {
       capabilities = ["read"]
     }
     %{~ endif ~}
-    %{ endif }
   EOT
 }
 

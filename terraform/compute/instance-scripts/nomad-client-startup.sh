@@ -254,20 +254,36 @@ sed -i "s|__FALCO_WEBHOOK_URL__|${FALCO_WEBHOOK_URL}|g" /etc/falco/falco.yaml
 
 systemctl restart falco
 
-# Configure Systemd-Resolved To Route *.Consul DNS Queries To Consul's
-# Own DNS Interface (127.0.0.1:8600) Rather Than The Default Upstream
-# (GCE Metadata Server), Which Has No Knowledge Of Consul-Registered
-# Names.
-mkdir -p /etc/systemd/resolved.conf.d
-cat > /etc/systemd/resolved.conf.d/consul.conf <<'EOF'
-[Resolve]
-DNS=127.0.0.1:8600
-Domains=~consul
-EOF
-systemctl restart systemd-resolved
+# Use Dnsmasq As The Single DNS Resolver For Both The Host And Any
+# Docker-Bridge-Networked Containers, Forwarding *.Consul Queries To
+# Consul's DNS Interface (127.0.0.1:8600) And Everything Else Upstream
+# To The GCE Metadata Server. 
+systemctl disable --now systemd-resolved
 
-# Force /Etc/Resolv.Conf To Point At Systemd-Resolved's Stub Listener
-# (127.0.0.53) 
-ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+apt-get update -qq
+apt-get install -y dnsmasq
+
+DOCKER_BRIDGE_IP="$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')"
+cat > /etc/dnsmasq.d/consul.conf <<EOF
+listen-address=127.0.0.1,${DOCKER_BRIDGE_IP}
+bind-interfaces
+no-resolv
+server=/consul/127.0.0.1#8600
+server=169.254.169.254
+EOF
+systemctl restart dnsmasq
+
+# Write /Etc/Resolv.Conf As A Real Static File Pointing At Dnsmasq,
+# Then Mark It Immutable So Nothing (GCE Guest Agent, DHCP Hooks,
+# Systemd-Resolved) Can Silently Rewrite It On A Later Boot Or Network
+# Event. chattr -i First So Re-Running This On A Later Boot Doesn't
+# Fail On An Already-Immutable File From A Prior Boot.
+chattr -i /etc/resolv.conf 2>/dev/null || true
+rm -f /etc/resolv.conf
+cat > /etc/resolv.conf <<EOF
+nameserver 127.0.0.1
+search ${ZONE%-*}.c.${GCP_PROJECT}.internal c.${GCP_PROJECT}.internal google.internal
+EOF
+chattr +i /etc/resolv.conf
 
 echo "[nomad-client-startup] Done."
