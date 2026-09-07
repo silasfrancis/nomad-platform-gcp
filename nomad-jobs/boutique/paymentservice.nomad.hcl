@@ -19,7 +19,7 @@ job "paymentservice" {
   }
 
   group "paymentservice" {
-    count = 1
+    count = #{ReplicaCount}
 
     constraint {
       attribute = "${meta.node_pool_type}"
@@ -76,8 +76,8 @@ job "paymentservice" {
       }
 
       resources {
-        cpu    = 200
-        memory = 300
+        cpu    = #{Cpu}
+        memory = #{Memory}
       }
     }
   }

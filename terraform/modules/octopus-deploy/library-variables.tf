@@ -4,44 +4,6 @@
 # specific to a single project (e.g. replica count) is set on that
 # project directly in projects.tf instead of duplicated here.
 
-locals {
-  environments = toset(["dev"])
-
-  env_by_key = {
-    dev  = octopusdeploy_environment.dev.id
-    prod = octopusdeploy_environment.prod.id
-  }
-  nomad_address_by_env = {
-    dev  = var.nomad_address_dev
-    prod = var.nomad_address_prod
-  }
-
-  traefik_public_ip_by_env = {
-    dev  = var.traefik_public_ip_dev
-    prod = var.traefik_public_ip_prod
-  }
-
-  traefik_public_port_by_env = {
-    dev  = var.traefik_public_port_dev
-    prod = var.traefik_public_port_prod
-  }
-
-  traefik_internal_ip_by_env = {
-    dev  = var.traefik_internal_ip_dev
-    prod = var.traefik_internal_ip_prod
-  }
-
-  traefik_internal_port_by_env = {
-    dev  = var.traefik_internal_port_dev
-    prod = var.traefik_internal_port_prod
-  }
-
-  # Base image path — same registry regardless of environment, unlike
-  # everything else that's split dev/prod. One repo, images promoted
-  # through environments by tag, not rebuilt — per the architecture
-  # doc's CI/CD design (GitHub Actions builds once per commit).
-  artifact_registry_path = var.artifact_registry_path
-}
 
 locals {
   dummy_token      = "hvs.CAESIJ_placeholder_token_for_testing"
@@ -203,4 +165,99 @@ resource "octopusdeploy_variable" "artifact_registry" {
   name     = "ArtifactRegistry"
   type     = "String"
   value    = local.artifact_registry_path # e.g. "us-central1-docker.pkg.dev/${var.gcp_project_id}/platform-images"
+}
+
+# ServiceName — extracted from the release's pre-release tag.
+# "0.0.0-cartservice.a03722a8" -> "cartservice"
+
+resource "octopusdeploy_variable" "service_name" {
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "ServiceName"
+  type     = "String"
+
+  value = chomp(<<-EOT
+    #{Octopus.Release.Number | Replace "^\d+\.\d+\.\d+-([a-zA-Z0-9-]+)\..*$" "$1"}
+  EOT
+  )
+}
+
+
+# CPU / Memory overrides — named Cpu[service] / Memory[service] to use
+# Octostache's dynamic indexer syntax: #{Cpu[#{ServiceName}]}
+
+resource "octopusdeploy_variable" "cpu_override" {
+  for_each = local.cpu_overrides
+
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "Cpu[${each.key}]"
+  type     = "String"
+  value    = tostring(each.value)
+}
+
+resource "octopusdeploy_variable" "memory_override" {
+  for_each = local.memory_overrides
+
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "Memory[${each.key}]"
+  type     = "String"
+  value    = tostring(each.value)
+}
+
+# Whether ServiceName has an override.
+
+resource "octopusdeploy_variable" "cpu_is_overridden" {
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "CpuIsOverridden"
+  type     = "String"
+
+  value = chomp(<<-EOT
+    #{ServiceName | Match "^(${local.cpu_service_regex})$"}
+  EOT
+  )
+}
+
+resource "octopusdeploy_variable" "memory_is_overridden" {
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "MemoryIsOverridden"
+  type     = "String"
+
+  value = chomp(<<-EOT
+    #{ServiceName | Match "^(${local.memory_service_regex})$"}
+  EOT
+  )
+}
+
+# Final Cpu / Memory — what the Nomad templates reference as #{Cpu} /
+# #{Memory}. Falls through to the default floor when unlisted.
+
+resource "octopusdeploy_variable" "cpu" {
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "Cpu"
+  type     = "String"
+
+  value = chomp(<<-EOT
+    #{if CpuIsOverridden}#{Cpu[#{ServiceName}]}#{else}${local.cpu_default}#{/if}
+  EOT
+  )
+
+  depends_on = [
+    octopusdeploy_variable.cpu_override,
+    octopusdeploy_variable.cpu_is_overridden
+  ]
+}
+
+resource "octopusdeploy_variable" "memory" {
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "Memory"
+  type     = "String"
+
+  value = chomp(<<-EOT
+    #{if MemoryIsOverridden}#{Memory[#{ServiceName}]}#{else}${local.memory_default}#{/if}
+  EOT
+  )
+
+  depends_on = [
+    octopusdeploy_variable.memory_override,
+    octopusdeploy_variable.memory_is_overridden
+  ]
 }

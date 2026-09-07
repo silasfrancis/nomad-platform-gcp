@@ -16,7 +16,7 @@ job "adservice" {
   }
 
   group "adservice" {
-    count = 1
+    count = #{ReplicaCount}
 
     constraint {
       attribute = "${meta.node_pool_type}"
@@ -72,8 +72,8 @@ job "adservice" {
       }
 
       resources {
-        cpu    = 300
-        memory = 512
+        cpu    = #{Cpu}
+        memory = #{Memory}
       }
     }
   }
