@@ -67,6 +67,7 @@ job "currencyservice" {
 
       env {
         PORT = "7000"
+        DISABLE_PROFILER = "1"
       }
 
       resources {

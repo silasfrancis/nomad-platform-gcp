@@ -20,7 +20,8 @@ deployed_job_ids=()
 
 for job_file in "${job_files[@]}"; do
   job_id="$(job_id_from_file "${job_file}")"
-  echo "Submitting ${job_file} (job \"${job_id}\") to ${NOMAD_ADDR} (namespace ${NOMAD_NAMESPACE})..."
+  job_type="$(job_type_from_file "${job_file}")"
+  echo "Submitting ${job_file} (job \"${job_id}\", type ${job_type}) to ${NOMAD_ADDR} (namespace ${NOMAD_NAMESPACE})..."
 
   set +e
   run_output="$(nomad job run -namespace "${NOMAD_NAMESPACE}" -detach -no-color "${job_file}" 2>&1)"
@@ -30,6 +31,20 @@ for job_file in "${job_files[@]}"; do
 
   if [ "${run_exit}" -ne 0 ]; then
     fail_with_reason "Nomad job run failed for ${job_id}: $(echo "${run_output}" | tail -n 5)"
+  fi
+
+  # Only "service" jobs have a Deployment object at all — batch,
+  # system, and sysbatch jobs register and run but never create one,
+  # so `nomad job deployments` correctly returns [] for them; that's
+  # not a failure, there's nothing to track. Registration succeeding
+  # (checked above) is the whole success condition for these types —
+  # skip deployment-ID lookup entirely and don't add them to
+  # deployed_job_ids, so wait-for-healthy.sh and promote-deployment.sh
+  # (which only ever iterate over DeployedJobIds) naturally never see
+  # them either, with no changes needed in either of those scripts.
+  if [ "${job_type}" != "service" ]; then
+    echo "Job \"${job_id}\" is type ${job_type} — no deployment tracking applies to this type; registration success is sufficient."
+    continue
   fi
 
   # Give Nomad a moment to create the deployment record server-side —

@@ -66,7 +66,7 @@ job "frontend" {
       }
 
       tags = [
-        "metrics"
+        "metrics",
         "traefik.enable=true",
         "traefik.http.routers.frontend.rule=Host(`#{PublicHostname}`)",
         "traefik.http.routers.frontend.tls.certresolver=letsencrypt",

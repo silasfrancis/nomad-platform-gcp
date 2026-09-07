@@ -3,15 +3,13 @@
 #
 # Sourced by every deployment script — not runnable on its own.
 #
-# Four jobs: bridge Octopus's project-scoped variables to the names
+# Three jobs: bridge Octopus's project-scoped variables to the names
 # these scripts use internally, discover what's actually in the
-# package rather than expecting Octopus to tell us, replace #{...}
-# template tokens in job spec files ourselves (see
-# substitute_job_file_variables below), and give every script one
-# place to report ITS OWN meaningful failure text — Octopus only ever
-# exposes Octopus.Deployment.Error/.ErrorDetail, which is Octopus's own
-# internal exception trace, never the real stdout/stderr of a failed
-# script.
+# package rather than expecting Octopus to tell us, and give every
+# script one place to report ITS OWN meaningful failure text — Octopus
+# only ever exposes Octopus.Deployment.Error/.ErrorDetail, which is
+# Octopus's own internal exception trace, never the real stdout/stderr
+# of a failed script.
 
 NomadApiUrl="$(get_octopusvariable "NomadApiUrl")"
 NomadAclToken="$(get_octopusvariable "NomadAclToken")"
@@ -27,11 +25,10 @@ export NOMAD_TOKEN="$NomadAclToken"
 # Set for anything that reads the env var (query/status/promote
 # commands honor this already). Also passed explicitly as -namespace
 # on every direct `nomad job validate/plan/run` call in these scripts
-# as reinforcement — but note neither of those is what actually makes
-# a job land in the right namespace when the job SPEC's own
-# `namespace = "..."` field is a literal, unsubstituted
-# "#{DeploymentNamespace}" string; see substitute_job_file_variables
-# below for what actually fixes that.
+# as reinforcement. The job spec's own `namespace = "#{DeploymentNamespace}"`
+# field is resolved by Octopus's built-in "Substitute Variables in
+# Files" feature (Octopus.Features.SubstituteInFiles), configured on
+# the validate-nomad-job and deploy-to-nomad steps in Terraform.
 export NOMAD_NAMESPACE="$DeploymentNamespace"
 
 # Absolute path to the package root. Calamari runs each step's script
@@ -87,32 +84,32 @@ fail_with_reason() {
 # "#{Octopus.Release.Number | Replace ...}") — Octopus resolves that
 # internally, so a plain get_octopusvariable("ImageTag") call is
 # sufficient; no filter-parsing needed here.
-# substitute_job_file_variables() {
-#   local file="$1"
-#   local content
-#   content="$(cat "${file}")"
+substitute_job_file_variables() {
+  local file="$1"
+  local content
+  content="$(cat "${file}")"
 
-#   # NOTE: POSIX bracket expressions don't support backslash-escaping —
-#   # a literal ']' inside [...] must be the FIRST character right after
-#   # '[' to be treated literally, not escaped with '\'. An earlier
-#   # version of this pattern used \[\] here, which silently matched
-#   # nothing at all (the stray unescaped ']' terminated the character
-#   # class one position early, leaving a dangling literal "]+" outside
-#   # it that could never match real tokens) — caught by testing against
-#   # a real job spec before shipping this.
-#   local tokens
-#   mapfile -t tokens < <(grep -oE '#\{[]A-Za-z0-9_.[]+\}' "${file}" | sort -u)
+  # NOTE: POSIX bracket expressions don't support backslash-escaping —
+  # a literal ']' inside [...] must be the FIRST character right after
+  # '[' to be treated literally, not escaped with '\'. An earlier
+  # version of this pattern used \[\] here, which silently matched
+  # nothing at all (the stray unescaped ']' terminated the character
+  # class one position early, leaving a dangling literal "]+" outside
+  # it that could never match real tokens) — caught by testing against
+  # a real job spec before shipping this.
+  local tokens
+  mapfile -t tokens < <(grep -oE '#\{[]A-Za-z0-9_.[]+\}' "${file}" | sort -u)
 
-#   local token var_name value
-#   for token in "${tokens[@]}"; do
-#     var_name="${token#\#\{}"
-#     var_name="${var_name%\}}"
-#     value="$(get_octopusvariable "${var_name}")"
-#     content="${content//${token}/${value}}"
-#   done
+  local token var_name value
+  for token in "${tokens[@]}"; do
+    var_name="${token#\#\{}"
+    var_name="${var_name%\}}"
+    value="$(get_octopusvariable "${var_name}")"
+    content="${content//${token}/${value}}"
+  done
 
-#   printf '%s' "${content}" > "${file}"
-# }
+  printf '%s' "${content}" > "${file}"
+}
 
 # Discover every .nomad.hcl file in the package root, substituting its
 # #{Variable} tokens in place before returning it. Usually one file —
@@ -150,9 +147,9 @@ discover_job_files() {
   fi
 
   local f
-  # for f in "${files[@]}"; do
-  #   substitute_job_file_variables "${f}"
-  # done
+  for f in "${files[@]}"; do
+    substitute_job_file_variables "${f}"
+  done
 
   printf '%s\n' "${files[@]}"
 }
@@ -179,6 +176,33 @@ job_id_from_file() {
     exit 1
   fi
   printf '%s' "${id}"
+}
+
+# Pulls the job's `type = "..."` field straight out of the file — same
+# technique and same subshell-safety rules as job_id_from_file above
+# (never call fail_with_reason/set_octopusvariable in here).
+#
+# Unlike the job ID, `type` is genuinely OPTIONAL in a Nomad job spec —
+# Nomad itself defaults an unset type to "service" — so a missing match
+# here is not an error condition the way a missing job ID is; it just
+# means "service", silently, matching Nomad's own default exactly.
+#
+# This matters because Nomad's deployment-tracking machinery (`nomad
+# job deployments`, `nomad deployment status`, canary/rolling updates —
+# everything deploy-to-nomad.sh/wait-for-healthy.sh/promote-deployment.sh
+# were originally built around) only exists for `type = "service"` jobs.
+# `batch`, `system`, and `sysbatch` jobs register and run but never
+# create a Deployment object at all — `nomad job deployments` correctly
+# returns `[]` for them, which is not a failure, it's Nomad telling you
+# there's nothing there to track.
+job_type_from_file() {
+  local file="$1"
+  local type
+  type="$(sed -n 's/^[[:space:]]*type[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${file}" | head -n1)"
+  if [ -z "${type}" ]; then
+    type="service"
+  fi
+  printf '%s' "${type}"
 }
 
 # True if this job's spec was configured for canary deploys (any task
