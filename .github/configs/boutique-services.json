@@ -8,7 +8,7 @@
     },
     {
       "name": "cartservice",
-      "path": "services/cartservice",
+      "path": "services/cartservice/src",
       "job_spec": "nomad-jobs/boutique/cartservice.nomad.hcl",
       "octopus_project": "boutique"
     },
