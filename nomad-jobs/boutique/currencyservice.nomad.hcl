@@ -1,9 +1,3 @@
-# nomad-jobs/boutique/currencyservice.nomad.hcl
-#
-# Rolling deployment (Nomad default). Soft affinity toward Spot.
-# Connect mesh retrofit: service {} at group level (Consul Connect
-# requirement), receiving-only — called by frontend/checkoutservice.
-
 job "currencyservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

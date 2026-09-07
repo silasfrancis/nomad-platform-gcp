@@ -41,9 +41,5 @@ pki-local/
 *.retry
 *.pkrvars.hcl
 !*.pkrvars.hcl.example
-<<<<<<< HEAD
-packer_cache/
-=======
 packer_cache/
 .git.bak
->>>>>>> ed240f8 (using dnsmasq for bridge networking - consul dns query fixes)

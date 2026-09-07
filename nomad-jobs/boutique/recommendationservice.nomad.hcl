@@ -1,12 +1,3 @@
-# nomad-jobs/boutique/recommendationservice.nomad.hcl
-#
-# Rolling deployment, hard spot-only. Connect mesh retrofit:
-# group-level service {}, one upstream (productcatalogservice) —
-# NOMAD_UPSTREAM_ADDR_productcatalogservice is Nomad's own generated
-# env var for this upstream's sidecar address, used instead of
-# hardcoding localhost:<port> so the value can never silently drift
-# out of sync with whatever local_bind_port is actually set below.
-
 job "recommendationservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

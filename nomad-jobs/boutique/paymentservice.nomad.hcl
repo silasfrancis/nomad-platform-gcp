@@ -1,11 +1,3 @@
-# nomad-jobs/boutique/paymentservice.nomad.hcl
-#
-# Rolling deployment but hard on-demand — direct customer transaction
-# path even though not one of the 4 canaried services. App mocks
-# payment in-process; reads only PORT + DISABLE_PROFILER.
-# Connect mesh retrofit: group-level service {}, receiving-only —
-# called by checkoutservice.
-
 job "paymentservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

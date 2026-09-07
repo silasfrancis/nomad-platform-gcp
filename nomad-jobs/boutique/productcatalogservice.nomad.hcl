@@ -1,15 +1,3 @@
-# nomad-jobs/boutique/productcatalogservice.nomad.hcl
-#
-# Canary deployment, on-demand only. No secrets — just serves a
-# static product list.
-#
-# Connect mesh retrofit: service {} moved from task-level to
-# group-level — Consul Connect requires this (the sidecar attaches to
-# the group's bridge network, not an individual task). Receiving-only:
-# nothing this service calls itself, so no upstreams block, just the
-# empty sidecar_service {} needed to accept mesh traffic from
-# frontend/checkoutservice/recommendationservice.
-
 job "productcatalogservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

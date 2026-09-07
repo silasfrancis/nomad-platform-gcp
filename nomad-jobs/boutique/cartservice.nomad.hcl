@@ -1,14 +1,3 @@
-# nomad-jobs/boutique/cartservice.nomad.hcl
-#
-# Canary deployment, on-demand only (direct customer transaction
-# path). Connect mesh retrofit: group-level service {}, one upstream
-# (redis) — Connect proxies plain TCP fine, not just HTTP/gRPC, so
-# Redis's wire protocol works the same way through the sidecar as
-# everything else here. REDIS_ADDR now points at
-# localhost:<local_bind_port> instead of Consul DNS; the password
-# still comes from kv/data/{env}/shared/redis exactly as before —
-# Connect handles the network hop, not authentication.
-
 job "cartservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

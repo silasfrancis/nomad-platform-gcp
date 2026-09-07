@@ -1,8 +1,3 @@
-# nomad-jobs/boutique/adservice.nomad.hcl
-#
-# Rolling deployment, hard spot-only. Connect mesh retrofit:
-# group-level service {}, receiving-only — called by frontend.
-
 job "adservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

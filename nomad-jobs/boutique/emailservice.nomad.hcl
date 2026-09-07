@@ -1,9 +1,3 @@
-# nomad-jobs/boutique/emailservice.nomad.hcl
-#
-# Rolling deployment, soft affinity toward Spot. Logs a mock
-# confirmation only. Connect mesh retrofit: group-level service {},
-# receiving-only — called by checkoutservice.
-
 job "emailservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

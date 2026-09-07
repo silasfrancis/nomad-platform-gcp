@@ -1,9 +1,3 @@
-# nomad-jobs/boutique/shippingservice.nomad.hcl
-#
-# Rolling deployment, soft affinity toward Spot.
-# Connect mesh retrofit: group-level service {}, receiving-only —
-# called by frontend/checkoutservice.
-
 job "shippingservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

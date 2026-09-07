@@ -1,12 +1,3 @@
-# nomad-jobs/boutique/checkoutservice.nomad.hcl
-#
-# Canary deployment, on-demand only — orchestrates the actual purchase
-# transaction across 6 downstream services. Connect mesh retrofit:
-# group-level service {}, 6 upstreams — every *_ADDR env var uses
-# Nomad's own NOMAD_UPSTREAM_ADDR_<service> for each one, rather than
-# hardcoding localhost:<port>, so the value can never silently drift
-# out of sync with whatever local_bind_port is set below.
-
 job "checkoutservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

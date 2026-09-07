@@ -1,21 +1,3 @@
-# nomad-jobs/boutique/frontend.nomad.hcl
-#
-# The only boutique service reached from outside the platform — Traefik
-# calls it directly via Consul Catalog (plain reverse proxy, not
-# through Connect), so its own inbound side is unaffected by this
-# retrofit. Its 7 outbound calls to other boutique services now go
-# through Connect upstreams instead of Consul DNS.
-#
-# One real collision, not just a mechanical port list: recommendationservice's
-# remote port is 8080 — the exact same port frontend itself listens on
-# within this allocation's own network namespace. local_bind_port 8082
-# below avoids that; every other upstream's remote port is unique
-# across this list, so no other offset was needed.
-#
-# Canary deployment: a new version runs alongside the stable one, gets
-# smoke-tested, then is promoted explicitly (auto_promote = false —
-# this is Octopus's `nomad deployment promote` step, not automatic).
-
 job "frontend" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"

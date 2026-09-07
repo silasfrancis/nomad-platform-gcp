@@ -46,11 +46,9 @@ job "loadgenerator" {
       }
 
       env {
-        FRONTEND_ADDR   = "frontend.service.consul:8080"
-        USERS           = "10"
-        SPAWN_RATE      = "1"
-        LOCUST_HEADLESS = "true"
-        RUN_TIME        = "#{RunTime}" # e.g. "5m" — new Octopus variable, this job's own duration
+        FRONTEND_ADDR = "frontend.service.consul:8080"
+        USERS         = "10"
+        RATE          = "1"
       }
 
       resources {
