@@ -44,7 +44,7 @@ job "nomad-sentinel" {
       }
 
       tags = [
-        "metrics"
+        "metrics",
         "traefik.enable=true",
         "traefik.http.routers.nomad-sentinel.rule=Host(`nomad-sentinel-#{Environment}.platform.lefrancis.org`)",
         "traefik.http.routers.nomad-sentinel.entrypoints=internal",
@@ -60,6 +60,7 @@ job "nomad-sentinel" {
               local_bind_port  = 5432
             }
           }
+          tags = []
         }
 
         sidecar_task {

@@ -8,7 +8,7 @@ resource "random_password" "redis" {
 resource "vault_kv_secret_v2" "cartservice_redis" {
   for_each = toset(["dev", "prod"])
   mount    = vault_mount.kv.path
-  name     = "${each.key}/cartservice/redis"
+  name     = "shared/redis"
   data_json = jsonencode({
     password = random_password.redis[each.key].result
   })

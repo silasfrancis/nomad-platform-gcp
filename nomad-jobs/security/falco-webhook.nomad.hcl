@@ -41,6 +41,7 @@ job "falco-webhook" {
       # entrypoint. This is what gives Falco (running as a host systemd service on every client
       # node via Ansible) a stable URL to send its alerts to.
       tags = [
+        "metrics",
         "traefik.enable=true",
         "traefik.http.routers.falco-webhook.rule=Host(`falco-webhook-#{Environment}.platform.lefrancis.org`)",
         "traefik.http.routers.falco-webhook.entrypoints=internal", 
@@ -59,6 +60,7 @@ job "falco-webhook" {
               local_bind_port  = 8090
             }
           }
+          tags = []
         }
 
         # Two upstreams — 100/128 floor.

@@ -56,7 +56,9 @@ job "loki" {
       ]
 
       connect {
-        sidecar_service {}
+        sidecar_service {
+          tags = []
+        }
 
         sidecar_task {
           resources {

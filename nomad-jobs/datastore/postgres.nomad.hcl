@@ -1,32 +1,3 @@
-# nomad-jobs/datastore/postgres.nomad.hcl
-#
-# Single PostgreSQL instance serving two consumers: metrics-api's
-# "metrics" database (Vault-issued dynamic per-connection credentials,
-# 1h TTL) and nomad-sentinel's "monitoring" database, agent_anomalies
-# table.
-#
-# Service name is just "postgres" — no environment suffix. Dev and
-# prod are entirely separate Nomad clusters and separate Consul
-# datacenters; nothing ever shares one catalog where "postgres" could
-# collide between them. The env-specific naming that matters (for
-# Vault, the one consumer that genuinely needs simultaneous access to
-# both) lives at the DNS layer (postgres-dev/postgres-prod hostnames
-# on traefik-internal) — a different mechanism entirely, not the
-# Consul service name.
-#
-# Bootstrap credentials live at ONE shared path, kv/data/shared/postgres/admin
-# (not per-environment) — matches vault_consumers' actual kv_paths
-# entry, which grants that literal path with no env variant. Both the
-# superuser password and the vault-admin password are fields on that
-# same secret.
-#
-# CSI, not host volumes — NOT YET COMPLETE: the GCE Persistent Disk
-# CSI driver itself isn't deployed anywhere (needs its own controller +
-# node-plugin jobs), and the Nomad client service accounts don't yet
-# have the GCE disk-management IAM permissions the driver needs to
-# create/attach/detach volumes. This volume block assumes both exist;
-# neither does yet.
-
 job "postgres" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
@@ -39,7 +10,7 @@ job "postgres" {
   }
 
   group "postgres" {
-    count = #{ReplicaCount}
+    count =  1
 
     constraint {
       attribute = "${meta.node_pool_type}"
@@ -82,7 +53,9 @@ job "postgres" {
       ]
 
       connect {
-        sidecar_service {}
+        sidecar_service {
+          tags = []
+        }
 
         # Receiving-only sidecar (no upstreams of its own) — 100/128 is
         # a workable floor. Hardcoded per your ask, not an Octopus var.

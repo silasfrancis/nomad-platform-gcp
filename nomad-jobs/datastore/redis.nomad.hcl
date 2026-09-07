@@ -1,27 +1,3 @@
-# nomad-jobs/datastore/redis.nomad.hcl
-#
-# Shared Redis instance — cartservice is the only real consumer today,
-# but the job/service/Vault path are named generically so a future
-# consumer can share this instance without a rename. No host volume,
-# deliberately — matches the upstream Online Boutique K8s manifest's
-# emptyDir{}: cart data is intentionally ephemeral and resets on
-# restart.
-#
-# Connect mesh retrofit: group-level service {}, receiving-only —
-# cartservice reaches this via its own upstream now, not Consul DNS.
-#
-# NOTE — single shared password, no per-consumer isolation: --requirepass
-# is one secret for the whole instance. Fine with exactly one consumer;
-# if a second service actually starts using this instance, it gets full
-# access to every key including cartservice's. Redis ACL users (6+),
-# each scoped to their own key pattern, is the real fix — tracked as a
-# changelog item, not built now since there's no second consumer yet.
-#
-# Needs its own Vault workload-identity role, separate from
-# cartservice's — Vault's JWT auth binds by exact nomad_job_id, so
-# cartservice's own modules/vault/locals.tf entry doesn't cover this
-# job. Add a "redis" entry to vault_consumers, namespace = "datastore".
-
 job "redis" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
@@ -34,7 +10,7 @@ job "redis" {
   }
 
   group "redis" {
-    count = #{ReplicaCount}
+    count = 1
 
     constraint {
       attribute = "${meta.node_pool_type}"

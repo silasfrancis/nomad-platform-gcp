@@ -43,7 +43,7 @@ job "metrics-api" {
       }
 
       tags = [
-        "metrics"
+        "metrics",
         "traefik.enable=true",
         "traefik.http.routers.metrics-api.rule=Host(`metrics-api-#{Environment}.platform.lefrancis.org`)",
         "traefik.http.routers.metrics-api.entrypoints=internal",
@@ -59,6 +59,7 @@ job "metrics-api" {
               local_bind_port  = 5432
             }
           }
+          tags = []
         }
 
         # One upstream, receiving-only otherwise — 100/128 floor.
@@ -104,6 +105,5 @@ EOF
         cpu    = #{Cpu}
         memory = #{Memory}
       }
-    }
   }
 }

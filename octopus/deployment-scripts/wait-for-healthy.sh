@@ -20,7 +20,17 @@ source "$(dirname "$0")/common.sh"
 DEPLOY_STEP_NAME="deploy-to-nomad"
 
 DeployedJobIds="$(get_octopusvariable "Octopus.Action[${DEPLOY_STEP_NAME}].Output.DeployedJobIds")"
-: "${DeployedJobIds:?DeployedJobIds set by deploy-to-nomad.sh is required}"
+# Empty (not unset — reaching this step at all means deploy-to-nomad.sh
+# ran to completion and unconditionally called set_octopusvariable on
+# this name) legitimately means "no service-type jobs in this package" —
+# deploy-to-nomad.sh only adds a job ID here for `type = "service"`
+# jobs; batch/system/sysbatch jobs register and run but have no
+# Deployment object to wait on at all, so there's nothing to check.
+# That's success, not an error — exit cleanly rather than failing.
+if [ -z "${DeployedJobIds}" ]; then
+  echo "No service-type jobs were deployed (only batch/system/sysbatch, or none at all) — nothing to wait for."
+  exit 0
+fi
 
 MAX_ATTEMPTS=30
 SLEEP_SECONDS=10

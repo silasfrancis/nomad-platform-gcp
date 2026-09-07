@@ -104,6 +104,7 @@ job "frontend" {
               local_bind_port  = 9555
             }
           }
+          tags = []
         }
 
         # 7 upstreams — highest in this whole retrofit, sized up
