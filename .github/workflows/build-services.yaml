@@ -32,6 +32,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.get-matrix.outputs.matrix) }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ matrix.items.name }}-${{ github.ref }}
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
@@ -77,7 +80,7 @@ jobs:
 
   publish-build-manifest:
     needs: build
-    if: ${{ contains(fromJson('["success", "failure"]'), needs.build.result) }}
+    if: ${{ contains(fromJson('["success", "failure", "cancelled"]'), needs.build.result) }}
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Set short SHA and Build ID

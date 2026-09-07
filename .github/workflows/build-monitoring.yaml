@@ -61,6 +61,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.split-nomad-sentinel.outputs.other_tools) }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ matrix.items.name }}-${{ github.ref }}
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
@@ -173,8 +176,8 @@ jobs:
     needs: [build, build-nomad-sentinel]
     if: |
       always() &&
-      (contains(fromJson('["success", "failure"]'), needs.build.result) ||
-       contains(fromJson('["success", "failure"]'), needs.build-nomad-sentinel.result))
+      (contains(fromJson('["success", "failure", "cancelled"]'), needs.build.result) ||
+       contains(fromJson('["success", "failure", "cancelled"]'), needs.build-nomad-sentinel.result))
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Set short SHA and Build ID
