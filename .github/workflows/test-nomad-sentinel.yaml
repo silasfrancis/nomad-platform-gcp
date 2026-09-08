@@ -51,12 +51,9 @@ jobs:
             kv/data/cicd/nomad-sentinel gemini_api_key | GEMINI_API_KEY ;
             kv/data/cicd/slack webhook_url | SLACK_WEBHOOK_URL
 
-      - name: Install Python
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3 python3-pip python3-venv
-          python3 --version
-
+      - name: Check Python Version
+        run: python3 --version
+        
       - name: Run Tests
         working-directory: monitoring/nomad-sentinel
         env:

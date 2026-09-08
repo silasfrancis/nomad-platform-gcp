@@ -9,6 +9,9 @@ common_packages:
   - gnupg
   - ca-certificates
   - chrony
+  - python3
+  - python3-pip 
+  - python3-venv
   - python3-yaml
 
 common_enable_unattended_upgrades: true
