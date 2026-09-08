@@ -5,9 +5,10 @@
 #
 # Purpose
 # -------
-# This script boots a local Nomad dev agent, deploys sample test jobs via the 
-# Nomad CLI, gathers status metrics, and handles cleanup or leaves the server 
-# and jobs running based on user flags (ideal for CI pipelines).
+# This script boots a local Nomad dev agent (or reuses one that's already
+# running), deploys sample test jobs via the Nomad CLI, gathers status
+# metrics, and handles cleanup or leaves the server and jobs running based
+# on user flags (ideal for CI pipelines).
 #
 # Usage
 # -----
@@ -56,20 +57,26 @@ JOBS=(
 header() { printf "\n# ------------------------------------------------------------------\n# %s\n# ------------------------------------------------------------------\n\n" "$1"; }
 check() { printf "✓ %s\n" "$1"; }
 
-# Start the Nomad agent in the background
+# Start the Nomad agent in the background, or reuse one that's already running
+# (e.g. started by the calling CI workflow)
 header "Starting Nomad agent in -dev mode"
-nomad agent -dev -bind 0.0.0.0 > "$NOMAD_LOG" 2>&1 &
-NOMAD_PID=$!
-echo "$NOMAD_PID" > "${SCRIPT_DIR}/.nomad-agent.pid"
-
-export NOMAD_ADDR="http://127.0.0.1:4646"
+NOMAD_PID=""
+if curl -sf "${NOMAD_ADDR:-http://127.0.0.1:4646}/v1/status/leader" > /dev/null 2>&1; then
+  echo "Existing Nomad agent detected at ${NOMAD_ADDR:-http://127.0.0.1:4646} — reusing it."
+  export NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
+else
+  nomad agent -dev -bind 0.0.0.0 > "$NOMAD_LOG" 2>&1 &
+  NOMAD_PID=$!
+  echo "$NOMAD_PID" > "${SCRIPT_DIR}/.nomad-agent.pid"
+  export NOMAD_ADDR="http://127.0.0.1:4646"
+fi
 
 # Wait for the agent to be ready using Nomad CLI
 echo "Waiting for Nomad CLI to connect..."
 until nomad node status >/dev/null 2>&1; do
   sleep 1
 done
-check "Nomad agent is ready (PID: $NOMAD_PID)."
+check "Nomad agent is ready${NOMAD_PID:+ (PID: $NOMAD_PID)}."
 
 # Deploy Jobs via Nomad CLI
 header "Deploying test jobs via Nomad CLI"
@@ -84,9 +91,9 @@ for entry in "${JOBS[@]}"; do
 
   echo "Submitting ${job_name} using ${job_file}..."
   if [[ "$STDOUT_MODE" == "true" ]]; then
-    nomad job run "$job_path"
+    nomad job run -detach "$job_path"
   else
-    nomad job run "$job_path" > "${OUTPUT_DIR}/${job_name}-deploy.log" 2>&1
+    nomad job run -detach "$job_path" > "${OUTPUT_DIR}/${job_name}-deploy.log" 2>&1
   fi
   check "Deployed ${job_name}"
 done
@@ -121,10 +128,16 @@ cleanup() {
 
   # 2. Stop Server Cleanup
   if [ "$KEEP_SERVER" = false ]; then
-    echo -e "Stopping Nomad server agent (PID: $NOMAD_PID)..."
-    kill "$NOMAD_PID" 2>/dev/null || true
+    if [[ -n "$NOMAD_PID" ]]; then
+      echo -e "Stopping Nomad server agent (PID: $NOMAD_PID)..."
+      kill "$NOMAD_PID" 2>/dev/null || true
+    else
+      echo -e "No agent was started by this script; nothing to stop."
+    fi
   else
-    echo -e "Keeping Nomad server alive in the background (PID: $NOMAD_PID). Remember to stop it manually!"
+    if [[ -n "$NOMAD_PID" ]]; then
+      echo -e "Keeping Nomad server alive in the background (PID: $NOMAD_PID). Remember to stop it manually!"
+    fi
   fi
 }
 

@@ -4,7 +4,7 @@ on:
   workflow_call:
 
 permissions:
-  id-token: write # Vault OIDC
+  id-token: write
   contents: read
 
 jobs:
@@ -22,7 +22,8 @@ jobs:
 
       - name: Start Nomad In Dev Mode
         run: |
-          nohup nomad agent -dev > nomad-dev.log 2>&1 &
+          nohup nomad agent -dev -bind 0.0.0.0 > nomad-dev.log 2>&1 &
+          echo $! > nomad-agent.pid
           echo "NOMAD_ADDR=http://127.0.0.1:4646" >> "$GITHUB_ENV"
           for i in $(seq 1 15); do
             curl -sf http://127.0.0.1:4646/v1/status/leader > /dev/null && break
@@ -62,7 +63,7 @@ jobs:
       - name: Stop Nomad Server
         if: always()
         run: |
-          if [[ -f scripts/.nomad-agent.pid ]]; then
-            kill "$(cat scripts/.nomad-agent.pid)" || true
-            rm -f scripts/.nomad-agent.pid
+          if [[ -f nomad-agent.pid ]]; then
+            kill "$(cat nomad-agent.pid)" || true
+            rm -f nomad-agent.pid
           fi
