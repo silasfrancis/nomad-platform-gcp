@@ -33,6 +33,7 @@ job "redis" {
       check {
         name     = "redis-health"
         type     = "script"
+        task     = "redis"
         command  = "/bin/sh"
         args     = [
           "-c",

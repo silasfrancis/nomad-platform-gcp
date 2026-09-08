@@ -44,7 +44,7 @@ resource "nomad_acl_policy" "nomad_autoscaler" {
 
 # Octopus Deploy — Submits, Plans, And Promotes Releases
 #
-# Scoped to the namespaces Octopus actually deploys projects into 
+# Scoped to the namespaces Octopus actually deploys projects into and plugin -read for jobs with csi volumes
 resource "nomad_acl_policy" "octopus_deploy" {
   name        = "octopus-deploy-${var.environment}"
   description = "Octopus Deploy — submit, plan, and promote releases into the boutique and monitoring namespaces."
@@ -63,6 +63,9 @@ resource "nomad_acl_policy" "octopus_deploy" {
     }
     namespace "operations" {
       policy = "write"
+    }
+    plugin {
+      policy = "read"
     }
   EOT
 }

@@ -28,6 +28,10 @@ job "alloy" {
         ]
       }
 
+      env {
+      LOKI_URL = "http://loki.service.consul:3100/loki/api/v1/push"
+    }
+
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}

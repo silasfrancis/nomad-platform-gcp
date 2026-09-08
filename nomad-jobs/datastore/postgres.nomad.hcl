@@ -41,6 +41,7 @@ job "postgres" {
       check {
         name     = "postgres-health"
         type     = "script"
+        task     = "postgres"
         command  = "/bin/sh"
         args = [
           "-c",

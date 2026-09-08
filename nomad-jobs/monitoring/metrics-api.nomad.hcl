@@ -6,7 +6,6 @@ job "metrics-api" {
   # Roll allocations one at a time so each replacement can become healthy
   # before the next allocation is restarted during Vault credential rotation.
   update {
-    canary            = 0
     max_parallel      = 1
     min_healthy_time  = "30s"
     healthy_deadline  = "5m"
