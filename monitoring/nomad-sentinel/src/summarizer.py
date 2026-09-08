@@ -167,7 +167,6 @@ def _build_snapshot(allocs: list[dict]) -> dict:
     unhealthy = 0
     pending = 0
     active_count = 0
-    active_count += 1
 
     # client_status → count
     status_counts: dict[str, int] = {}
@@ -193,6 +192,7 @@ def _build_snapshot(allocs: list[dict]) -> dict:
             continue
 
         cs = alloc.get("ClientStatus", "unknown")
+        active_count += 1
         status_counts[cs] = status_counts.get(cs, 0) + 1
 
         job_id = alloc.get("JobID", "unknown")
