@@ -102,10 +102,10 @@ done
 header "Collecting job status details"
 if [[ "$STDOUT_MODE" == "true" ]]; then
   nomad job status
-  nomad alloc status
+  nomad alloc status -json
 else
   nomad job status > "${OUTPUT_DIR}/job-status.txt"
-  nomad alloc status > "${OUTPUT_DIR}/alloc-status.txt"
+  nomad alloc status -json > "${OUTPUT_DIR}/alloc-status.txt"
   check "Saved CLI status tables to output directory"
 fi
 

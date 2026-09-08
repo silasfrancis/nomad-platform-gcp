@@ -24,6 +24,7 @@ jobs:
         run: |
           nohup nomad agent -dev -bind 0.0.0.0 > nomad-dev.log 2>&1 &
           echo $! > nomad-agent.pid
+          echo "Started Nomad agent with PID: $(cat nomad-agent.pid)"
           echo "NOMAD_ADDR=http://127.0.0.1:4646" >> "$GITHUB_ENV"
           for i in $(seq 1 15); do
             curl -sf http://127.0.0.1:4646/v1/status/leader > /dev/null && break
@@ -64,6 +65,10 @@ jobs:
         if: always()
         run: |
           if [[ -f nomad-agent.pid ]]; then
-            kill "$(cat nomad-agent.pid)" || true
+            PID="$(cat nomad-agent.pid)"
+            echo "Stopping Nomad agent with PID: $PID"
+            kill "$PID" || true
             rm -f nomad-agent.pid
+          else
+            echo "No nomad-agent.pid file found; nothing to stop."
           fi
