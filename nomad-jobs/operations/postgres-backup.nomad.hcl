@@ -1,27 +1,3 @@
-# nomad-jobs/operations/postgres-backup.nomad.hcl
-#
-# This job intentionally connects via Consul DNS rather than Consul
-# Connect — not every workload needs to be a mesh participant.
-# Establishing a sidecar has real startup overhead and a standing
-# resource cost; neither is a good trade for a connection that exists
-# once a day for a few seconds. Worth being precise about what this
-# isn't: it's not a security exception, since Postgres's real port
-# stays reachable directly either way (Connect doesn't lock down a
-# service's real listening port unless transparent_proxy is enabled,
-# which it isn't here) — this is purely an operational-cost decision.
-#
-# Daily 03:00 UTC per architecture doc section 10. Dumps both
-# databases (metrics, monitoring) in one pass — same instance, same
-# credentials, per postgres.nomad.hcl's bootstrap task.
-#
-# Uses the vault-admin credential (the same one Vault's database
-# engine uses to mint dynamic roles) rather than a dedicated
-# read-only backup role — genuinely overprivileged for a job that only
-# ever reads, flagged here rather than left silent. Reasonable for now
-# given this never leaves the private VPC (same trust model already
-# accepted for Postgres's own plaintext TCP passthrough), but a
-# dedicated read-only role would be the tighter version of this.
-
 job "postgres-backup" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
@@ -78,7 +54,7 @@ STAMP=$(date +%Y%m%dT%H%M%SZ)
 for DB in metrics monitoring; do
   pg_dump "$DB" | gzip > "/local/${DB}-${STAMP}.sql.gz"
 done
-gcloud storage cp /local/*.sql.gz gs://platform-artifacts/pg-backups/#{Environment}/
+gcloud storage cp /local/*.sql.gz gs://nomad-platform-gcp-europe-west1-platform-artifacts/pg-backups/#{Environment}/
 EOF
         destination = "local/backup.sh"
         perms       = "0755"

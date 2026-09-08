@@ -65,11 +65,34 @@ for job_id in ${DeployedJobIds}; do
         ;;
       running)
         if job_has_canary "${job_id}"; then
-          echo "  [${job_id}] canary healthy, awaiting promotion (handled by promote-deployment.sh next)."
-          job_healthy=1
-          break
+          # job_has_canary only tells us this job's SPEC uses canaries —
+          # it says nothing about whether the canary placed by THIS
+          # deployment has actually passed its health check yet.
+          # Status stays "running" for the entire canary window: from
+          # the moment the canary allocation is placed (HealthyAllocs=0)
+          # all the way through to it being confirmed healthy, and even
+          # after promotion. Nomad's own docs show a deployment reported
+          # as "requires manual promotion" while HealthyAllocs is still
+          # 0 for the canary group, so the coarse Status/Description
+          # text can't be trusted here either — checking the actual
+          # per-task-group HealthyAllocs/DesiredCanaries counts already
+          # present in status_response is what actually tells us the
+          # canary is ready. Without this check, promote-deployment.sh
+          # can be called before Nomad has finished bringing the canary
+          # up, which fails with "Task group has 0/1 healthy allocations".
+          canary_ready="$(echo "${status_response}" | jq -r '
+            [.TaskGroups[]? | select((.DesiredCanaries // 0) > 0)] as $canary_groups
+            | (($canary_groups | length) > 0) and ($canary_groups | all(.HealthyAllocs >= .DesiredCanaries))
+          ')"
+          if [ "${canary_ready}" = "true" ]; then
+            echo "  [${job_id}] canary healthy, awaiting promotion (handled by promote-deployment.sh next)."
+            job_healthy=1
+            break
+          fi
+          echo "  [${job_id}] canary placed but not yet confirmed healthy — still polling."
         fi
-        # Plain rolling update still finishing — not terminal, keep polling.
+        # Plain rolling update still finishing, or canary not yet
+        # healthy — not terminal, keep polling.
         ;;
       failed|cancelled)
         echo "  [${job_id}] deployment ${status} — aborting. Raw status response:" >&2

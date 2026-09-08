@@ -1,11 +1,3 @@
-# nomad-jobs/operations/consul-snapshot.nomad.hcl
-#
-# Daily 02:30 UTC per architecture doc section 10. Runs against the
-# local Consul agent on whichever client node it lands on (agent
-# forwards to the cluster leader) — no special network access needed
-# beyond what every node already has. 30-day retention is enforced by
-# a GCS lifecycle rule on the bucket, not by anything in this job.
-
 job "consul-snapshot" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
@@ -57,7 +49,7 @@ set -eu
 chmod +x /local/consul
 STAMP=$(date +%Y%m%dT%H%M%SZ)
 /local/consul snapshot save "/local/consul-#{Environment}-${STAMP}.snap"
-gcloud storage cp /local/consul-*.snap gs://platform-artifacts/consul-snapshots/#{Environment}/
+gcloud storage cp /local/consul-*.snap gs://nomad-platform-gcp-europe-west1-platform-artifacts/consul-snapshots/#{Environment}/
 EOF
         destination = "local/backup.sh"
         perms       = "0755"
