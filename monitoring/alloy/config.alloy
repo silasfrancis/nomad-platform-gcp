@@ -48,6 +48,6 @@ loki.write "default" {
     // but Loki is a single Nomad-scheduled workload on exactly one of
     // them. So this address has to resolve via Consul DNS 
     // since they might not be scheduled on the same nodes
-    url = "http://loki.service.consul:3100/loki/api/v1/push"
+    url = "${LOKI_URL:-http://loki.service.consul:3100/loki/api/v1/push}"
   }
 }

@@ -1,7 +1,3 @@
-# Dockerfile for: metrics-api (Python / Flask)
-# Custom platform-engineering demo service — see main.py docstring and the
-# project README for the full rationale on why this service exists.
-
 FROM python:3.12-slim
 WORKDIR /app
 

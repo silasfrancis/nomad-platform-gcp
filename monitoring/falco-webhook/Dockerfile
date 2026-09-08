@@ -1,4 +1,3 @@
-# monitoring/falco-webhook/Dockerfile
 FROM golang:1.23-alpine AS build
 WORKDIR /src
 COPY go.mod .

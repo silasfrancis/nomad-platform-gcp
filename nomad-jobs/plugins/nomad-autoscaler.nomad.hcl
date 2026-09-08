@@ -110,7 +110,7 @@ http {
 nomad {
   address     = "https://nomad.service.consul:4646"
   ca_cert     = "/local/tls/ca.pem"
-  tls_server_name = "server.${var.environment}.nomad"
+  tls_server_name = "server.${local.datacenter}.nomad"
 }
 
 apm "prometheus" {

@@ -10,7 +10,7 @@ job "postgres" {
   }
 
   group "postgres" {
-    count =  1
+    count = 1
 
     constraint {
       attribute = "${meta.node_pool_type}"
@@ -20,10 +20,10 @@ job "postgres" {
 
     volume "postgres-data" {
       type            = "csi"
-      source           = "postgres-data-#{Environment}"
-      read_only        = false
-      attachment_mode  = "file-system"
-      access_mode      = "single-node-writer"
+      source          = "postgres-data-#{Environment}"
+      read_only       = false
+      attachment_mode = "file-system"
+      access_mode     = "single-node-writer"
     }
 
     network {
@@ -39,10 +39,15 @@ job "postgres" {
       port = "db"
 
       check {
-        type     = "tcp"
-        port     = "db"
+        name     = "postgres-health"
+        type     = "script"
+        command  = "/bin/sh"
+        args = [
+          "-c",
+          "PGPASSWORD=\"$POSTGRES_PASSWORD\" psql -h 127.0.0.1 -U \"$POSTGRES_USER\" -d postgres -c 'SELECT 1' >/dev/null"
+        ]
         interval = "10s"
-        timeout  = "2s"
+        timeout  = "5s"
       }
 
       tags = [
@@ -72,31 +77,17 @@ job "postgres" {
       role = "postgres"
     }
 
-    task "bootstrap" {
-      lifecycle {
-        hook    = "prestart"
-        sidecar = false
-      }
-
+    task "postgres" {
       driver = "docker"
 
       config {
-        image   = "postgres:16-alpine"
-        command = "/bin/sh"
-        args    = ["-c", "psql -v ON_ERROR_STOP=1 -f /local/bootstrap.sql"]
+        image = "postgres:16-alpine"
+        ports = ["db"]
       }
 
-      template {
-        data = <<EOF
-{{ with secret "kv/data/shared/postgres/admin" }}
-PGHOST=localhost
-PGPORT=5432
-PGUSER=postgres
-PGPASSWORD={{ .Data.data.superuser_password }}
-{{ end }}
-EOF
-        destination = "secrets/postgres.env"
-        env         = true
+      volume_mount {
+        volume      = "postgres-data"
+        destination = "/var/lib/postgresql/data"
       }
 
       template {
@@ -112,27 +103,9 @@ $$;
 
 CREATE DATABASE metrics OWNER "vault-admin";
 CREATE DATABASE monitoring OWNER "vault-admin";
+{{ end }}
 EOF
-        destination = "local/bootstrap.sql"
-      }
-
-      resources {
-        cpu    = 100
-        memory = 128
-      }
-    }
-
-    task "postgres" {
-      driver = "docker"
-
-      config {
-        image = "postgres:16-alpine"
-        ports = ["db"]
-      }
-
-      volume_mount {
-        volume      = "postgres-data"
-        destination = "/var/lib/postgresql/data"
+        destination = "local/docker-entrypoint-initdb.d/bootstrap.sql"
       }
 
       template {

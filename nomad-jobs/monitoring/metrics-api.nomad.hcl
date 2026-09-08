@@ -49,7 +49,6 @@ job "metrics-api" {
         "traefik.http.routers.metrics-api.entrypoints=internal",
         "traefik.http.routers.metrics-api.tls.certresolver=letsencrypt",
       ]
-    }
 
       connect {
         sidecar_service {
@@ -105,5 +104,6 @@ EOF
         cpu    = #{Cpu}
         memory = #{Memory}
       }
+    }
   }
 }

@@ -1,6 +1,5 @@
-FROM prom/prometheus:v2.55.1
+FROM prom/prometheus:v3.14.0
 
-COPY prometheus.yaml /etc/prometheus/prometheus.yaml
-
-ENTRYPOINT ["/bin/prometheus"]
-CMD ["--config.file=/etc/prometheus/prometheus.yaml", "--storage.tsdb.path=/prometheus"]
+COPY prometheus.yaml.tmpl /etc/prometheus/prometheus.yaml.tmpl
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+ENTRYPOINT ["/docker-entrypoint.sh"]

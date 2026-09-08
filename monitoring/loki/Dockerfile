@@ -1,5 +1,4 @@
-# monitoring/loki/Dockerfile
-FROM grafana/loki:3.3.2
+FROM grafana/loki:3.7.0
 
 COPY loki.yml /etc/loki/loki.yml
 

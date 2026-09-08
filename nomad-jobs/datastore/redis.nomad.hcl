@@ -31,10 +31,15 @@ job "redis" {
       port = "redis"
 
       check {
-        type     = "tcp"
-        port     = "redis"
+        name     = "redis-health"
+        type     = "script"
+        command  = "/bin/sh"
+        args     = [
+          "-c",
+          "redis-cli -h 127.0.0.1 -p 6379 -a \"$REDIS_PASSWORD\" ping | grep -q PONG"
+        ]
         interval = "10s"
-        timeout  = "2s"
+        timeout  = "5s"
       }
 
       connect {

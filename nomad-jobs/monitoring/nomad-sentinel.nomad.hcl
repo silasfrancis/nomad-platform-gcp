@@ -50,7 +50,6 @@ job "nomad-sentinel" {
         "traefik.http.routers.nomad-sentinel.entrypoints=internal",
         "traefik.http.routers.nomad-sentinel.tls.certresolver=letsencrypt",
       ]
-    }
 
       connect {
         sidecar_service {
@@ -77,28 +76,28 @@ job "nomad-sentinel" {
     }
 
     task "nomad-sentinel" {
-      driver = "docker"
+        driver = "docker"
 
-      config {
-        image = "#{ArtifactRegistry}/nomad-sentinel:#{ImageTag}"
-        ports = ["http"]
-      }
+        config {
+          image = "#{ArtifactRegistry}/nomad-sentinel:#{ImageTag}"
+          ports = ["http"]
+        }
 
-      # Nomad's own signed workload identity, exposed as NOMAD_TOKEN —
-      # the standard env var name the nomad CLI/API client already
-      # looks for by convention, so nomad-sentinel's own Nomad-API
-      # calls need no special-casing on the app side.
-      identity {
-        env = true
-      }
+        # Nomad's own signed workload identity, exposed as NOMAD_TOKEN —
+        # the standard env var name the nomad CLI/API client already
+        # looks for by convention, so nomad-sentinel's own Nomad-API
+        # calls need no special-casing on the app side.
+        identity {
+          env = true
+        }
 
-      env {
-        PORT             = "8090"
-        REMEDIATION_MODE = "#{RemediationMode}"
-      }
+        env {
+          HTTP_PORT             = "8090"
+          REMEDIATION_MODE = "#{RemediationMode}"
+        }
 
-    template {
-      data = <<EOF
+      template {
+        data = <<EOF
 {{ with secret "kv/data/#{Environment}/nomad-sentinel/config" }}
 GEMINI_API_KEY={{ .Data.data.gemini_api_key }}
 SLACK_WEBHOOK_URL={{ .Data.data.slack_webhook_url }}
@@ -108,17 +107,17 @@ SLACK_WEBHOOK_URL={{ .Data.data.slack_webhook_url }}
 HISTORY_DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "NOMAD_UPSTREAM_ADDR_postgres" }}/monitoring?sslmode=disable
 {{ end }}
 EOF
+        destination = "secrets/nomad-sentinel-config.env"
+        env         = true
+        # Vault dynamically rotates credentials, so restart the allocation when secrets
+        # change to ensure the replacement allocation picks up the new credentials.
+        change_mode = "restart"
+      }
 
-      destination = "secrets/nomad-sentinel-config.env"
-      env         = true
-      # Vault dynamically rotates credentials, so restart the allocation when secrets
-      # change to ensure the replacement allocation picks up the new credentials.
-      change_mode = "restart"
-    }
-
-    resources {
-      cpu    = #{Cpu}
-      memory = #{Memory}
+      resources {
+        cpu    = #{Cpu}
+        memory = #{Memory}
+      }
     }
   }
 }

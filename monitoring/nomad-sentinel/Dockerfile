@@ -18,8 +18,6 @@ USER agent
 
 WORKDIR /app/src
 
-# HTTP server: GET /health (liveness), GET /summary (on-demand cluster summary).
-# Port is also configurable via HTTP_PORT env var — keep in sync with config.py default.
 EXPOSE 8090
 
 ENTRYPOINT ["python", "main.py"]

@@ -37,20 +37,19 @@ job "prometheus" {
       name = "prometheus"
       port = "http"
 
-      check {
-        type     = "http"
-        path     = "/-/healthy"
-        interval = "10s"
-        timeout  = "2s"
-      }
-    }
-
       tags = [
         "traefik.enable=true",
         "traefik.http.routers.prometheus.rule=Host(`prometheus-#{Environment}.platform.lefrancis.org`)",
         "traefik.http.routers.prometheus.entrypoints=internal",
         "traefik.http.routers.prometheus.tls.certresolver=letsencrypt",
       ]
+
+      check {
+        type     = "http"
+        path     = "/-/healthy"
+        interval = "10s"
+        timeout  = "2s"
+      }
     }
 
     vault {
@@ -64,14 +63,6 @@ job "prometheus" {
         image = "#{ArtifactRegistry}/prometheus:#{ImageTag}"
         ports = ["http"]
       }
-      
-      env {
-        TRAEFIK_PUBLIC_IP = "#{TraefikPublicIp}"
-        TRAEFIK_PUBLIC_PORT = "#{TraefikPublicPort}"
-        
-        TRAEFIK_INTERNAL_IP = "#{TraefikInternalIp}"
-        TRAEFIK_INTERNAL_PORT = "#{TraefikInternalPort}"
-      }
 
       template {
         data = <<EOF
@@ -81,6 +72,24 @@ CONSUL_PROMETHEUS_TOKEN={{ .Data.data.consul_prometheus_token }}
 EOF
         destination = "secrets/prometheus-config.env"
         env         = true
+      }
+
+      template {
+        data = <<EOF
+{{ with secret "kv/data/pki/#{Environment}/consul-ca" }}
+{{ .Data.data.ca_cert }}
+{{ end }}
+EOF
+        destination = "secrets/consul-ca.pem"
+      }
+
+      env {
+        ENV = "#{Environment}"
+        TRAEFIK_PUBLIC_IP = "#{TraefikPublicIp}"
+        TRAEFIK_PUBLIC_PORT = "#{TraefikPublicPort}"
+        TRAEFIK_INTERNAL_IP = "#{TraefikInternalIp}"
+        TRAEFIK_INTERNAL_PORT = "#{TraefikInternalPort}"
+        CONSUL_SERVER_CA_FILE = "/secrets/consul-ca.pem"
       }
 
       volume_mount {
@@ -93,4 +102,5 @@ EOF
         memory = #{Memory}
       }
     }
+  }
 }

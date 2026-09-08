@@ -31,7 +31,7 @@ jobs:
 
       - name: Collect Nomad Fixture Data
         run: |
-          ./scripts/run-nomad-test-jobs.sh "${NOMAD_ADDR}" --stdout > nomad-test-data.json
+          ./scripts/run-nomad-test-jobs.sh --stdout --no-cleanup --keep-server > nomad-test-data.json
 
       - name: Upload Nomad Fixture Data
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
@@ -58,3 +58,11 @@ jobs:
         run: |
           pip install -r requirements.txt --break-system-packages
           pytest tests/ -v
+
+      - name: Stop Nomad Server
+        if: always()
+        run: |
+          if [[ -f scripts/.nomad-agent.pid ]]; then
+            kill "$(cat scripts/.nomad-agent.pid)" || true
+            rm -f scripts/.nomad-agent.pid
+          fi

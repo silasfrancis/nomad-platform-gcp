@@ -13,7 +13,7 @@ scrape_configs:
       - server: "localhost:8501"
         scheme: https
         tls_config:
-          ca_file: /etc/prometheus/tls/ca.pem
+          ca_file: "${CONSUL_SERVER_CA_FILE}"
         token: "${CONSUL_PROMETHEUS_TOKEN}"
         services: ["node-exporter"]
 
@@ -40,7 +40,7 @@ scrape_configs:
       - server: "localhost:8501"
         scheme: https
         tls_config:
-          ca_file: /etc/prometheus/tls/ca.pem
+          ca_file: "${CONSUL_SERVER_CA_FILE}"
         token: "${CONSUL_PROMETHEUS_TOKEN}"
         tags: ["metrics"]
     relabel_configs:
@@ -70,12 +70,12 @@ scrape_configs:
       - server: "localhost:8501"
         scheme: https
         tls_config:
-          ca_file: /etc/prometheus/tls/ca.pem
+          ca_file: "${CONSUL_SERVER_CA_FILE}"
         token: "${CONSUL_PROMETHEUS_TOKEN}"
         services: ["nomad"]
     scheme: https
     tls_config:
-      ca_file: /etc/prometheus/tls/ca.pem
+      ca_file: "${CONSUL_SERVER_CA_FILE}"
       server_name: "server.dc-${ENV}.nomad"
     metrics_path: /v1/metrics
     params:
@@ -86,12 +86,12 @@ scrape_configs:
       - server: "localhost:8501"
         scheme: https
         tls_config:
-          ca_file: /etc/prometheus/tls/ca.pem
+          ca_file: "${CONSUL_SERVER_CA_FILE}"
         token: "${CONSUL_PROMETHEUS_TOKEN}"
         services: ["consul"]
     scheme: https
     tls_config:
-      ca_file: /etc/prometheus/tls/ca.pem
+      ca_file: "${CONSUL_SERVER_CA_FILE}"
       server_name: "server.dc-${ENV}.consul"
     metrics_path: /v1/agent/metrics
     params:

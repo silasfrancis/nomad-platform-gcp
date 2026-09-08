@@ -39,7 +39,13 @@ done
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 DIR_NAME=$(date +"%Y%m%d-%H%M%S")
 OUTPUT_DIR="${SCRIPT_DIR}/output/${DIR_NAME}"
-[[ "$STDOUT_MODE" == "false" ]] && mkdir -p "$OUTPUT_DIR"
+
+if [[ "$STDOUT_MODE" == "true" ]]; then
+  NOMAD_LOG="$(mktemp -d)/nomad.log"
+else
+  mkdir -p "$OUTPUT_DIR"
+  NOMAD_LOG="${OUTPUT_DIR}/nomad.log"
+fi
 
 # Job Configuration: Name | File path relative to test-nomad-jobs directory
 JOBS=(
@@ -52,8 +58,9 @@ check() { printf "✓ %s\n" "$1"; }
 
 # Start the Nomad agent in the background
 header "Starting Nomad agent in -dev mode"
-nomad agent -dev -bind 0.0.0.0 > "${OUTPUT_DIR:-/tmp}/nomad.log" 2>&1 &
+nomad agent -dev -bind 0.0.0.0 > "$NOMAD_LOG" 2>&1 &
 NOMAD_PID=$!
+echo "$NOMAD_PID" > "${SCRIPT_DIR}/.nomad-agent.pid"
 
 export NOMAD_ADDR="http://127.0.0.1:4646"
 
