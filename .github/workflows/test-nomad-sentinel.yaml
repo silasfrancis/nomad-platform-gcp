@@ -53,7 +53,7 @@ jobs:
 
       - name: Check Python Version
         run: python3 --version
-        
+
       - name: Run Tests
         working-directory: monitoring/nomad-sentinel
         env:
@@ -62,7 +62,7 @@ jobs:
           NOMAD_ADDR: ${{ env.NOMAD_ADDR }}
         run: |
           pip install -r requirements.txt --break-system-packages
-          pytest tests/ -v
+          python3 -m pytest tests/ -v
 
       - name: Stop Nomad Server
         if: always()
