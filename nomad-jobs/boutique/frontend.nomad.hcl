@@ -16,16 +16,12 @@ job "frontend" {
   group "frontend" {
     count = #{ReplicaCount}
 
-    # Direct customer transaction path — never Spot.
     constraint {
       attribute = "${meta.node_pool_type}"
       operator  = "="
       value     = "on-demand"
     }
 
-    # Task scaling (HPA equivalent) — per architecture doc 2.5.
-    # Scale in/out based on the nomad_apm Prometheus plugin, not raw
-    # host CPU, so this reacts to actual request load.
     scaling {
       min     = 1
       max     = 5

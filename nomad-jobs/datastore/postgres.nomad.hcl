@@ -82,6 +82,12 @@ job "postgres" {
       config {
         image = "postgres:16-alpine"
         ports = ["db"]
+        
+        mount {
+          type   = "bind"
+          source = "local/docker-entrypoint-initdb.d"
+          target = "/docker-entrypoint-initdb.d"
+        }
       }
 
       volume_mount {
