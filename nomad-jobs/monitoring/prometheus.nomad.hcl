@@ -62,7 +62,7 @@ job "prometheus" {
       config {
         image = "#{ArtifactRegistry}/prometheus:#{ImageTag}"
         ports = ["http"]
-
+        
         mount {
           type   = "bind"
           source = "secrets/consul-ca.pem"
