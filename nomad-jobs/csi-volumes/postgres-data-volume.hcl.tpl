@@ -9,6 +9,7 @@ id           = "postgres-data-$ENVIRONMENT"
 name         = "postgres-data-$ENVIRONMENT"
 type         = "csi"
 plugin_id    = "gce-pd"
+namespace    = "$NAMESPACE"
 capacity_min = "$MIN_CAPACITY"
 capacity_max = "$MAX_CAPACITY"
 

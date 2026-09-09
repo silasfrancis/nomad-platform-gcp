@@ -13,11 +13,10 @@ job "shippingservice" {
   group "shippingservice" {
     count = #{ReplicaCount}
 
-    affinity {
+    constraint {
       attribute = "${meta.node_pool_type}"
       operator  = "="
       value     = "spot"
-      weight    = 50
     }
 
     network {

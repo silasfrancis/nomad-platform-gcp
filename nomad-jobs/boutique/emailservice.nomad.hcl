@@ -13,11 +13,17 @@ job "emailservice" {
   group "emailservice" {
     count = #{ReplicaCount}
 
-    affinity {
+    // affinity {
+    //   attribute = "${meta.node_pool_type}"
+    //   operator  = "="
+    //   value     = "spot"
+    //   weight    = 50
+    // }
+
+    constraint {
       attribute = "${meta.node_pool_type}"
       operator  = "="
       value     = "spot"
-      weight    = 50
     }
 
     network {

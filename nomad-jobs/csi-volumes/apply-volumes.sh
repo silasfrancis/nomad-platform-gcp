@@ -53,22 +53,22 @@ render_and_create() {
 }
 
 if [[ "${ENVIRONMENT}" == "prod" ]]; then
-  export MIN_CAPACITY="20GiB" MAX_CAPACITY="100GiB" DISK_TYPE="pd-ssd"
+  export MIN_CAPACITY="20GiB" MAX_CAPACITY="100GiB" DISK_TYPE="pd-ssd" NAMESPACE="datastore"
   render_and_create postgres-data-volume.hcl.tpl
 
-  export MIN_CAPACITY="20GiB" MAX_CAPACITY="100GiB" DISK_TYPE="pd-ssd"
+  export MIN_CAPACITY="20GiB" MAX_CAPACITY="100GiB" DISK_TYPE="pd-ssd" NAMESPACE="monitoring"
   render_and_create prometheus-data-volume.hcl.tpl
 
-  export MIN_CAPACITY="20GiB" MAX_CAPACITY="100GiB" DISK_TYPE="pd-standard"
+  export MIN_CAPACITY="20GiB" MAX_CAPACITY="100GiB" DISK_TYPE="pd-standard" NAMESPACE="monitoring"
   render_and_create loki-data-volume.hcl.tpl
 else
-  export MIN_CAPACITY="20GiB" MAX_CAPACITY="50GiB" DISK_TYPE="pd-standard"
+  export MIN_CAPACITY="20GiB" MAX_CAPACITY="50GiB" DISK_TYPE="pd-standard" NAMESPACE="datastore"
   render_and_create postgres-data-volume.hcl.tpl
 
-  export MIN_CAPACITY="20GiB" MAX_CAPACITY="50GiB" DISK_TYPE="pd-standard"
+  export MIN_CAPACITY="20GiB" MAX_CAPACITY="50GiB" DISK_TYPE="pd-standard" NAMESPACE="monitoring"
   render_and_create prometheus-data-volume.hcl.tpl
 
-  export MIN_CAPACITY="20GiB" MAX_CAPACITY="50GiB" DISK_TYPE="pd-standard"
+  export MIN_CAPACITY="20GiB" MAX_CAPACITY="50GiB" DISK_TYPE="pd-standard" NAMESPACE="monitoring"
   render_and_create loki-data-volume.hcl.tpl
 fi
 

@@ -82,10 +82,6 @@ job "nomad-sentinel" {
           ports = ["http"]
         }
 
-        # Nomad's own signed workload identity, exposed as NOMAD_TOKEN —
-        # the standard env var name the nomad CLI/API client already
-        # looks for by convention, so nomad-sentinel's own Nomad-API
-        # calls need no special-casing on the app side.
         identity {
           env = true
         }

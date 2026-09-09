@@ -16,10 +16,17 @@ job "checkoutservice" {
   group "checkoutservice" {
     count = #{ReplicaCount}
 
+    // affinity {
+    //   attribute = "${meta.node_pool_type}"
+    //   operator  = "="
+    //   value     = "spot"
+    //   weight    = 50
+    // }
+
     constraint {
       attribute = "${meta.node_pool_type}"
       operator  = "="
-      value     = "on-demand"
+      value     = "spot"
     }
 
     network {

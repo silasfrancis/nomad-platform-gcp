@@ -19,8 +19,15 @@ job "productcatalogservice" {
     constraint {
       attribute = "${meta.node_pool_type}"
       operator  = "="
-      value     = "on-demand"
+      value     = "spot"
     }
+
+    // affinity {
+    //   attribute = "${meta.node_pool_type}"
+    //   operator  = "="
+    //   value     = "spot"
+    //   weight    = 50
+    // }
 
     network {
       mode = "bridge"
