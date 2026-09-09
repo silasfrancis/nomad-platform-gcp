@@ -57,7 +57,7 @@ job "metrics-api" {
               local_bind_port  = 5432
             }
           }
-          tags = []
+          tags = ["traefik.enable=false"]
         }
 
         # One upstream, receiving-only otherwise — 100/128 floor.

@@ -60,7 +60,7 @@ job "postgres" {
 
       connect {
         sidecar_service {
-          tags = []
+          tags = ["traefik.enable=false"]
         }
 
         # Receiving-only sidecar (no upstreams of its own) — 100/128 is

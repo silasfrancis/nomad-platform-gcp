@@ -104,7 +104,7 @@ job "frontend" {
               local_bind_port  = 9555
             }
           }
-          tags = []
+          tags = ["traefik.enable=false"]
         }
 
         # 7 upstreams — highest in this whole retrofit, sized up

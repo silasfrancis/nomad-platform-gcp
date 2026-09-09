@@ -57,7 +57,7 @@ job "loki" {
 
       connect {
         sidecar_service {
-          tags = []
+          tags = ["traefik.enable=false"]
         }
 
         sidecar_task {

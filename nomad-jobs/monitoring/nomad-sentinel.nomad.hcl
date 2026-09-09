@@ -58,7 +58,7 @@ job "nomad-sentinel" {
               local_bind_port  = 5432
             }
           }
-          tags = []
+          tags = ["traefik.enable=false"]
         }
 
         sidecar_task {

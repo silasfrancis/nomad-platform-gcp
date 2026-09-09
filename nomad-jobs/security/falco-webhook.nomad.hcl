@@ -60,7 +60,7 @@ job "falco-webhook" {
               local_bind_port  = 8090
             }
           }
-          tags = []
+          tags = ["traefik.enable=false"]
         }
 
         # Two upstreams — 100/128 floor.
