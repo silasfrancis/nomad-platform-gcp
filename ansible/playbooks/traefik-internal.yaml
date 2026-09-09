@@ -8,7 +8,7 @@
   become: true
   vars:
     traefik_active_instances:
-      - mgmt
+      # - mgmt
       - dev-internal
       # - prod-internal
   roles:

@@ -30,6 +30,7 @@ job "postgres" {
       mode = "bridge"
 
       port "db" {
+        static = 5432
         to = 5432
       }
     }
@@ -55,7 +56,6 @@ job "postgres" {
         "traefik.enable=true",
         "traefik.tcp.routers.postgres.rule=HostSNI(`*`)",
         "traefik.tcp.routers.postgres.entrypoints=postgres",
-        "traefik.tcp.services.postgres.loadbalancer.server.port=5432",
       ]
 
       connect {

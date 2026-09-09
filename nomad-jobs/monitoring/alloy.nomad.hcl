@@ -22,7 +22,11 @@ job "alloy" {
       config {
         image   = "#{ArtifactRegistry}/alloy:#{ImageTag}"
         ports   = ["http"]
-        args    = ["run", "/etc/alloy/config.alloy"]
+        args = [
+          "run",
+          "--server.http.listen-addr=0.0.0.0:12345",
+          "/etc/alloy/config.alloy",
+        ]
         volumes = [
           "/var/nomad/alloc:/var/nomad/alloc:ro",
         ]
