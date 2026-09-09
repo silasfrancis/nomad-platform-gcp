@@ -53,7 +53,7 @@ job "prometheus" {
     }
 
     vault {
-      role = "nomad-sentinel"
+      role = "prometheus"
     }
     
     task "prometheus" {

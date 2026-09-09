@@ -174,6 +174,27 @@ locals {
       deny                = []
     }
 
+    "traefik-internal" = {
+      description         = "Allow Traefik internal to reach Nomad-scheduled backend services in over dynamic ports + postgres"
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-mgmt"]]
+      destination_ranges = [
+        local.cidr["subnet-dev-private"],
+        local.cidr["subnet-prod-private"],
+      ]
+      allow = [
+        {
+          protocol = "tcp"
+          ports =  [
+              "5432", # Postgres
+              "20000-32000",   # Nomad dynamic allocation ports
+            ]
+        },
+      ]
+      deny                = []
+    }
+
     "mgmt-internal" = {
       description         = "Allow traefik-internal and mgmt-vm to reach each other on Vault/Octopus/Grafana ports, Traefik's own entrypoints, and Vault's Postgres TCP passthrough"
       direction           = "INGRESS"
