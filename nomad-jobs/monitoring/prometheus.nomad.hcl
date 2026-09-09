@@ -62,6 +62,12 @@ job "prometheus" {
       config {
         image = "#{ArtifactRegistry}/prometheus:#{ImageTag}"
         ports = ["http"]
+
+        mount {
+          type   = "bind"
+          source = "secrets/consul-ca.pem"
+          target = "/etc/prometheus/consul-ca.pem"
+        }
       }
 
       template {
@@ -89,7 +95,7 @@ EOF
         TRAEFIK_PUBLIC_PORT = "#{TraefikPublicPort}"
         TRAEFIK_INTERNAL_IP = "#{TraefikInternalIp}"
         TRAEFIK_INTERNAL_PORT = "#{TraefikInternalPort}"
-        CONSUL_SERVER_CA_FILE = "/secrets/consul-ca.pem"
+        CONSUL_SERVER_CA_FILE = "/etc/prometheus/consul-ca.pem"
       }
 
       volume_mount {
