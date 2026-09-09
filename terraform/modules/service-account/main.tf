@@ -1,8 +1,20 @@
+resource "google_project_iam_custom_role" "csi_disk_attach" {
+  project     = var.project_id
+  role_id     = "csiDiskAttacher"
+  title       = "CSI Disk Attach/Detach"
+  description = "Minimal permissions for the GCE PD CSI driver to attach/detach disks on client instances."
+  permissions = [
+    "compute.instances.attachDisk",
+    "compute.instances.detachDisk",
+    "compute.instances.get",
+  ]
+}
+
 locals {
   service_accounts = {
     "nomad-server-sa-prod" = {
-      display_name  = "Nomad Server SA"
-      description   = "Attached to control-plane VMs running Nomad Server and Consul Server."
+      display_name = "Nomad Server SA"
+      description  = "Attached to control-plane VMs running Nomad Server and Consul Server."
       # Project-level roles assigned here provide baseline functionality
       # (e.g. logging, monitoring,Compute Engine instance discovery for
       # Nomad/Consul auto-join and Compute storage for persistent disks).
@@ -18,8 +30,8 @@ locals {
       ]
     }
     "nomad-server-sa-dev" = {
-      display_name  = "Nomad Server SA"
-      description   = "Attached to control-plane VMs running Nomad Server and Consul Server."
+      display_name = "Nomad Server SA"
+      description  = "Attached to control-plane VMs running Nomad Server and Consul Server."
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
@@ -27,30 +39,32 @@ locals {
       ]
     }
     "nomad-client-sa-prod" = {
-      display_name  = "Nomad Client SA"
-      description   = "Attached to worker VMs running Nomad Client and Consul Client."
+      display_name = "Nomad Client SA"
+      description  = "Attached to worker VMs running Nomad Client and Consul Client."
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
         "roles/compute.viewer",
         "roles/compute.storageAdmin",
-        "roles/iam.serviceAccountUser"
+        "roles/iam.serviceAccountUser",
+        "projects/${var.project_id}/roles/csiDiskAttacher"
       ]
     }
     "nomad-client-sa-dev" = {
-      display_name  = "Nomad Client SA"
-      description   = "Attached to worker VMs running Nomad Client and Consul Client."
+      display_name = "Nomad Client SA"
+      description  = "Attached to worker VMs running Nomad Client and Consul Client."
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
         "roles/compute.viewer",
         "roles/compute.storageAdmin",
-        "roles/iam.serviceAccountUser"
+        "roles/iam.serviceAccountUser",
+        "projects/${var.project_id}/roles/csiDiskAttacher"
       ]
     }
     "management-vm-sa" = {
-      display_name  = "Management VM SA"
-      description   = "Attached to mgmt VM. Covers Vault, GitHub runner, Octopus, Grafana, internal Traefik."
+      display_name = "Management VM SA"
+      description  = "Attached to mgmt VM. Covers Vault, GitHub runner, Octopus, Grafana, internal Traefik."
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",
@@ -72,8 +86,8 @@ locals {
       project_roles = []
     }
     "packer-builder-sa" = {
-      display_name  = "Packer Builder SA"
-      description   = "Used by Packer to build golden VM images (nomad-server, nomad-client, mgmt-vm). Attached to ephemeral build VMs only."
+      display_name = "Packer Builder SA"
+      description  = "Used by Packer to build golden VM images (nomad-server, nomad-client, mgmt-vm). Attached to ephemeral build VMs only."
       project_roles = [
         "roles/compute.instanceAdmin.v1",
         "roles/compute.storageAdmin",
@@ -109,17 +123,17 @@ resource "google_service_account_iam_member" "this" {
     for item in flatten([
       for sa_name, sa_config in local.service_accounts : [
         for member in var.service_account_iam_members : {
-          key    = "${sa_name}/${member}"
+          key     = "${sa_name}/${member}"
           sa_name = sa_name
-          member = member
+          member  = member
         }
       ]
     ]) : item.key => item
   }
 
   service_account_id = google_service_account.this[each.value.sa_name].id
-  role               = "roles/iam.serviceAccountUser"
-  member             = each.value.member
+  role                = "roles/iam.serviceAccountUser"
+  member              = each.value.member
 }
 
 resource "google_project_iam_member" "roles" {
@@ -128,4 +142,6 @@ resource "google_project_iam_member" "roles" {
   project = var.project_id
   role    = each.value.role
   member  = google_service_account.this[each.value.sa_name].member
+
+  depends_on = [google_project_iam_custom_role.csi_disk_attach]
 }

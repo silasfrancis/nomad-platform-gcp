@@ -62,7 +62,7 @@ resource "google_storage_bucket" "buckets" {
   )
 
   encryption {
-    default_kms_key_name = try(each.value.kms_key_id, local.bucket_defaults.kms_key_id)
+    default_kms_key_name = coalesce(try(each.value.kms_key_id, null), local.bucket_defaults.kms_key_id)
     google_managed_encryption_enforcement_config {
         restriction_mode = "FullyRestricted"
     }
@@ -70,7 +70,7 @@ resource "google_storage_bucket" "buckets" {
         restriction_mode = "FullyRestricted"
     }
   }
-
+  
   versioning {
     enabled = coalesce(try(each.value.versioning_enabled, null), local.bucket_defaults.versioning_enabled)
   }
