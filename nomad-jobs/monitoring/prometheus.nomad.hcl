@@ -55,14 +55,43 @@ job "prometheus" {
     vault {
       role = "prometheus"
     }
-    
+
+    # Runs once, as root, before the main task starts. Fixes ownership
+    # on the CSI volume so the main "prometheus" task can run as nobody
+    # without needing chown privileges itself.
+    task "volume-permissions" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
+      }
+
+      config {
+        image   = "busybox:1.36"
+        command = "sh"
+        args    = ["-c", "chown -R nobody:nobody /prometheus"]
+        # busybox images default to root, no user override needed here
+      }
+
+      volume_mount {
+        volume      = "prometheus-data"
+        destination = "/prometheus"
+      }
+
+      resources {
+        cpu    = 50
+        memory = 64
+      }
+    }
+
     task "prometheus" {
       driver = "docker"
 
       config {
         image = "#{ArtifactRegistry}/prometheus:#{ImageTag}"
         ports = ["http"]
-        
+
         mount {
           type   = "bind"
           source = "secrets/consul-ca.pem"
@@ -72,30 +101,30 @@ job "prometheus" {
 
       template {
         data = <<EOF
-{{ with secret "kv/data/#{Environment}/prometheus/config" }}
-CONSUL_PROMETHEUS_TOKEN={{ .Data.data.consul_prometheus_token }}
-{{ end }}
-EOF
+  {{ with secret "kv/data/#{Environment}/prometheus/config" }}
+  CONSUL_PROMETHEUS_TOKEN={{ .Data.data.consul_prometheus_token }}
+  {{ end }}
+  EOF
         destination = "secrets/prometheus-config.env"
         env         = true
       }
 
       template {
         data = <<EOF
-{{ with secret "kv/data/pki/#{Environment}/consul-ca" }}
-{{ .Data.data.ca_cert }}
-{{ end }}
-EOF
+  {{ with secret "kv/data/pki/#{Environment}/consul-ca" }}
+  {{ .Data.data.ca_cert }}
+  {{ end }}
+  EOF
         destination = "secrets/consul-ca.pem"
       }
 
       env {
-        ENV = "#{Environment}"
-        TRAEFIK_PUBLIC_IP = "#{TraefikPublicIp}"
-        TRAEFIK_PUBLIC_PORT = "#{TraefikPublicPort}"
-        TRAEFIK_INTERNAL_IP = "#{TraefikInternalIp}"
-        TRAEFIK_INTERNAL_PORT = "#{TraefikInternalPort}"
-        CONSUL_SERVER_CA_FILE = "/etc/prometheus/consul-ca.pem"
+        ENV                    = "#{Environment}"
+        TRAEFIK_PUBLIC_IP      = "#{TraefikPublicIp}"
+        TRAEFIK_PUBLIC_PORT    = "#{TraefikPublicPort}"
+        TRAEFIK_INTERNAL_IP    = "#{TraefikInternalIp}"
+        TRAEFIK_INTERNAL_PORT  = "#{TraefikInternalPort}"
+        CONSUL_SERVER_CA_FILE  = "/etc/prometheus/consul-ca.pem"
       }
 
       volume_mount {

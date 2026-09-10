@@ -17,8 +17,10 @@ sed \
   -e "s|\${TRAEFIK_PUBLIC_PORT}|$TRAEFIK_PUBLIC_PORT|g" \
   -e "s|\${TRAEFIK_INTERNAL_IP}|$TRAEFIK_INTERNAL_IP|g" \
   -e "s|\${TRAEFIK_INTERNAL_PORT}|$TRAEFIK_INTERNAL_PORT|g" \
-  /etc/prometheus/prometheus.yaml.tmpl > /etc/prometheus/prometheus.yaml
+  /etc/prometheus/prometheus.yaml.tmpl \
+  > /etc/prometheus/prometheus.yaml
 
-chown -R nobody:nobody /etc/prometheus /prometheus
-
-exec su nobody -c "/bin/prometheus --config.file=/etc/prometheus/prometheus.yaml --storage.tsdb.path=/prometheus $*"
+exec /bin/prometheus \
+  --config.file=/etc/prometheus/prometheus.yaml \
+  --storage.tsdb.path=/prometheus \
+  "$@"
