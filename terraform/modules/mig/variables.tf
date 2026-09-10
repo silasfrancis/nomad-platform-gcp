@@ -35,14 +35,11 @@ variable "migs" {
     shutdown_script          = optional(string, "")
     cpu_target               = optional(number, 0.6) # doc: 60% average CPU
 
-    # Caps how many instances can be removed within time_window_sec —
-    # protects stateful on-demand workloads from disruptive rescheduling
-    # during a scale-in. Leave null (default) to skip this entirely, which
-    # is the right call for *-spot pools, since Spot preemption already
-    # shrinks the pool unpredictably regardless of any control here.
-    scale_in_control = optional(object({
-      max_scaled_in_replicas_fixed = number
-      time_window_sec              = optional(number, 300)
-    }), null)
+    # Re-add only for a pool with no matching Nomad Autoscaler policy.
+    #
+    #   scale_in_control = optional(object({
+    #     max_scaled_in_replicas_fixed = optional(number, 1)
+    #     time_window_sec              = optional(number, 300)
+    #   }), null)
   }))
 }

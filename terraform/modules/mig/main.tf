@@ -90,6 +90,7 @@ resource "google_compute_region_instance_group_manager" "this" {
   base_instance_name   = each.key
   distribution_policy_zones = var.zones
   distribution_policy_target_shape = "EVEN"
+  target_size          = each.value.min_replicas
 
   version {
     instance_template = google_compute_instance_template.this[each.key].id
@@ -110,32 +111,42 @@ resource "google_compute_region_instance_group_manager" "this" {
   }
 }
 
-resource "google_compute_region_autoscaler" "this" {
-  for_each = var.migs
+# REMOVED (2026-09-10): This and Nomad Autoscaler's gce-mig target driver
+# (nomad-jobs/plugins/nomad-autoscaler.hcl) both resize this MIG based on
+# unrelated signals (CPU util here vs. Nomad blocked-evals there) — they
+# fight over target_size. HashiCorp's own gce-mig troubleshooting docs list
+# "MIG scales down despite min=1" as a symptom of exactly this, caused by
+# "external automation... modifying the MIG." Nomad Autoscaler is the sole
+# intended owner of target_size here (see ignore_changes on the manager
+# resource above, same reasoning). Re-add only for a pool with no matching
+# Nomad Autoscaler policy.
+#
+# resource "google_compute_region_autoscaler" "this" {
+#   for_each = var.migs
 
-  project = var.project_id
-  name    = "${each.key}-autoscaler"
-  region  = var.region
-  target  = google_compute_region_instance_group_manager.this[each.key].id
+#   project = var.project_id
+#   name    = "${each.key}-autoscaler"
+#   region  = var.region
+#   target  = google_compute_region_instance_group_manager.this[each.key].id
 
-  autoscaling_policy {
-    min_replicas         = each.value.min_replicas
-    max_replicas         = each.value.max_replicas
-    cooldown_period      = 90
-    stabilization_period = each.value.spot ? null : 300
+#   autoscaling_policy {
+#     min_replicas         = each.value.min_replicas
+#     max_replicas         = each.value.max_replicas
+#     cooldown_period      = 90
+#     stabilization_period = each.value.spot ? null : 300
 
-    cpu_utilization {
-      target = each.value.cpu_target
-    }
+#     cpu_utilization {
+#       target = each.value.cpu_target
+#     }
 
-    dynamic "scale_in_control" {
-      for_each = each.value.scale_in_control != null ? [each.value.scale_in_control] : []
-      content {
-        max_scaled_in_replicas {
-          fixed = scale_in_control.value.max_scaled_in_replicas_fixed
-        }
-        time_window_sec = scale_in_control.value.time_window_sec
-      }
-    }
-  }
-}
+#     dynamic "scale_in_control" {
+#       for_each = each.value.scale_in_control != null ? [each.value.scale_in_control] : []
+#       content {
+#         max_scaled_in_replicas {
+#           fixed = scale_in_control.value.max_scaled_in_replicas_fixed
+#         }
+#         time_window_sec = scale_in_control.value.time_window_sec
+#       }
+#     }
+#   }
+# }

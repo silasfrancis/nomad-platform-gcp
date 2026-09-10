@@ -19,7 +19,7 @@ GCP_PROJECT="${2:?see usage}"
 GCP_REGION="${3:-europe-west1}"
 MIN_ONDEMAND_INSTANCES="${4:-1}"
 MAX_ONDEMAND_INSTANCES="${5:-10}"
-MIN_SPOT_INSTANCES="${6:-0}"
+MIN_SPOT_INSTANCES="${6:-1}"
 MAX_SPOT_INSTANCES="${7:-10}"
 
 if [[ "${ENVIRONMENT}" != "dev" && "${ENVIRONMENT}" != "prod" ]]; then

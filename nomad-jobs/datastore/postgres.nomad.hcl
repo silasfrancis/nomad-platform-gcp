@@ -76,6 +76,38 @@ job "postgres" {
       role = "postgres"
     }
 
+    # Runs once, as root, before the main PostgreSQL task.
+    # Fixes CSI volume ownership for the postgres UID/GID.
+    # docker run --rm postgres:16-alpine id postgres
+    # => uid=70(postgres) gid=70(postgres) groups=70(postgres),70(postgres)
+    task "volume-permissions" {
+      driver = "docker"
+
+      lifecycle {
+        hook    = "prestart"
+        sidecar = false
+      }
+
+      config {
+        image   = "busybox:1.36"
+        command = "sh"
+        args = [
+          "-c",
+          "chown -R 70:70 /var/lib/postgresql/data && chmod 700 /var/lib/postgresql/data/pgdata 2>/dev/null || true"
+        ]
+      }
+
+      volume_mount {
+        volume      = "postgres-data"
+        destination = "/var/lib/postgresql/data"
+      }
+
+      resources {
+        cpu    = 50
+        memory = 64
+      }
+    }
+
     task "postgres" {
       driver = "docker"
 

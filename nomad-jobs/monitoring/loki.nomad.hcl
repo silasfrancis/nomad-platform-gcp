@@ -78,9 +78,12 @@ job "loki" {
       }
 
       config {
-        image   = "busybox:latest"
+        image   = "busybox:1.36"
         command = "sh"
-        args    = ["-c", "chown -R 10001:10001 /loki"]
+        args = [
+          "-c",
+          "find /loki -mindepth 1 -maxdepth 1 -not -name lost+found -exec chown -R 10001:10001 {} +"
+        ]
       }
 
       volume_mount {
@@ -93,7 +96,7 @@ job "loki" {
         memory = 64
       }
     }
-
+    
     task "loki" {
       driver = "docker"
 

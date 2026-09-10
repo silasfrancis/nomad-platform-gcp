@@ -25,7 +25,7 @@ locals {
   nomad_server_startup_script = file("${local.instance_scripts_dir}/nomad-server-startup.sh")
   nomad_client_startup_script = file("${local.instance_scripts_dir}/nomad-client-startup.sh")
   nomad_client_spot_shutdown_script  = file("${local.instance_scripts_dir}/nomad-client-spot-shutdown.sh")
-
+  nomad_client_ondemand_shutdown_script  = file("${local.instance_scripts_dir}/nomad-client-ondemand-shutdown.sh")
 
   # Shared, Unconditional — Not Gated By active_environments
   #
@@ -178,8 +178,11 @@ locals {
       boot_disk_image          = "${var.project_id}/nomad-client"
       tags                     = ["nomad-client-dev", "consul-client-dev"]
       labels                   = { role = "worker", environment = "dev", pool = "on-demand" }
-      scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
       startup_script           = local.nomad_client_startup_script
+      shutdown_script          = local.nomad_client_ondemand_shutdown_script
+      
+      # Re-add only for a pool with no matching Nomad Autoscaler policy.
+      # scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
     }
     "nomad-dev-spot" = {
       machine_type            = "e2-standard-2"
@@ -206,8 +209,11 @@ locals {
       boot_disk_image          = "${var.project_id}/nomad-client"
       tags                     = ["nomad-client-prod", "consul-client-prod"]
       labels                   = { role = "worker", environment = "prod", pool = "on-demand" }
-      scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
       startup_script           = local.nomad_client_startup_script
+      shutdown_script          = local.nomad_client_ondemand_shutdown_script
+
+      # Re-add only for a pool with no matching Nomad Autoscaler policy.
+      # scale_in_control         = { max_scaled_in_replicas_fixed = 1, time_window_sec = 300 }
     }
     "nomad-prod-spot" = {
       machine_type            = "e2-standard-2"

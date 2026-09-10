@@ -9,6 +9,10 @@ resource "consul_acl_policy" "prometheus" {
     node_prefix "" {
       policy = "read"
     }
+
+    agent_prefix "" {
+      policy = "read"
+    }
   EOT
 }
 
