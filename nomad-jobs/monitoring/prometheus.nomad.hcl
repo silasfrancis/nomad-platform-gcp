@@ -71,8 +71,10 @@ job "prometheus" {
       config {
         image   = "busybox:1.36"
         command = "sh"
-        args    = ["-c", "chown -R nobody:nobody /prometheus"]
-        # busybox images default to root
+        args    = [
+          "-c",
+          "chown nobody:nobody /prometheus && find /prometheus -mindepth 1 -maxdepth 1 -not -name lost+found -exec chown -R nobody:nobody {} +"
+        ]
       }
 
       volume_mount {
