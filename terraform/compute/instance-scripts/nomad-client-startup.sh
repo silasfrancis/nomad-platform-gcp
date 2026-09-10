@@ -48,8 +48,8 @@ get_metadata() {
 # --- Values Supplied By Terraform Via Instance Metadata ---
 ENVIRONMENT="$(get_metadata env)"
 DATACENTER="$(get_metadata datacenter)"
-NODE_POOL_TYPE="$(get_metadata node_pool_type)"
 NODE_CLASS="$(get_metadata node_class)"
+NODE_POOL="$(get_metadata node_pool)"
 
 # --- Values Supplied By the Compute Engine Metadata Server ---
 ZONE="$(curl -sf -H "${METADATA_HEADER}" \
@@ -64,7 +64,7 @@ NODE_NAME="$(hostname)"
 
 printf 'environment=%s\n' "$ENVIRONMENT"
 printf 'datacenter=%s\n' "$DATACENTER"
-printf 'node_pool_type=%s\n' "$NODE_POOL_TYPE"
+printf 'node_pool=%s\n' "$NODE_POOL"
 printf 'node_class=%s\n' "$NODE_CLASS"
 printf 'zone=%s\n' "$ZONE"
 printf 'region=%s\n' "$REGION"
@@ -152,7 +152,7 @@ chown nomad:nomad /etc/nomad.d/tls/ca.pem /etc/nomad.d/tls/cert.pem /etc/nomad.d
 chmod 0644 /etc/nomad.d/tls/ca.pem /etc/nomad.d/tls/cert.pem /etc/nomad.d/tls/vault-ca.pem
 chmod 0600 /etc/nomad.d/tls/key.pem
 
-echo "[nomad-client-startup] env=${ENVIRONMENT} dc=${DATACENTER} pool=${NODE_POOL_TYPE} class=${NODE_CLASS} ip=${PRIVATE_IP}"
+echo "[nomad-client-startup] env=${ENVIRONMENT} dc=${DATACENTER} pool=${NODE_POOL} class=${NODE_CLASS} ip=${PRIVATE_IP}"
 
 # --- Consul Instance Config ---
 # Agent Token In The Config File (acl.tokens.agent), Not A Separate
@@ -198,9 +198,10 @@ client {
   server_join {
     retry_join = ["${NOMAD_DISCOVER}"]
   }
+  node_class = "${NODE_CLASS}"
 
   meta {
-    node_pool_type = "${NODE_POOL_TYPE}"
+    node_pool = "${NODE_POOL}"
     env            = "${ENVIRONMENT}"
     node_class     = "${NODE_CLASS}"
   }

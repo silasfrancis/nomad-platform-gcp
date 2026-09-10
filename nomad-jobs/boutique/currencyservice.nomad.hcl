@@ -14,14 +14,14 @@ job "currencyservice" {
     count = #{ReplicaCount}
 
     // affinity {
-    //   attribute = "${meta.node_pool_type}"
+    //   attribute = "${node.class}"
     //   operator  = "="
     //   value     = "spot"
     //   weight    = 50
     // }
 
     constraint {
-      attribute = "${meta.node_pool_type}"
+      attribute = "${node.class}"
       operator  = "="
       value     = "spot"
     }

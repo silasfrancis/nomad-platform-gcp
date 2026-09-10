@@ -13,7 +13,7 @@ job "redis" {
     count = 1
 
     constraint {
-      attribute = "${meta.node_pool_type}"
+      attribute = "${node.class}"
       operator  = "="
       value     = "on-demand"
     }

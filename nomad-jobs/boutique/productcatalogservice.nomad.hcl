@@ -17,13 +17,13 @@ job "productcatalogservice" {
     count = #{ReplicaCount}
 
     constraint {
-      attribute = "${meta.node_pool_type}"
+      attribute = "${node.class}"
       operator  = "="
       value     = "spot"
     }
 
     // affinity {
-    //   attribute = "${meta.node_pool_type}"
+    //   attribute = "${node.class}"
     //   operator  = "="
     //   value     = "spot"
     //   weight    = 50

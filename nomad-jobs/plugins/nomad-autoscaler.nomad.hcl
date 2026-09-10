@@ -50,7 +50,7 @@ job "nomad-autoscaler" {
     count = 1
 
     constraint {
-      attribute = "${meta.node_pool_type}"
+      attribute = "${node.class}"
       operator  = "="
       value     = "on-demand"
     }
@@ -154,7 +154,7 @@ scaling "cluster_policy_ondemand" {
 
     check "blocked_evaluations_scale_out" {
       source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_total_blocked)"
+      query        = "sum(nomad_nomad_blocked_evals_cpu{node_class=\"on-demand\"}) or vector(0)"
       query_window = "instant"
 
       strategy "threshold" {
@@ -166,7 +166,7 @@ scaling "cluster_policy_ondemand" {
 
     check "blocked_evaluations_scale_in" {
       source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_total_blocked)"
+      query        = "sum(nomad_nomad_blocked_evals_cpu{node_class=\"on-demand\"}) or vector(0)"
       query_window = "instant"
 
       strategy "threshold" {
@@ -181,6 +181,7 @@ scaling "cluster_policy_ondemand" {
       region                   = "${var.gcp_region}"
       mig_name                = "nomad-${var.environment}-ondemand"
       datacenter               = "dc-${var.environment}"
+      node_class               = "on-demand"
       node_drain_deadline      = "10m"
       node_purge               = true
       node_selector_strategy   = "empty_ignore_system"
@@ -199,7 +200,7 @@ scaling "cluster_policy_spot" {
 
     check "blocked_evaluations_scale_out" {
       source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_total_blocked)"
+      query        = "sum(nomad_nomad_blocked_evals_cpu{node_class=\"spot\"}) or vector(0)"
       query_window = "instant"
 
       strategy "threshold" {
@@ -211,7 +212,7 @@ scaling "cluster_policy_spot" {
 
     check "blocked_evaluations_scale_in" {
       source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_total_blocked)"
+      query        = "sum(nomad_nomad_blocked_evals_cpu{node_class=\"spot\"}) or vector(0)"
       query_window = "instant"
 
       strategy "threshold" {
@@ -226,6 +227,7 @@ scaling "cluster_policy_spot" {
       region                   = "${var.gcp_region}"
       mig_name                = "nomad-${var.environment}-spot"
       datacenter               = "dc-${var.environment}"
+      node_class               = "spot"
       node_drain_deadline      = "10m"
       node_purge               = true
       node_selector_strategy   = "empty_ignore_system"

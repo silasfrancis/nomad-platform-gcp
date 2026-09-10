@@ -13,7 +13,7 @@ job "postgres-backup" {
     count = #{ReplicaCount}
 
     affinity {
-      attribute = "${meta.node_pool_type}"
+      attribute = "${node.class}"
       operator  = "="
       value     = "spot"
       weight    = 50

@@ -14,7 +14,7 @@ job "recommendationservice" {
     count = #{ReplicaCount}
 
     constraint {
-      attribute = "${meta.node_pool_type}"
+      attribute = "${node.class}"
       operator  = "="
       value     = "spot"
     }

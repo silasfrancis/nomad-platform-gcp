@@ -14,7 +14,7 @@ job "loki" {
     count = #{ReplicaCount}
 
     constraint {
-      attribute = "${meta.node_pool_type}"
+      attribute = "${node.class}"
       operator  = "="
       value     = "on-demand"
     }
@@ -96,7 +96,7 @@ job "loki" {
         memory = 64
       }
     }
-    
+
     task "loki" {
       driver = "docker"
 

@@ -14,7 +14,7 @@ job "prometheus" {
     count = #{ReplicaCount}
 
     constraint {
-      attribute = "${meta.node_pool_type}"
+      attribute = "${node.class}"
       operator  = "="
       value     = "on-demand"
     }

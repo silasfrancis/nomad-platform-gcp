@@ -13,7 +13,7 @@ job "postgres" {
     count = 1
 
     constraint {
-      attribute = "${meta.node_pool_type}"
+      attribute = "${node.class}"
       operator  = "="
       value     = "on-demand"
     }
@@ -93,7 +93,7 @@ job "postgres" {
         command = "sh"
         args = [
           "-c",
-          "chown -R 70:70 /var/lib/postgresql/data && chmod 700 /var/lib/postgresql/data/pgdata 2>/dev/null || true"
+          "chown 70:70 /var/lib/postgresql/data && find /var/lib/postgresql/data -mindepth 1 -maxdepth 1 -not -name lost+found -exec chown -R 70:70 {} +"
         ]
       }
 

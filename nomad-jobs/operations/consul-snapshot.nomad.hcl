@@ -15,7 +15,7 @@ job "consul-snapshot" {
     # Short-lived, idempotent, retry-safe — soft Spot preference is
     # fine, unlike the always-on services above.
     affinity {
-      attribute = "${meta.node_pool_type}"
+      attribute = "${node.class}"
       operator  = "="
       value     = "spot"
       weight    = 50
