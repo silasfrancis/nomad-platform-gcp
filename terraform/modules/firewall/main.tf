@@ -174,8 +174,8 @@ locals {
       deny                = []
     }
 
-    "traefik-internal" = {
-      description         = "Allow Traefik internal to reach Nomad-scheduled backend services in over dynamic ports + postgres"
+    "traefik-internal-nomad" = {
+      description         = "Allow Traefik internal to reach Nomad-scheduled backend services in over dynamic ports + static ports (prom and postgres)"
       direction           = "INGRESS"
       priority            = 1000
       source_ranges       = [local.cidr["subnet-mgmt"]]
@@ -188,6 +188,7 @@ locals {
           protocol = "tcp"
           ports =  [
               "5432", # Postgres
+              "9090", # Prometheus
               "20000-32000",   # Nomad dynamic allocation ports
             ]
         },
@@ -258,6 +259,16 @@ locals {
         },
       ]
       deny = []
+    }
+
+    "prometheus-internal-scrape" = {
+      description         = "Allow Nomad-scheduled workloads (e.g. nomad-autoscaler) in dev/prod private to query Prometheus's API on its static port"
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-dev-private"], local.cidr["subnet-prod-private"]]
+      destination_ranges  = [local.cidr["subnet-dev-private"], local.cidr["subnet-prod-private"]]
+      allow               = [{ protocol = "tcp", ports = ["9090"] }]
+      deny                = []
     }
 
     "prometheus-to-traefik-internal" = {

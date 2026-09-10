@@ -8,6 +8,7 @@ set -eu
 : "${TRAEFIK_PUBLIC_PORT:?must be set}"
 : "${TRAEFIK_INTERNAL_IP:?must be set}"
 : "${TRAEFIK_INTERNAL_PORT:?must be set}"
+: "${CONSUL_HTTP_ADDR:?must be set}"
 
 sed \
   -e "s|\${CONSUL_PROMETHEUS_TOKEN}|$CONSUL_PROMETHEUS_TOKEN|g" \
@@ -17,6 +18,7 @@ sed \
   -e "s|\${TRAEFIK_PUBLIC_PORT}|$TRAEFIK_PUBLIC_PORT|g" \
   -e "s|\${TRAEFIK_INTERNAL_IP}|$TRAEFIK_INTERNAL_IP|g" \
   -e "s|\${TRAEFIK_INTERNAL_PORT}|$TRAEFIK_INTERNAL_PORT|g" \
+  -e "s|\${CONSUL_HTTP_ADDR}|$CONSUL_HTTP_ADDR|g" \
   /etc/prometheus/prometheus.yaml.tmpl \
   > /etc/prometheus/prometheus.yaml
 

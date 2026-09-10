@@ -29,6 +29,7 @@ job "prometheus" {
 
     network {
       port "http" {
+        static = 9090
         to = 9090
       }
     }
@@ -71,7 +72,7 @@ job "prometheus" {
         image   = "busybox:1.36"
         command = "sh"
         args    = ["-c", "chown -R nobody:nobody /prometheus"]
-        # busybox images default to root, no user override needed here
+        # busybox images default to root
       }
 
       volume_mount {
@@ -125,6 +126,7 @@ job "prometheus" {
         TRAEFIK_INTERNAL_IP    = "#{TraefikInternalIp}"
         TRAEFIK_INTERNAL_PORT  = "#{TraefikInternalPort}"
         CONSUL_SERVER_CA_FILE  = "/etc/prometheus/consul-ca.pem"
+        CONSUL_HTTP_ADDR       = "${attr.unique.network.ip-address}:8501"
       }
 
       volume_mount {
