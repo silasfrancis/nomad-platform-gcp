@@ -1,11 +1,7 @@
-# Falco Webhook service: A small Go application that receives Falco's JSON alerts 
-# (Falco itself runs as a host systemd service on every client node via Ansible).
-# Receives alerts from Falco, forwards to Loki (label: source=falco) and, for
-# severity >= WARNING, calls nomad-sentinel over internal HTTP.
-
 job "falco-webhook" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "on-demand"
   type        = "service"
 
   update {
