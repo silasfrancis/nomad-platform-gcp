@@ -1,6 +1,7 @@
 job "postgres-backup" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "on-demand"
   type        = "batch"
 
   periodic {
