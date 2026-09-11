@@ -91,6 +91,7 @@ job "postgres" {
 
       config {
         image   = "busybox:1.36"
+        privileged = true
         command = "sh"
         args = [
         "-c",
