@@ -97,71 +97,15 @@ job "postgres" {
         <<-EOT
           set -eux
 
-          echo "========================================"
-          echo " PostgreSQL CSI VOLUME DIAGNOSTICS"
-          echo "========================================"
+          # Ensure the mounted block device path is owned by postgres (uid:gid 70:70)
+          chown -R 70:70 /var/lib/postgresql/data
+          chmod 700 /var/lib/postgresql/data
 
-          echo ""
-          echo "=== 1. Identity ==="
-          id
-
-          echo ""
-          echo "=== 2. Volume root permissions ==="
+          # Verification check
           ls -ld /var/lib/postgresql/data
-          ls -la /var/lib/postgresql/data
-
-          echo ""
-          echo "=== 3. Filesystem information ==="
-          df -h /var/lib/postgresql/data
-          df -T /var/lib/postgresql/data
-
-          echo ""
-          echo "=== 4. Mount information ==="
-          cat /proc/mounts | grep "/var/lib/postgresql/data" || true
-
-          echo ""
-          echo "=== 5. Mount information from mountinfo ==="
-          cat /proc/self/mountinfo | grep "/var/lib/postgresql/data" || true
-
-          echo ""
-          echo "=== 6. Parent directory permissions ==="
-          ls -ld /
-          ls -ld /var
-          ls -ld /var/lib
-          ls -ld /var/lib/postgresql
-          ls -ld /var/lib/postgresql/data
-
-          echo ""
-          echo "=== 7. Write test directly in volume root ==="
-          echo "Attempting to create test file..."
-
-          if touch /var/lib/postgresql/data/.write-test; then
-            echo "SUCCESS: volume root is writable"
-            ls -l /var/lib/postgresql/data/.write-test
-            rm -f /var/lib/postgresql/data/.write-test
-          else
-            echo "FAILED: volume root is NOT writable"
-          fi
-
-          echo ""
-          echo "=== 8. Directory creation test ==="
-          if mkdir /var/lib/postgresql/data/.mkdir-test; then
-            echo "SUCCESS: directory creation works"
-            rmdir /var/lib/postgresql/data/.mkdir-test
-          else
-            echo "FAILED: directory creation is denied"
-          fi
-
-          echo ""
-          echo "=== 9. Volume root stat ==="
-          stat /var/lib/postgresql/data || true
-
-          echo ""
-          echo "========================================"
-          echo " DIAGNOSTICS COMPLETE"
-          echo "========================================"
+          echo "SUCCESS: Volume ownership adjusted for postgres"
         EOT
-      ]
+        ]
       }
 
       volume_mount {
