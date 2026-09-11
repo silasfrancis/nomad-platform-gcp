@@ -84,6 +84,23 @@ scrape_configs:
     params:
       format: ["prometheus"]
 
+  - job_name: nomad-client
+    consul_sd_configs:
+      - server: "${CONSUL_HTTP_ADDR}"
+        scheme: https
+        tls_config:
+          ca_file: "${CONSUL_SERVER_CA_FILE}"
+          server_name: "client.dc-${ENV}.consul"
+        token: "${CONSUL_PROMETHEUS_TOKEN}"
+        services: ["nomad-client"]
+    scheme: https
+    tls_config:
+      ca_file: "${CONSUL_SERVER_CA_FILE}"
+      server_name: "client.${ENV}.nomad"
+    metrics_path: /v1/metrics
+    params:
+      format: ["prometheus"]
+
   - job_name: consul
     consul_sd_configs:
       - server: "${CONSUL_HTTP_ADDR}"
