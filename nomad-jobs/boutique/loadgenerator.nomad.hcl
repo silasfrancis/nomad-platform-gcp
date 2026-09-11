@@ -1,6 +1,7 @@
 job "loadgenerator" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "spot"
   type        = "batch"
 
   group "loadgenerator" {
@@ -9,7 +10,7 @@ job "loadgenerator" {
     constraint {
       attribute = "${node.class}"
       operator  = "="
-      value     = "spot"
+      value     = "preemptible"
     }
 
     task "loadgenerator" {

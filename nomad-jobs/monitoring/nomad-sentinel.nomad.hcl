@@ -1,6 +1,7 @@
 job "nomad-sentinel" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "on-demand"
   type        = "service"
 
   # Roll allocations one at a time so each replacement can become healthy
@@ -20,7 +21,7 @@ job "nomad-sentinel" {
     constraint {
       attribute = "${node.class}"
       operator  = "="
-      value     = "on-demand"
+      value     = "critical"
     }
 
     network {

@@ -1,6 +1,7 @@
 job "metrics-api" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "on-demand"
   type        = "service"
 
   # Roll allocations one at a time so each replacement can become healthy
@@ -19,7 +20,7 @@ job "metrics-api" {
     constraint {
       attribute = "${node.class}"
       operator  = "="
-      value     = "on-demand"
+      value     = "critical"
     }
 
     network {

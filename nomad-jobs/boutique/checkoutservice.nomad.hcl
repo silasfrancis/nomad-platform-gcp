@@ -1,6 +1,7 @@
 job "checkoutservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "spot"
   type        = "service"
 
   update {
@@ -19,14 +20,14 @@ job "checkoutservice" {
     // affinity {
     //   attribute = "${node.class}"
     //   operator  = "="
-    //   value     = "spot"
+    //   value     = "preemptible"
     //   weight    = 50
     // }
 
     constraint {
       attribute = "${node.class}"
       operator  = "="
-      value     = "spot"
+      value     = "preemptible"
     }
 
     network {

@@ -12,6 +12,7 @@
 job "docker-cleanup" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "all"
   type        = "system"
 
   periodic {

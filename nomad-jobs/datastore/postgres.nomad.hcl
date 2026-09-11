@@ -1,6 +1,7 @@
 job "postgres" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "on-demand"
   type        = "service"
 
   update {
@@ -15,7 +16,7 @@ job "postgres" {
     constraint {
       attribute = "${node.class}"
       operator  = "="
-      value     = "on-demand"
+      value     = "critical"
     }
 
     volume "postgres-data" {

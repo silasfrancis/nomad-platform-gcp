@@ -1,6 +1,7 @@
 job "node-exporter" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "all"
   type        = "system"
 
   update {

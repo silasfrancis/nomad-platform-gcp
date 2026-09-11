@@ -1,6 +1,7 @@
 job "recommendationservice" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "spot"
   type        = "service"
 
   update {
@@ -16,7 +17,7 @@ job "recommendationservice" {
     constraint {
       attribute = "${node.class}"
       operator  = "="
-      value     = "spot"
+      value     = "preemptible"
     }
 
     network {
