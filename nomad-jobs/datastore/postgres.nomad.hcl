@@ -93,91 +93,75 @@ job "postgres" {
         image   = "busybox:1.36"
         command = "sh"
         args = [
-          "-c",
-          <<-EOT
-            set -eux
+        "-c",
+        <<-EOT
+          set -eux
 
-            echo "========================================"
-            echo " PostgreSQL CSI VOLUME PERMISSIONS TEST"
-            echo "========================================"
+          echo "========================================"
+          echo " PostgreSQL CSI VOLUME DIAGNOSTICS"
+          echo "========================================"
 
-            echo ""
-            echo "=== 1. Current identity ==="
-            id
+          echo ""
+          echo "=== 1. Identity ==="
+          id
 
-            echo ""
-            echo "=== 2. Mount information ==="
-            mount | grep "/var/lib/postgresql/data" || true
+          echo ""
+          echo "=== 2. Volume root permissions ==="
+          ls -ld /var/lib/postgresql/data
+          ls -la /var/lib/postgresql/data
 
-            echo ""
-            echo "=== 3. Volume root ==="
-            ls -ld /var/lib/postgresql/data
-            ls -la /var/lib/postgresql/data
+          echo ""
+          echo "=== 3. Filesystem information ==="
+          df -h /var/lib/postgresql/data
+          df -T /var/lib/postgresql/data
 
-            echo ""
-            echo "=== 4. Test directory creation ==="
-            echo "Attempting: mkdir -p /var/lib/postgresql/data/pgdata"
+          echo ""
+          echo "=== 4. Mount information ==="
+          cat /proc/mounts | grep "/var/lib/postgresql/data" || true
 
-            if mkdir -p /var/lib/postgresql/data/pgdata; then
-              echo "SUCCESS: mkdir worked"
-            else
-              echo "FAILED: mkdir was denied"
-              exit 1
-            fi
+          echo ""
+          echo "=== 5. Mount information from mountinfo ==="
+          cat /proc/self/mountinfo | grep "/var/lib/postgresql/data" || true
 
-            echo ""
-            echo "=== 5. New directory ownership ==="
-            ls -ld /var/lib/postgresql/data/pgdata
+          echo ""
+          echo "=== 6. Parent directory permissions ==="
+          ls -ld /
+          ls -ld /var
+          ls -ld /var/lib
+          ls -ld /var/lib/postgresql
+          ls -ld /var/lib/postgresql/data
 
-            echo ""
-            echo "=== 6. Test file creation ==="
-            echo "Attempting to create a test file..."
+          echo ""
+          echo "=== 7. Write test directly in volume root ==="
+          echo "Attempting to create test file..."
 
-            if touch /var/lib/postgresql/data/pgdata/.permissions-test; then
-              echo "SUCCESS: file creation worked"
-            else
-              echo "FAILED: file creation was denied"
-              exit 1
-            fi
+          if touch /var/lib/postgresql/data/.write-test; then
+            echo "SUCCESS: volume root is writable"
+            ls -l /var/lib/postgresql/data/.write-test
+            rm -f /var/lib/postgresql/data/.write-test
+          else
+            echo "FAILED: volume root is NOT writable"
+          fi
 
-            echo ""
-            echo "=== 7. Test file ownership ==="
-            ls -l /var/lib/postgresql/data/pgdata/.permissions-test
+          echo ""
+          echo "=== 8. Directory creation test ==="
+          if mkdir /var/lib/postgresql/data/.mkdir-test; then
+            echo "SUCCESS: directory creation works"
+            rmdir /var/lib/postgresql/data/.mkdir-test
+          else
+            echo "FAILED: directory creation is denied"
+          fi
 
-            echo ""
-            echo "=== 8. Test chown on pgdata ==="
-            echo "Attempting: chown 70:70 /var/lib/postgresql/data/pgdata"
+          echo ""
+          echo "=== 9. Volume root stat ==="
+          stat /var/lib/postgresql/data || true
 
-            if chown 70:70 /var/lib/postgresql/data/pgdata; then
-              echo "SUCCESS: chown on pgdata worked"
-            else
-              echo "FAILED: chown on pgdata was denied"
-            fi
-
-            echo ""
-            echo "=== 9. pgdata ownership after chown ==="
-            ls -ld /var/lib/postgresql/data/pgdata
-
-            echo ""
-            echo "=== 10. Test chown on test file ==="
-            echo "Attempting: chown 70:70 /var/lib/postgresql/data/pgdata/.permissions-test"
-
-            if chown 70:70 /var/lib/postgresql/data/pgdata/.permissions-test; then
-              echo "SUCCESS: chown on test file worked"
-            else
-              echo "FAILED: chown on test file was denied"
-            fi
-
-            echo ""
-            echo "=== 11. Final state ==="
-            ls -la /var/lib/postgresql/data/pgdata
-
-            echo ""
-            echo "========================================"
-            echo " TEST COMPLETE"
-            echo "========================================"
-          EOT
-        ]
+          echo ""
+          echo "========================================"
+          echo " DIAGNOSTICS COMPLETE"
+          echo "========================================"
+        EOT
+      ]
       }
 
       volume_mount {
