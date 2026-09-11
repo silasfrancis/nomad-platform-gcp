@@ -97,19 +97,85 @@ job "postgres" {
           <<-EOT
             set -eux
 
-            echo "=== BEFORE ==="
+            echo "========================================"
+            echo " PostgreSQL CSI VOLUME PERMISSIONS TEST"
+            echo "========================================"
+
+            echo ""
+            echo "=== 1. Current identity ==="
             id
+
+            echo ""
+            echo "=== 2. Mount information ==="
+            mount | grep "/var/lib/postgresql/data" || true
+
+            echo ""
+            echo "=== 3. Volume root ==="
             ls -ld /var/lib/postgresql/data
+            ls -la /var/lib/postgresql/data
 
-            chown -R 70:70 /var/lib/postgresql/data
+            echo ""
+            echo "=== 4. Test directory creation ==="
+            echo "Attempting: mkdir -p /var/lib/postgresql/data/pgdata"
 
-            chmod 700 /var/lib/postgresql/data
+            if mkdir -p /var/lib/postgresql/data/pgdata; then
+              echo "SUCCESS: mkdir worked"
+            else
+              echo "FAILED: mkdir was denied"
+              exit 1
+            fi
 
-            echo "=== AFTER ==="
-            ls -ld /var/lib/postgresql/data
+            echo ""
+            echo "=== 5. New directory ownership ==="
+            ls -ld /var/lib/postgresql/data/pgdata
 
-            touch /var/lib/postgresql/data/.permissions-test
-            rm /var/lib/postgresql/data/.permissions-test
+            echo ""
+            echo "=== 6. Test file creation ==="
+            echo "Attempting to create a test file..."
+
+            if touch /var/lib/postgresql/data/pgdata/.permissions-test; then
+              echo "SUCCESS: file creation worked"
+            else
+              echo "FAILED: file creation was denied"
+              exit 1
+            fi
+
+            echo ""
+            echo "=== 7. Test file ownership ==="
+            ls -l /var/lib/postgresql/data/pgdata/.permissions-test
+
+            echo ""
+            echo "=== 8. Test chown on pgdata ==="
+            echo "Attempting: chown 70:70 /var/lib/postgresql/data/pgdata"
+
+            if chown 70:70 /var/lib/postgresql/data/pgdata; then
+              echo "SUCCESS: chown on pgdata worked"
+            else
+              echo "FAILED: chown on pgdata was denied"
+            fi
+
+            echo ""
+            echo "=== 9. pgdata ownership after chown ==="
+            ls -ld /var/lib/postgresql/data/pgdata
+
+            echo ""
+            echo "=== 10. Test chown on test file ==="
+            echo "Attempting: chown 70:70 /var/lib/postgresql/data/pgdata/.permissions-test"
+
+            if chown 70:70 /var/lib/postgresql/data/pgdata/.permissions-test; then
+              echo "SUCCESS: chown on test file worked"
+            else
+              echo "FAILED: chown on test file was denied"
+            fi
+
+            echo ""
+            echo "=== 11. Final state ==="
+            ls -la /var/lib/postgresql/data/pgdata
+
+            echo ""
+            echo "========================================"
+            echo " TEST COMPLETE"
+            echo "========================================"
           EOT
         ]
       }
