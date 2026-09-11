@@ -14,7 +14,7 @@
 # ./deploy-plugins.sh <dev|prod> <gcp-project> <gcp-region> [min-ondemand] [max-ondemand] [min-spot] [max-spot]
 
 set -euo pipefail
-ENVIRONMENT="${1:?Usage: ./deploy.sh <dev|prod> <gcp-project> <artifact-registry> <image-tag> [gcp-zone] [ondemand-mig] [spot-mig]}"
+ENVIRONMENT="${1:?Usage: ./deploy-plugins.sh <dev|prod> <gcp-project> <gcp-region> [min-ondemand] [max-ondemand] [min-spot] [max-spot]}"
 GCP_PROJECT="${2:?see usage}"
 GCP_REGION="${3:-europe-west1}"
 MIN_ONDEMAND_INSTANCES="${4:-1}"

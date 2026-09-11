@@ -167,6 +167,13 @@ resource "octopusdeploy_variable" "artifact_registry" {
   value    = local.artifact_registry_path # e.g. "us-central1-docker.pkg.dev/${var.gcp_project_id}/platform-images"
 }
 
+resource "octopusdeploy_variable" "platform_gcs_bucket" {
+  owner_id = octopusdeploy_library_variable_set.platform_shared.id
+  name     = "PlatformGcsBucket"
+  type     = "String"
+  value    = local.platform_gcs_bucket
+}
+
 # ServiceName — extracted from the release's pre-release tag.
 # "0.0.0-cartservice.a03722a8" -> "cartservice"
 

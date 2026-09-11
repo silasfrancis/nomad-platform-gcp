@@ -10,6 +10,7 @@ locals {
 job "csi-controller" {
   datacenters = [local.datacenter]
   namespace   = "plugins"
+  node_pool   = "on-demand"
   type        = "service"
 
   update {
@@ -24,7 +25,7 @@ job "csi-controller" {
     constraint {
       attribute = "${node.class}"
       operator  = "="
-      value     = "on-demand"
+      value     = "critical"
     }
 
     constraint {

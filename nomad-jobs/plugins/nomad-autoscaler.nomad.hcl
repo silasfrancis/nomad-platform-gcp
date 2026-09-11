@@ -38,6 +38,7 @@ locals {
 job "nomad-autoscaler" {
   datacenters = [local.datacenter]
   namespace   = "plugins"
+  node_pool   = "on-demand"
   type        = "service"
 
   update {
@@ -52,7 +53,7 @@ job "nomad-autoscaler" {
     constraint {
       attribute = "${node.class}"
       operator  = "="
-      value     = "on-demand"
+      value     = "critical"
     }
 
     network {
@@ -154,7 +155,7 @@ scaling "cluster_policy_ondemand" {
 
     check "blocked_evaluations_scale_out" {
       source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_cpu{node_class=\"on-demand\"}) or vector(0)"
+      query        = "sum(nomad_nomad_blocked_evals_cpu{node_pool=\"on-demand\"}) or vector(0)"
       query_window = "instant"
 
       strategy "threshold" {
@@ -166,7 +167,7 @@ scaling "cluster_policy_ondemand" {
 
     check "blocked_evaluations_scale_in" {
       source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_cpu{node_class=\"on-demand\"}) or vector(0)"
+      query        = "sum(nomad_nomad_blocked_evals_cpu{node_pool=\"on-demand\"}) or vector(0)"
       query_window = "instant"
 
       strategy "threshold" {
@@ -182,6 +183,7 @@ scaling "cluster_policy_ondemand" {
       mig_name                = "nomad-${var.environment}-ondemand"
       datacenter               = "dc-${var.environment}"
       node_class               = "on-demand"
+      node_pool                = "on-demand"
       node_drain_deadline      = "10m"
       node_purge               = true
       node_selector_strategy   = "empty_ignore_system"
@@ -200,7 +202,7 @@ scaling "cluster_policy_spot" {
 
     check "blocked_evaluations_scale_out" {
       source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_cpu{node_class=\"spot\"}) or vector(0)"
+      query        = "sum(nomad_nomad_blocked_evals_cpu{node_pool=\"spot\"}) or vector(0)"
       query_window = "instant"
 
       strategy "threshold" {
@@ -212,7 +214,7 @@ scaling "cluster_policy_spot" {
 
     check "blocked_evaluations_scale_in" {
       source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_cpu{node_class=\"spot\"}) or vector(0)"
+      query        = "sum(nomad_nomad_blocked_evals_cpu{node_pool=\"spot\"}) or vector(0)"
       query_window = "instant"
 
       strategy "threshold" {
@@ -228,6 +230,7 @@ scaling "cluster_policy_spot" {
       mig_name                = "nomad-${var.environment}-spot"
       datacenter               = "dc-${var.environment}"
       node_class               = "spot"
+      node_pool                = "spot"
       node_drain_deadline      = "10m"
       node_purge               = true
       node_selector_strategy   = "empty_ignore_system"

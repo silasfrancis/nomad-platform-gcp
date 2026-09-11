@@ -91,7 +91,8 @@ locals {
 
   # Base image path — same registry regardless of environment, unlike
   # everything else that's split dev/prod. One repo, images promoted
-  # through environments by tag, not rebuilt — per the architecture
-  # doc's CI/CD design (GitHub Actions builds once per commit).
+  # through environments by tag, not rebuilt
   artifact_registry_path = var.artifact_registry_path
+  platform_gcs_bucket = var.platform_gcs_bucket
 }
+

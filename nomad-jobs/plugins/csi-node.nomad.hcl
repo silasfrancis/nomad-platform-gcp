@@ -10,6 +10,7 @@ locals {
 job "csi-node" {
   datacenters = [local.datacenter]
   namespace   = "plugins"
+  node_pool   = "all"
   type        = "system"
 
   update {

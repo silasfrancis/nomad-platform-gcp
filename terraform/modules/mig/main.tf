@@ -47,8 +47,8 @@ resource "google_compute_instance_template" "this" {
   metadata = merge({
     env            = each.value.environment
     datacenter     = each.value.environment == "dev" ? "dc-dev" : "dc-prod"
-    node_class = each.value.spot ? "spot" : "on-demand"
-    node_pool     = each.value.spot ? "preemptible" : "critical" 
+    node_pool = each.value.spot ? "spot" : "on-demand"
+    node_class = each.value.spot ? "preemptible" : "critical"
   },
     each.value.startup_script != "" ? { startup-script = each.value.startup_script } : {},
     each.value.spot && each.value.shutdown_script != "" ? { shutdown-script = each.value.shutdown_script } : {},

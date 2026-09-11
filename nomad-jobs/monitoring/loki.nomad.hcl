@@ -19,14 +19,6 @@ job "loki" {
       value     = "on-demand"
     }
 
-    volume "loki-data" {
-      type            = "csi"
-      source          = "loki-data-#{Environment}"
-      read_only       = false
-      attachment_mode = "file-system"
-      access_mode     = "single-node-writer"
-    }
-
     network {
       mode = "bridge"
 
@@ -46,8 +38,8 @@ job "loki" {
         timeout  = "2s"
       }
 
-      # Grafana on mgmt-vm reaches it via traefik-internal's dedicated "internal"
-      # entrypoint, since Grafana isn't in the mesh at all.
+      # Grafana on mgmt-vm reaches Loki through Traefik's
+      # dedicated internal entrypoint.
       tags = [
         "traefik.enable=true",
         "traefik.http.routers.loki.rule=Host(`loki-#{Environment}.platform.lefrancis.org`)",
@@ -69,45 +61,22 @@ job "loki" {
       }
     }
 
-    task "loki-permissions" {
-      driver = "docker"
-
-      lifecycle {
-        hook    = "prestart"
-        sidecar = false
-      }
-
-      config {
-        image   = "busybox:1.36"
-        command = "sh"
-        args = [
-          "-c",
-          "find /loki -mindepth 1 -maxdepth 1 -not -name lost+found -exec chown -R 10001:10001 {} +"
-        ]
-      }
-
-      volume_mount {
-        volume      = "loki-data"
-        destination = "/loki"
-      }
-
-      resources {
-        cpu    = 50
-        memory = 64
-      }
-    }
-
     task "loki" {
       driver = "docker"
 
       config {
         image = "#{ArtifactRegistry}/loki:#{ImageTag}"
         ports = ["http"]
+
+        args = [
+          "-config.file=/etc/loki/loki.yaml",
+          "-config.expand-env=true",
+        ]
       }
 
-      volume_mount {
-        volume      = "loki-data"
-        destination = "/loki"
+      env {
+        LOKI_GCS_BUCKET = "#{PlatformGcsBucket}"
+        LOKI_GCS_PREFIX = "loki/#{Environment}"
       }
 
       resources {

@@ -1,6 +1,7 @@
 job "prometheus" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
+  node_pool   = "on-demand"
   type        = "service"
 
   update {
@@ -16,7 +17,7 @@ job "prometheus" {
     constraint {
       attribute = "${node.class}"
       operator  = "="
-      value     = "on-demand"
+      value     = "critical"
     }
 
     volume "prometheus-data" {

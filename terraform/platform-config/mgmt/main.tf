@@ -30,6 +30,7 @@ module "octopus" {
   nomad_address_prod  = var.nomad_address_prod
   use_dummy_secrets = false
   artifact_registry_path = var.artifact_registry_path
+  platform_gcs_bucket = var.platform_gcs_bucket
 
   # Traefik ip and entry points - only needed for prometheus scrape
   # and can be applied manually from the Octopus deploy UI if VMS are not yet setup

@@ -56,3 +56,7 @@ variable "github_repository" {
 variable "artifact_registry_path" {
   type = string
 }
+
+variable "platform_gcs_bucket"{
+  type = string
+}

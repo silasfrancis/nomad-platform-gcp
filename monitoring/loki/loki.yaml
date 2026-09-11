@@ -7,11 +7,13 @@ server:
 
 common:
   path_prefix: /loki
+
   storage:
-    filesystem:
-      chunks_directory: /loki/chunks
-      rules_directory: /loki/rules
+    gcs:
+      bucket_name: ${LOKI_GCS_BUCKET}
+
   replication_factor: 1
+
   ring:
     kvstore:
       store: inmemory
@@ -20,12 +22,23 @@ schema_config:
   configs:
     - from: 2024-01-01
       store: tsdb
-      object_store: filesystem
+      object_store: gcs
       schema: v13
       index:
         prefix: index_
         period: 24h
-        
+
+storage_config:
+  object_prefix: ${LOKI_GCS_PREFIX}
+
+  tsdb_shipper:
+    active_index_directory: /loki/index
+    cache_location: /loki/index_cache
+    cache_ttl: 24h
+
+  gcs:
+    bucket_name: ${LOKI_GCS_BUCKET}
+
 compactor:
   working_directory: /loki/compactor
   compaction_interval: 10m

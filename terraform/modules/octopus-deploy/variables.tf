@@ -28,6 +28,10 @@ variable "artifact_registry_path" {
   type = string
 }
 
+variable "platform_gcs_bucket"{
+  type = string
+}
+
 variable "traefik_public_ip_dev" {
   type = string
 }

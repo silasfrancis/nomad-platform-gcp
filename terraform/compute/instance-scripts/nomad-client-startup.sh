@@ -199,6 +199,7 @@ client {
     retry_join = ["${NOMAD_DISCOVER}"]
   }
   node_class = "${NODE_CLASS}"
+  node_pool = "${NODE_POOL}"
 
   meta {
     node_pool = "${NODE_POOL}"
