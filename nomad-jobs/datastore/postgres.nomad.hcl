@@ -94,7 +94,23 @@ job "postgres" {
         command = "sh"
         args = [
           "-c",
-          "chown 70:70 /var/lib/postgresql/data && find /var/lib/postgresql/data -mindepth 1 -maxdepth 1 -not -name lost+found -exec chown -R 70:70 {} +"
+          <<-EOT
+            set -eux
+
+            echo "=== BEFORE ==="
+            id
+            ls -ld /var/lib/postgresql/data
+
+            chown -R 70:70 /var/lib/postgresql/data
+
+            chmod 700 /var/lib/postgresql/data
+
+            echo "=== AFTER ==="
+            ls -ld /var/lib/postgresql/data
+
+            touch /var/lib/postgresql/data/.permissions-test
+            rm /var/lib/postgresql/data/.permissions-test
+          EOT
         ]
       }
 
