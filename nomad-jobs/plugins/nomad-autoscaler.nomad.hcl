@@ -38,8 +38,9 @@ locals {
 job "nomad-autoscaler" {
   datacenters = [local.datacenter]
   namespace   = "plugins"
-  node_pool   = "on-demand"
-  type        = "service"
+
+  node_pool = "on-demand"
+  type      = "service"
 
   update {
     max_parallel     = 1
@@ -128,8 +129,8 @@ target "gce-mig" {
   }
 }
 
-strategy "threshold" {
-  driver = "threshold"
+strategy "target-value" {
+  driver = "target-value"
 }
 
 policy {
@@ -141,7 +142,7 @@ EOF
         destination = "local/config.hcl"
       }
 
-      # Cluster-scaling policies
+      # Cluster-scaling policies.
       template {
         data = <<EOF
 scaling "cluster_policy_ondemand" {
@@ -153,40 +154,56 @@ scaling "cluster_policy_ondemand" {
     cooldown             = "10m"
     evaluation_interval  = "1m"
 
-    check "blocked_evaluations_scale_out" {
-      source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_cpu{node_pool=\"on-demand\"}) or vector(0)"
-      query_window = "instant"
+    check "cpu_allocated_percentage" {
+      source = "prometheus"
+      query  = <<-EOQ
+        sum(
+          nomad_client_allocated_cpu{node_pool="on-demand"} * 100
+          /
+          (
+            nomad_client_unallocated_cpu{node_pool="on-demand"}
+            + nomad_client_allocated_cpu{node_pool="on-demand"}
+          )
+        )
+        / count(nomad_client_allocated_cpu{node_pool="on-demand"})
+        or vector(0)
+      EOQ
 
-      strategy "threshold" {
-        lower_bound            = 1
-        delta                  = 1
-        within_bounds_trigger  = 1
+      strategy "target-value" {
+        target = 70
       }
     }
 
-    check "blocked_evaluations_scale_in" {
-      source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_cpu{node_pool=\"on-demand\"}) or vector(0)"
-      query_window = "instant"
+    check "mem_allocated_percentage" {
+      source = "prometheus"
+      query  = <<-EOQ
+        sum(
+          nomad_client_allocated_memory{node_pool="on-demand"} * 100
+          /
+          (
+            nomad_client_unallocated_memory{node_pool="on-demand"}
+            + nomad_client_allocated_memory{node_pool="on-demand"}
+          )
+        )
+        / count(nomad_client_allocated_memory{node_pool="on-demand"})
+        or vector(0)
+      EOQ
 
-      strategy "threshold" {
-        upper_bound            = 1
-        delta                  = -1
-        within_bounds_trigger  = 1
+      strategy "target-value" {
+        target = 70
       }
     }
 
     target "gce-mig" {
-      project                 = "${var.gcp_project}"
-      region                   = "${var.gcp_region}"
-      mig_name                = "nomad-${var.environment}-ondemand"
-      datacenter               = "dc-${var.environment}"
-      node_class               = "on-demand"
-      node_pool                = "on-demand"
-      node_drain_deadline      = "10m"
-      node_purge               = true
-      node_selector_strategy   = "empty_ignore_system"
+      project    = "${var.gcp_project}"
+      region     = "${var.gcp_region}"
+      mig_name   = "nomad-${var.environment}-ondemand"
+      datacenter = "dc-${var.environment}"
+      node_pool  = "on-demand"
+
+      node_drain_deadline    = "10m"
+      node_purge             = true
+      node_selector_strategy = "empty_ignore_system"
     }
   }
 }
@@ -200,40 +217,56 @@ scaling "cluster_policy_spot" {
     cooldown             = "10m"
     evaluation_interval  = "1m"
 
-    check "blocked_evaluations_scale_out" {
-      source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_cpu{node_pool=\"spot\"}) or vector(0)"
-      query_window = "instant"
+    check "cpu_allocated_percentage" {
+      source = "prometheus"
+      query  = <<-EOQ
+        sum(
+          nomad_client_allocated_cpu{node_pool="spot"} * 100
+          /
+          (
+            nomad_client_unallocated_cpu{node_pool="spot"}
+            + nomad_client_allocated_cpu{node_pool="spot"}
+          )
+        )
+        / count(nomad_client_allocated_cpu{node_pool="spot"})
+        or vector(0)
+      EOQ
 
-      strategy "threshold" {
-        lower_bound            = 1
-        delta                  = 1
-        within_bounds_trigger  = 1
+      strategy "target-value" {
+        target = 70
       }
     }
 
-    check "blocked_evaluations_scale_in" {
-      source       = "prometheus"
-      query        = "sum(nomad_nomad_blocked_evals_cpu{node_pool=\"spot\"}) or vector(0)"
-      query_window = "instant"
+    check "mem_allocated_percentage" {
+      source = "prometheus"
+      query  = <<-EOQ
+        sum(
+          nomad_client_allocated_memory{node_pool="spot"} * 100
+          /
+          (
+            nomad_client_unallocated_memory{node_pool="spot"}
+            + nomad_client_allocated_memory{node_pool="spot"}
+          )
+        )
+        / count(nomad_client_allocated_memory{node_pool="spot"})
+        or vector(0)
+      EOQ
 
-      strategy "threshold" {
-        upper_bound            = 1
-        delta                  = -1
-        within_bounds_trigger  = 1
+      strategy "target-value" {
+        target = 70
       }
     }
 
     target "gce-mig" {
-      project                 = "${var.gcp_project}"
-      region                   = "${var.gcp_region}"
-      mig_name                = "nomad-${var.environment}-spot"
-      datacenter               = "dc-${var.environment}"
-      node_class               = "spot"
-      node_pool                = "spot"
-      node_drain_deadline      = "10m"
-      node_purge               = true
-      node_selector_strategy   = "empty_ignore_system"
+      project    = "${var.gcp_project}"
+      region     = "${var.gcp_region}"
+      mig_name   = "nomad-${var.environment}-spot"
+      datacenter = "dc-${var.environment}"
+      node_pool  = "spot"
+
+      node_drain_deadline    = "10m"
+      node_purge             = true
+      node_selector_strategy = "empty_ignore_system"
     }
   }
 }
