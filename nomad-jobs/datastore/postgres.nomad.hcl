@@ -97,13 +97,18 @@ job "postgres" {
         <<-EOT
           set -eux
 
-          # Ensure the mounted block device path is owned by postgres (uid:gid 70:70)
-          chown -R 70:70 /var/lib/postgresql/data
+          # Change ownership of the root mount point itself, ignoring lost+found
+          chown 70:70 /var/lib/postgresql/data
           chmod 700 /var/lib/postgresql/data
+
+          # If a pgdata subdirectory exists or needs creation, handle it safely
+          mkdir -p /var/lib/postgresql/data/pgdata
+          chown -R 70:70 /var/lib/postgresql/data/pgdata
 
           # Verification check
           ls -ld /var/lib/postgresql/data
-          echo "SUCCESS: Volume ownership adjusted for postgres"
+          ls -ld /var/lib/postgresql/data/pgdata
+          echo "SUCCESS: Volume ownership adjusted safely"
         EOT
         ]
       }
