@@ -96,7 +96,7 @@ scrape_configs:
     scheme: https
     tls_config:
       ca_file: "${CONSUL_SERVER_CA_FILE}"
-      server_name: "client.${ENV}.nomad"
+      server_name: "client.dc-${ENV}.nomad"
     metrics_path: /v1/metrics
     params:
       format: ["prometheus"]
