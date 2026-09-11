@@ -98,18 +98,11 @@ job "postgres" {
         <<-EOT
           set -eux
 
-          # Change ownership of the root mount point itself, ignoring lost+found
           chown 70:70 /var/lib/postgresql/data
           chmod 700 /var/lib/postgresql/data
 
-          # If a pgdata subdirectory exists or needs creation, handle it safely
-          mkdir -p /var/lib/postgresql/data/pgdata
-          chown -R 70:70 /var/lib/postgresql/data/pgdata
-
-          # Verification check
           ls -ld /var/lib/postgresql/data
-          ls -ld /var/lib/postgresql/data/pgdata
-          echo "SUCCESS: Volume ownership adjusted safely"
+          echo "SUCCESS: Volume root permissions configured"
         EOT
         ]
       }
@@ -168,7 +161,7 @@ EOF
 POSTGRES_PASSWORD={{ .Data.data.superuser_password }}
 {{ end }}
 POSTGRES_USER=postgres
-PGDATA=/var/lib/postgresql/data/pgdata
+PGDATA=/var/lib/postgresql/data
 EOF
         destination = "secrets/postgres.env"
         env         = true
