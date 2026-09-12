@@ -86,9 +86,9 @@ resource "vault_database_secret_backend_role" "monitoring" {
   creation_statements = [
     "CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}';",
     "GRANT CONNECT ON DATABASE monitoring TO \"{{name}}\";",
-    "GRANT USAGE, CREATE ON SCHEMA public TO \"{{name}}\";",
+    "GRANT CREATE ON SCHEMA public TO \"{{name}}\";",
     "GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO \"{{name}}\";",
-    "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO \"{{name}}\";",
+    "GRANT \"vault-admin\" TO \"{{name}}\";",
   ]
   default_ttl = 3600
   max_ttl     = 3600

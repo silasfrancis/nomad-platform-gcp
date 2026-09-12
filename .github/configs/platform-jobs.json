@@ -35,6 +35,12 @@
       "path": "nomad-jobs/operations/docker-cleanup.nomad.hcl",
       "job_spec": "nomad-jobs/operations/docker-cleanup.nomad.hcl",
       "octopus_project": "operations"
+    },
+    {
+      "name": "postgres-migrate",
+      "path": "nomad-jobs/operations/postgres-migrate.nomad.hcl",
+      "job_spec": "nomad-jobs/operations/postgres-migrate.nomad.hcl",
+      "octopus_project": "operations"
     }
   ]
 }
