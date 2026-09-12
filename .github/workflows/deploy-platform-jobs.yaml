@@ -7,9 +7,7 @@ on:
       - "nomad-jobs/datastore/postgres.nomad.hcl"
       - "nomad-jobs/datastore/redis.nomad.hcl"
       - "nomad-jobs/monitoring/node-exporter.nomad.hcl"
-      - "nomad-jobs/operations/consul-snapshot.nomad.hcl"
-      - "nomad-jobs/operations/postgres-backup.nomad.hcl"
-      - "nomad-jobs/operations/docker-cleanup.nomad.hcl"
+      - "nomad-jobs/operations/*"
 
 permissions:
   contents: read
