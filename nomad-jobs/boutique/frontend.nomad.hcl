@@ -57,7 +57,7 @@ job "frontend" {
 
       check {
         type     = "http"
-        path     = "/_healthz"
+        path     = "/"
         interval = "10s"
         timeout  = "2s"
       }
