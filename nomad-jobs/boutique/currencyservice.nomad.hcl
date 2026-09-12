@@ -37,7 +37,7 @@ job "currencyservice" {
 
     service {
       name = "currencyservice"
-      port = "grpc"
+      port = "7000"
 
       check {
         type     = "grpc"
@@ -57,7 +57,7 @@ job "currencyservice" {
         # is a workable floor. Hardcoded per your ask, not an Octopus var.
         sidecar_task {
           resources {
-            cpu    = 200
+            cpu    = 100
             memory = 128
           }
         }

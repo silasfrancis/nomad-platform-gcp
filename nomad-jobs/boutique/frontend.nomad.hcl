@@ -53,7 +53,7 @@ job "frontend" {
 
     service {
       name = "frontend"
-      port = "http"
+      port = "8080"
 
       check {
         type     = "http"
@@ -108,8 +108,8 @@ job "frontend" {
         # accordingly from the single-upstream floor.
         sidecar_task {
           resources {
-            cpu    = 300
-            memory = 400
+            cpu    = 150
+            memory = 192
           }
         }
       }
