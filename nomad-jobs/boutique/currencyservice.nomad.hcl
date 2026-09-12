@@ -37,7 +37,7 @@ job "currencyservice" {
 
     service {
       name = "currencyservice"
-      port = "7000"
+      port = 7000
 
       check {
         type     = "grpc"
