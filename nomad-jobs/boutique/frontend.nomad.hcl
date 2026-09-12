@@ -133,9 +133,6 @@ job "frontend" {
         SHIPPING_SERVICE_ADDR         = "${NOMAD_UPSTREAM_ADDR_shippingservice}"
         CHECKOUT_SERVICE_ADDR         = "${NOMAD_UPSTREAM_ADDR_checkoutservice}"
         AD_SERVICE_ADDR               = "${NOMAD_UPSTREAM_ADDR_adservice}"
-        # SHOPPING_ASSISTANT_SERVICE_ADDR intentionally omitted — see
-        # architecture doc 13, requires GCP AlloyDB + Secret Manager,
-        # neither used in this project.
       }
 
       resources {

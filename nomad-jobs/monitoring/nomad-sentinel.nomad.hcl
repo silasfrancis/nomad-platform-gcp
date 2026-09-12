@@ -87,9 +87,21 @@ job "nomad-sentinel" {
           env = true
         }
 
+      template {
+        data = <<EOF
+{{ with secret "kv/data/pki/#{Environment}/nomad-ca" }}
+{{ .Data.data.ca_cert }}
+{{ end }}
+EOF
+        destination = "secrets/nomad-ca.pem"
+      }
+
         env {
           HTTP_PORT             = "8090"
           REMEDIATION_MODE = "#{RemediationMode}"
+          NOMAD_ADDR= "https://nomad.service.consul:4646"
+          NOMAD_CACERT = "/secrets/nomad-ca.pem"
+          NOMAD_TLS_SERVER_NAME = "server.#{Datacenter}.nomad"
         }
 
       template {

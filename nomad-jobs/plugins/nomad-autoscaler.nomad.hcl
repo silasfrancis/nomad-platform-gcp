@@ -99,7 +99,7 @@ EOF
 {{ .Data.data.ca_cert }}
 {{ end }}
 EOF
-        destination = "local/tls/ca.pem"
+        destination = "secrets/tls/ca.pem"
       }
 
       template {
@@ -113,7 +113,7 @@ http {
 
 nomad {
   address          = "https://nomad.service.consul:4646"
-  ca_cert          = "/local/tls/ca.pem"
+  ca_cert          = "/secrets/tls/ca.pem"
   tls_server_name  = "server.${local.datacenter}.nomad"
 }
 

@@ -56,9 +56,6 @@ resource "vault_database_secret_backend_role" "metrics_api" {
   creation_statements = [
     "CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}';",
     "GRANT CONNECT ON DATABASE metrics TO \"{{name}}\";",
-    # Postgres 15+ no longer grants CREATE on the public schema by
-    # default — needed here for the application's own
-    # CREATE TABLE IF NOT EXISTS on first startup.
     "GRANT CREATE ON SCHEMA public TO \"{{name}}\";",
     "GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO \"{{name}}\";",
   ]
