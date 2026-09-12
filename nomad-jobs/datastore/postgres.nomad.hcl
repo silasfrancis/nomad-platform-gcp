@@ -120,7 +120,7 @@ EOF
 POSTGRES_PASSWORD={{ .Data.data.superuser_password }}
 {{ end }}
 POSTGRES_USER=postgres
-PGDATA=/var/lib/postgresql/data
+PGDATA=/var/lib/postgresql/data/pgdata
 EOF
         destination = "secrets/postgres.env"
         env         = true
