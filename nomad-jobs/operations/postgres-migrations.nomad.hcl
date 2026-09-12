@@ -38,12 +38,32 @@ job "postgres-migrations" {
 
       template {
         data = <<EOF
+-- Cluster-wide (role grants aren't per-database): create a dedicated,
+-- non-login owner role and let vault-admin manage membership in it.
+-- vault-admin can't be granted membership in itself (Postgres rejects
+-- self-membership grants outright), so a separate owner role is what
+-- vault-admin's dynamic creation_statements grant into for every
+-- freshly minted ephemeral role instead.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'monitoring-owner') THEN
+    CREATE ROLE "monitoring-owner" NOLOGIN;
+  END IF;
+END
+$$;
+
+GRANT "monitoring-owner" TO "vault-admin" WITH ADMIN OPTION;
+
 \c monitoring
 
 -- Creates agent_anomalies (matching history.py's schema exactly) and
--- assigns ownership to vault-admin up front, so nomad-sentinel's own
--- ensure_schema() CREATE TABLE/INDEX IF NOT EXISTS calls become no-ops
--- regardless of whether nomad-sentinel has ever run in this environment.
+-- assigns ownership to monitoring-owner up front, so nomad-sentinel's
+-- own ensure_schema() CREATE TABLE/INDEX IF NOT EXISTS calls become
+-- no-ops regardless of whether nomad-sentinel has ever run in this
+-- environment. Every ephemeral role vault-admin creates is granted
+-- monitoring-owner membership (see the monitoring Vault role's
+-- creation_statements), which is what gives it ownership-equivalent
+-- access here.
 CREATE TABLE IF NOT EXISTS agent_anomalies (
     id                  SERIAL PRIMARY KEY,
     environment         TEXT NOT NULL,
@@ -66,8 +86,8 @@ CREATE TABLE IF NOT EXISTS agent_anomalies (
 CREATE INDEX IF NOT EXISTS idx_agent_anomalies_job_detected
     ON agent_anomalies (job_id, detected_at DESC);
 
-ALTER TABLE agent_anomalies OWNER TO "vault-admin";
-ALTER SEQUENCE agent_anomalies_id_seq OWNER TO "vault-admin";
+ALTER TABLE agent_anomalies OWNER TO "monitoring-owner";
+ALTER SEQUENCE agent_anomalies_id_seq OWNER TO "monitoring-owner";
 
 -- Add a new table block above this line as needed. Use \c to switch
 -- databases first if it's not in monitoring.

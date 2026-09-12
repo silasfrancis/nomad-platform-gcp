@@ -88,7 +88,7 @@ resource "vault_database_secret_backend_role" "monitoring" {
     "GRANT CONNECT ON DATABASE monitoring TO \"{{name}}\";",
     "GRANT CREATE ON SCHEMA public TO \"{{name}}\";",
     "GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO \"{{name}}\";",
-    "GRANT \"vault-admin\" TO \"{{name}}\";",
+    "GRANT \"monitoring-owner\" TO \"{{name}}\";",
   ]
   default_ttl = 3600
   max_ttl     = 3600
