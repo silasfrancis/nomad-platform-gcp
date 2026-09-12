@@ -104,6 +104,8 @@ EOF
 
       template {
         data = <<EOF
+log_level = "DEBUG"
+
 http {
   bind_address = "0.0.0.0"
   bind_port    = 8080
@@ -169,6 +171,8 @@ scaling "cluster_policy_ondemand" {
         or vector(0)
       EOQ
 
+      group = "ondemand-utilization"
+
       strategy "target-value" {
         target = 70
       }
@@ -188,6 +192,8 @@ scaling "cluster_policy_ondemand" {
         / count(nomad_client_allocated_memory{node_pool="on-demand"})
         or vector(0)
       EOQ
+
+      group = "ondemand-utilization"
 
       strategy "target-value" {
         target = 70
@@ -232,8 +238,10 @@ scaling "cluster_policy_spot" {
         or vector(0)
       EOQ
 
+      group = "spot-utilization"
+
       strategy "target-value" {
-        target = 70
+        target = 80
       }
     }
 
@@ -252,8 +260,10 @@ scaling "cluster_policy_spot" {
         or vector(0)
       EOQ
 
+      group = "spot-utilization"
+
       strategy "target-value" {
-        target = 70
+        target = 80
       }
     }
 
