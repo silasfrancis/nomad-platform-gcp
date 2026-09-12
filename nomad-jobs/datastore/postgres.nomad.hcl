@@ -76,7 +76,7 @@ job "postgres" {
     vault {
       role = "postgres"
     }
-    
+
     task "postgres" {
       driver = "docker"
 
