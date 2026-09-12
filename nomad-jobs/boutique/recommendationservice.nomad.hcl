@@ -30,7 +30,7 @@ job "recommendationservice" {
 
     service {
       name = "recommendationservice"
-      port = "grpc"
+      port = "8080"
 
       check {
         type     = "grpc"

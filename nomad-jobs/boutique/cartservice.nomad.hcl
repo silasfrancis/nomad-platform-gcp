@@ -33,7 +33,7 @@ job "cartservice" {
 
     service {
       name = "cartservice"
-      port = "grpc"
+      port = "7070"
 
       check {
         type     = "grpc"

@@ -37,7 +37,7 @@ job "emailservice" {
 
     service {
       name = "emailservice"
-      port = "grpc"
+      port = "8080"
 
       check {
         type     = "grpc"
