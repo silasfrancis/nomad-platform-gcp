@@ -30,7 +30,7 @@ job "shippingservice" {
 
     service {
       name = "shippingservice"
-      port = "50051"
+      port = 50051
 
       check {
         type     = "grpc"

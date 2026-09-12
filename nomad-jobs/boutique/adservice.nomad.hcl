@@ -30,7 +30,7 @@ job "adservice" {
 
     service {
       name = "adservice"
-      port = "9555"
+      port = 9555
 
       check {
         type     = "grpc"

@@ -40,7 +40,7 @@ job "productcatalogservice" {
 
     service {
       name = "productcatalogservice"
-      port = "3550"
+      port = 3550
 
       check {
         type     = "grpc"

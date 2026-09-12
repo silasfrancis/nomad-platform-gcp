@@ -40,7 +40,7 @@ job "checkoutservice" {
 
     service {
       name = "checkoutservice"
-      port = "5050"
+      port = 5050
 
       check {
         type     = "grpc"
