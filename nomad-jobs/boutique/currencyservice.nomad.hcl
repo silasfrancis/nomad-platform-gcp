@@ -57,7 +57,7 @@ job "currencyservice" {
         # is a workable floor. Hardcoded per your ask, not an Octopus var.
         sidecar_task {
           resources {
-            cpu    = 100
+            cpu    = 200
             memory = 128
           }
         }
