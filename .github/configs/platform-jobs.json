@@ -37,9 +37,9 @@
       "octopus_project": "operations"
     },
     {
-      "name": "postgres-migrate",
-      "path": "nomad-jobs/operations/postgres-migrate.nomad.hcl",
-      "job_spec": "nomad-jobs/operations/postgres-migrate.nomad.hcl",
+      "name": "postgres-migrations",
+      "path": "nomad-jobs/operations/postgres-migrations.nomad.hcl",
+      "job_spec": "nomad-jobs/operations/postgres-migrations.nomad.hcl",
       "octopus_project": "operations"
     }
   ]

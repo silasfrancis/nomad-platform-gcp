@@ -1,4 +1,4 @@
-job "postgres-migrate" {
+job "postgres-migrations" {
   datacenters = ["#{Datacenter}"]
   namespace   = "#{DeploymentNamespace}"
   node_pool   = "on-demand"
@@ -24,10 +24,10 @@ job "postgres-migrate" {
     }
 
     vault {
-      role = "postgres"
+      role = "postgres-migrations"
     }
 
-    task "migrate" {
+    task "monitoring-agent-anomalies" {
       driver = "docker"
 
       config {

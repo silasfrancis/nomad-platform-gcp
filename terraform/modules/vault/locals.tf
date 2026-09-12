@@ -54,6 +54,12 @@ locals {
       pki_paths = []
       db_role   = null
     }
+    "postgres-migrations" = {
+      namespace = "operations"
+      kv_paths  = ["shared/postgres/admin"]
+      pki_paths = []
+      db_role   = null
+    }
     "nomad-autoscaler" = {
       namespace = "plugins"
       kv_paths  = []
