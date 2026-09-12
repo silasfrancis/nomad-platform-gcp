@@ -181,11 +181,7 @@ function check (call, callback) {
  */
 function main () {
   logger.info(`Starting gRPC server on port ${PORT}...`);
-  const server = new grpc.Server({
-    'grpc.keepalive_permit_without_calls': 1,
-    'grpc.http2.min_ping_interval_without_data_ms': 10000,
-    'grpc.http2.max_pings_without_data': 0,
-  });
+  const server = new grpc.Server();
   server.addService(shopProto.CurrencyService.service, {getSupportedCurrencies, convert});
   server.addService(healthProto.Health.service, {check});
 

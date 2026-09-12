@@ -40,23 +40,37 @@ job "postgres-migrate" {
         data = <<EOF
 \c monitoring
 
--- One-time ownership fix for tables that were created under a
--- since-expired Vault dynamic role, before vault-admin membership
--- was granted to every monitoring-#{Environment} lease. Safe to
--- re-run: both blocks are existence-guarded no-ops once applied.
-DO $$
-BEGIN
-  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'agent_anomalies') THEN
-    ALTER TABLE agent_anomalies OWNER TO "vault-admin";
-  END IF;
-  IF EXISTS (SELECT FROM pg_class WHERE relname = 'agent_anomalies_id_seq') THEN
-    ALTER SEQUENCE agent_anomalies_id_seq OWNER TO "vault-admin";
-  END IF;
-END $$;
+-- Creates agent_anomalies (matching history.py's schema exactly) and
+-- assigns ownership to vault-admin up front, so nomad-sentinel's own
+-- ensure_schema() CREATE TABLE/INDEX IF NOT EXISTS calls become no-ops
+-- regardless of whether nomad-sentinel has ever run in this environment.
+CREATE TABLE IF NOT EXISTS agent_anomalies (
+    id                  SERIAL PRIMARY KEY,
+    environment         TEXT NOT NULL,
+    detected_at         TIMESTAMPTZ NOT NULL,
+    job_id              TEXT NOT NULL,
+    alloc_id            TEXT NOT NULL,
+    task                TEXT NOT NULL,
+    namespace           TEXT NOT NULL,
+    anomaly_type        TEXT NOT NULL,
+    restarts            INTEGER NOT NULL DEFAULT 0,
+    likely_cause        TEXT,
+    severity            TEXT,
+    confidence          REAL,
+    suggested_action    TEXT,
+    remediation_mode    TEXT NOT NULL,
+    outcome             TEXT NOT NULL,
+    outcome_detail      JSONB
+);
 
--- Add a new guarded block above this line for each future table
--- that ends up owned by whatever ephemeral Vault role created it
--- first. Use \c to switch databases first if it's not in monitoring.
+CREATE INDEX IF NOT EXISTS idx_agent_anomalies_job_detected
+    ON agent_anomalies (job_id, detected_at DESC);
+
+ALTER TABLE agent_anomalies OWNER TO "vault-admin";
+ALTER SEQUENCE agent_anomalies_id_seq OWNER TO "vault-admin";
+
+-- Add a new table block above this line as needed. Use \c to switch
+-- databases first if it's not in monitoring.
 EOF
         destination = "local/migrate.sql"
       }
