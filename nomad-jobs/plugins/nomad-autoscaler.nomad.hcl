@@ -241,7 +241,7 @@ scaling "cluster_policy_spot" {
       group = "spot-utilization"
 
       strategy "target-value" {
-        target = 80
+        target = 70
       }
     }
 
@@ -263,7 +263,7 @@ scaling "cluster_policy_spot" {
       group = "spot-utilization"
 
       strategy "target-value" {
-        target = 80
+        target = 70
       }
     }
 

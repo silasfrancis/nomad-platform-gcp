@@ -108,8 +108,8 @@ job "frontend" {
         # accordingly from the single-upstream floor.
         sidecar_task {
           resources {
-            cpu    = 150
-            memory = 192
+            cpu    = 300
+            memory = 400
           }
         }
       }
