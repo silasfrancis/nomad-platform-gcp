@@ -5,22 +5,10 @@ job "postgres-migrations" {
   type        = "batch"
 
   group "migrate" {
-    network {
-      mode = "bridge"
-    }
+    network {}
 
     service {
       name = "postgres-migrate"
-      connect {
-        sidecar_service {
-          proxy {
-            upstreams {
-              destination_name = "postgres"
-              local_bind_port  = 5432
-            }
-          }
-        }
-      }
     }
 
     vault {
@@ -33,13 +21,28 @@ job "postgres-migrations" {
       config {
         image   = "postgres:16-alpine"
         command = "psql"
-        args    = ["-h", "127.0.0.1", "-p", "5432", "-U", "postgres", "-d", "postgres", "-f", "/local/migrate.sql"]
+        args = [
+          "-h", "postgres.service.consul",
+          "-p", "5432",
+          "-U", "postgres",
+          "-d", "postgres",
+          "-f", "/local/migrate.sql"
+        ]
       }
 
       template {
         data = <<EOF
--- Cluster-wide (role grants aren't per-database): create a dedicated,
--- non-login owner role and let vault-admin manage membership in it.
+{{ with secret "kv/data/shared/postgres/admin" }}
+PGPASSWORD={{ .Data.data.superuser_password }}
+{{ end }}
+EOF
+        destination = "secrets/pg.env"
+        env         = true
+      }
+
+      template {
+        data = <<EOF
+-- Cluster-wide: create a dedicated, non-login owner role and let vault-admin manage membership in it.
 -- vault-admin can't be granted membership in itself (Postgres rejects
 -- self-membership grants outright), so a separate owner role is what
 -- vault-admin's dynamic creation_statements grant into for every
@@ -93,16 +96,6 @@ ALTER SEQUENCE agent_anomalies_id_seq OWNER TO "monitoring-owner";
 -- databases first if it's not in monitoring.
 EOF
         destination = "local/migrate.sql"
-      }
-
-      template {
-        data = <<EOF
-{{ with secret "kv/data/shared/postgres/admin" }}
-PGPASSWORD={{ .Data.data.superuser_password }}
-{{ end }}
-EOF
-        destination = "secrets/pg.env"
-        env         = true
       }
 
       resources {

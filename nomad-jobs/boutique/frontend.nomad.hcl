@@ -54,7 +54,6 @@ job "frontend" {
     service {
       name = "frontend"
       port = "http"
-      // address_mode = "alloc"
 
       check {
         type     = "http"
@@ -88,7 +87,7 @@ job "frontend" {
             }
             upstreams {
               destination_name = "recommendationservice"
-              local_bind_port  = 8082 # remote port is 8080, same as frontend's own — see header comment
+              local_bind_port  = 8082
             }
             upstreams {
               destination_name = "shippingservice"
@@ -106,8 +105,6 @@ job "frontend" {
           tags = ["traefik.enable=false"]
         }
 
-        # 7 upstreams — highest in this whole retrofit, sized up
-        # accordingly from the single-upstream floor.
         sidecar_task {
           resources {
             cpu    = 150

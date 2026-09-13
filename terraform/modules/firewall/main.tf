@@ -59,13 +59,12 @@ locals {
     }
 
     "nomad-internal" = {
-      description = "Allow Nomad RPC/Serf traffic between servers and clients within and across dev/prod private subnets, plus mgmt"
+      description = "Allow Nomad RPC/Serf traffic between servers and clients within and across dev/prod private subnets"
       direction = "INGRESS"
       priority  = 1000
       source_ranges = [
         local.cidr["subnet-dev-private"],
         local.cidr["subnet-prod-private"],
-        local.cidr["subnet-mgmt"],
       ]
       destination_ranges = [
         local.cidr["subnet-dev-private"],
@@ -79,13 +78,12 @@ locals {
     }
 
     "consul-internal" = {
-      description = "Allow Consul server RPC, Serf LAN gossip, and gRPC API traffic within and across dev/prod private subnets, plus mgmt"
+      description = "Allow Consul server RPC, Serf LAN gossip, and gRPC API traffic within and across dev/prod private subnets"
       direction = "INGRESS"
       priority  = 1000
       source_ranges = [
         local.cidr["subnet-dev-private"],
         local.cidr["subnet-prod-private"],
-        local.cidr["subnet-mgmt"],
       ]
       destination_ranges = [
         local.cidr["subnet-dev-private"],
@@ -96,6 +94,27 @@ locals {
         { protocol = "udp", ports = ["8301", "8302"] },
       ]
       deny = []
+    }
+
+    "nomad-clients-to-clients" = {
+      description         = "Allow Nomad clients in dev/prod private subnets to reach upstream services (static ports) in the cluster"
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-dev-private"], local.cidr["subnet-prod-private"]]
+      destination_ranges  = [local.cidr["subnet-dev-private"], local.cidr["subnet-prod-private"]]
+            allow = [
+        {
+          protocol = "tcp"
+          ports =  [
+              "5432", # Postgres
+              "6379", # Redis
+              "9090", # Prometheus
+              "3100", # Loki
+              "8090", # Nomad sentinel (platforms ai agent)
+            ]
+        },
+      ]
+      deny                = []
     }
 
     "nomad-clients-to-traefik-internal" = {
@@ -175,7 +194,7 @@ locals {
     }
 
     "traefik-internal-nomad" = {
-      description         = "Allow Traefik internal to reach Nomad-scheduled backend services in over dynamic ports + static ports (prom and postgres)"
+      description         = "Allow Traefik internal to reach Nomad-scheduled backend services in over dynamic ports + static ports (prom, postgres, loki and nomad sentinel)"
       direction           = "INGRESS"
       priority            = 1000
       source_ranges       = [local.cidr["subnet-mgmt"]]
@@ -189,12 +208,36 @@ locals {
           ports =  [
               "5432", # Postgres
               "9090", # Prometheus
+              "3100", # Loki
+              "8090", # Nomad sentinel (platforms ai agent)
               "20000-32000",   # Nomad dynamic allocation ports
             ]
         },
       ]
       deny                = []
     }
+
+    "traefik-internal-nomad-consul-servers" = {
+      description         = "Allow Traefik internal to reach Nomad and consul servers/UI for internal admin use"
+      direction           = "INGRESS"
+      priority            = 1000
+      source_ranges       = [local.cidr["subnet-mgmt"]]
+      destination_ranges = [
+        local.cidr["subnet-dev-private"],
+        local.cidr["subnet-prod-private"],
+      ]
+      allow = [
+        {
+          protocol = "tcp"
+          ports =  [
+              "4646", # Nomad
+              "8501", # Consul
+            ]
+        },
+      ]
+      deny                = []
+    }
+
 
     "mgmt-internal" = {
       description         = "Allow traefik-internal and mgmt-vm to reach each other on Vault/Octopus/Grafana ports, Traefik's own entrypoints, and Vault's Postgres TCP passthrough"
@@ -209,7 +252,7 @@ locals {
     }
 
     "mgmt-to-env-discovery" = {
-      description   = "Allow Grafana on mgmt to reach Prometheus, Loki, and falco-webhook Nomad-scheduled workloads in dev/prod private via Consul catalog discovery"
+      description   = "Allow Grafana on mgmt to reach Prometheus and Loki Nomad-scheduled workloads in dev/prod private via Consul catalog discovery"
       direction     = "INGRESS"
       priority      = 1000
       source_ranges = [local.cidr["subnet-mgmt"]]
@@ -217,16 +260,22 @@ locals {
         local.cidr["subnet-dev-private"],
         local.cidr["subnet-prod-private"],
       ]
-      allow = [{ protocol = "tcp", ports = ["9090", "3100", "8080"] }]
+      allow = [{ protocol = "tcp", ports = ["9090", "3100"] }]
       deny  = []
     }
 
-    "prometheus-scrape-dev" = {
-      description         = "Allow Prometheus in dev-private to scrape Consul, Nomad, node-exporter, and Nomad-scheduled service targets directly (not Connect-meshed)"
+    "prometheus-scrape" = {
+      description         = "Allow Prometheus to scrape Consul, Nomad, node-exporter, and Nomad-scheduled service targets directly"
       direction           = "INGRESS"
       priority            = 1000
-      source_ranges       = [local.cidr["subnet-dev-private"]]
-      destination_ranges  = [local.cidr["subnet-dev-private"]]
+      source_ranges = [
+        local.cidr["subnet-dev-private"],
+        local.cidr["subnet-prod-private"],
+      ]
+      destination_ranges  = [
+        local.cidr["subnet-dev-private"],
+        local.cidr["subnet-prod-private"],
+      ]
       allow = [
         {
           protocol = "tcp"
@@ -239,36 +288,6 @@ locals {
         },
       ]
       deny = []
-    }
-
-    "prometheus-scrape-prod" = {
-      description         = "Allow Prometheus in prod-private to scrape Consul, Nomad, node-exporter, and Nomad-scheduled service targets directly (not Connect-meshed)"
-      direction           = "INGRESS"
-      priority            = 1000
-      source_ranges       = [local.cidr["subnet-prod-private"]]
-      destination_ranges  = [local.cidr["subnet-prod-private"]]
-      allow = [
-        {
-          protocol = "tcp"
-          ports =  [
-              "8501",          # consul api
-              "4646",          # nomad api
-              "9100",          # node-exporter
-              "20000-32000",   # Nomad dynamic allocation ports
-            ]
-        },
-      ]
-      deny = []
-    }
-
-    "prometheus-internal-scrape" = {
-      description         = "Allow Nomad-scheduled workloads (e.g. nomad-autoscaler) in dev/prod private to query Prometheus's API on its static port"
-      direction           = "INGRESS"
-      priority            = 1000
-      source_ranges       = [local.cidr["subnet-dev-private"], local.cidr["subnet-prod-private"]]
-      destination_ranges  = [local.cidr["subnet-dev-private"], local.cidr["subnet-prod-private"]]
-      allow               = [{ protocol = "tcp", ports = ["9090"] }]
-      deny                = []
     }
 
     "prometheus-to-traefik-internal" = {

@@ -20,16 +20,15 @@ job "redis" {
     }
 
     network {
-      mode = "bridge"
-
       port "redis" {
+        static = 6379
         to = 6379
       }
     }
 
     service {
       name = "redis"
-      port = 6379
+      port = "redis"
 
       check {
         name     = "redis-health"
@@ -42,17 +41,6 @@ job "redis" {
         ]
         interval = "10s"
         timeout  = "5s"
-      }
-
-      connect {
-        sidecar_service {}
-
-        sidecar_task {
-          resources {
-            cpu    = 100
-            memory = 128
-          }
-        }
       }
     }
 

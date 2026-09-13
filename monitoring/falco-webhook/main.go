@@ -9,12 +9,6 @@
 // documentation: output, priority, rule, time, output_fields,
 // hostname, source, tags.
 //
-// NOT VERIFIED: nomad-sentinel's own HTTP API contract — /anomaly
-// below and its request body shape are a reasonable assumption, not
-// confirmed against nomad-sentinel's actual (not yet written) code.
-// Whoever builds that service needs to either match this shape or
-// this file needs updating to match whatever nomad-sentinel actually
-// expects.
 package main
 
 import (
@@ -68,7 +62,7 @@ func severityAtLeastWarning(priority string) bool {
 
 type server struct {
 	lokiAddr    string
-	aiAgentAddr string
+	nomadSentinelAddr string
 	httpClient  *http.Client
 }
 
@@ -80,7 +74,7 @@ func main() {
 
 	s := &server{
 		lokiAddr:    mustEnv("LOKI_ADDR"),
-		aiAgentAddr: mustEnv("AI_AGENT_ADDR"),
+		nomadSentinelAddr: mustEnv("NOMAD_SENTINEL_ADDR"),
 		httpClient:  &http.Client{Timeout: 5 * time.Second},
 	}
 
@@ -88,7 +82,7 @@ func main() {
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/webhook", s.handleWebhook)
 
-	log.Printf("falco-webhook listening on :%s (loki=%s, ai-agent=%s)", port, s.lokiAddr, s.aiAgentAddr)
+	log.Printf("falco-webhook listening on :%s (loki=%s, ai-agent=%s)", port, s.lokiAddr, s.nomadSentinelAddr)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatalf("server exited: %v", err)
 	}
@@ -194,14 +188,14 @@ func (s *server) forwardToLoki(alert FalcoAlert) error {
 	return nil
 }
 
-// escalateToNomadSentinel — NOT VERIFIED, see file header comment.
+// escalateToNomadSentinel
 func (s *server) escalateToNomadSentinel(alert FalcoAlert) error {
 	body, err := json.Marshal(alert)
 	if err != nil {
 		return fmt.Errorf("marshal alert: %w", err)
 	}
 
-	url := fmt.Sprintf("http://%s/anomaly", s.aiAgentAddr)
+	url := fmt.Sprintf("http://%s/anomaly", s.nomadSentinelAddr)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build nomad-sentinel request: %w", err)

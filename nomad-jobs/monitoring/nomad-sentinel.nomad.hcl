@@ -17,7 +17,6 @@ job "nomad-sentinel" {
   group "nomad-sentinel" {
     count = #{ReplicaCount}
 
-    # Monitoring must survive Spot preemption.
     constraint {
       attribute = "${node.class}"
       operator  = "="
@@ -25,17 +24,15 @@ job "nomad-sentinel" {
     }
 
     network {
-      mode = "bridge"
-
       port "http" {
+        static = 8090
         to = 8090
       }
     }
 
     service {
       name = "nomad-sentinel"
-      port = 8090
-      address_mode = "alloc"
+      port = "http"
 
       check {
         type     = "http"
@@ -52,25 +49,6 @@ job "nomad-sentinel" {
         "traefik.http.routers.nomad-sentinel.entrypoints=internal",
         "traefik.http.routers.nomad-sentinel.tls.certresolver=letsencrypt",
       ]
-
-      connect {
-        sidecar_service {
-          proxy {
-            upstreams {
-              destination_name = "postgres"
-              local_bind_port  = 5432
-            }
-          }
-          tags = ["traefik.enable=false"]
-        }
-
-        sidecar_task {
-          resources {
-            cpu    = 100
-            memory = 128
-          }
-        }
-      }
     }
 
     vault {
@@ -104,6 +82,7 @@ EOF
           NOMAD_ADDR= "https://nomad.service.consul:4646"
           NOMAD_CACERT = "/secrets/nomad-ca.pem"
           NOMAD_TLS_SERVER_NAME = "server.#{Datacenter}.nomad"
+          POSTGRES_ADDR = "postgres.service.consul:5432"
         }
 
       template {
@@ -114,7 +93,7 @@ SLACK_WEBHOOK_URL={{ .Data.data.slack_webhook_url }}
 {{ end }}
 
 {{ with secret "database/creds/monitoring-#{Environment}" }}
-HISTORY_DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "NOMAD_UPSTREAM_ADDR_postgres" }}/monitoring?sslmode=disable
+HISTORY_DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "POSTGRES_ADDR" }}/monitoring?sslmode=disable
 {{ end }}
 EOF
         destination = "secrets/nomad-sentinel-config.env"

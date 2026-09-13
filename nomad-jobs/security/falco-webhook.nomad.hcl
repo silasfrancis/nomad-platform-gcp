@@ -15,8 +15,6 @@ job "falco-webhook" {
     count = #{ReplicaCount}
 
     network {
-      mode = "bridge"
-
       port "http" {
         to = 8080
       }
@@ -24,8 +22,7 @@ job "falco-webhook" {
 
     service {
       name = "falco-webhook"
-      port = 8080
-      address_mode = "alloc"
+      port = "http"
 
       check {
         type     = "http"
@@ -35,9 +32,6 @@ job "falco-webhook" {
         timeout  = "2s"
       }
 
-      # Routed through traefik-internal's dedicated "internal"
-      # entrypoint. This is what gives Falco (running as a host systemd service on every client
-      # node via Ansible) a stable URL to send its alerts to.
       tags = [
         "metrics",
         "traefik.enable=true",
@@ -45,30 +39,6 @@ job "falco-webhook" {
         "traefik.http.routers.falco-webhook.entrypoints=internal", 
         "traefik.http.routers.falco-webhook.tls.certresolver=letsencrypt",
       ]
-
-      connect {
-        sidecar_service {
-          proxy {
-            upstreams {
-              destination_name = "loki"
-              local_bind_port  = 3100
-            }
-            upstreams {
-              destination_name = "nomad-sentinel"
-              local_bind_port  = 8090
-            }
-          }
-          tags = ["traefik.enable=false"]
-        }
-
-        # Two upstreams — 100/128 floor.
-        sidecar_task {
-          resources {
-            cpu    = 100
-            memory = 128
-          }
-        }
-      }
     }
 
     task "falco-webhook" {
@@ -81,10 +51,8 @@ job "falco-webhook" {
 
       env {
         PORT          = "8080"
-        LOKI_ADDR     = "${NOMAD_UPSTREAM_ADDR_loki}"
-        # Explicit localhost avoids depending on Nomad's generated
-        # NOMAD_UPSTREAM_ADDR_* variable naming for hyphenated services.
-        AI_AGENT_ADDR = "localhost:8090"
+        LOKI_ADDR     = "loki.service.consul:3100"
+        NOMAD_SENTINEL_ADDR = "nomad-sentinel.service.consul:8090"
       }
 
       resources {

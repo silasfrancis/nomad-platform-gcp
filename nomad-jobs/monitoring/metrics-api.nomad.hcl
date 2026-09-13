@@ -24,8 +24,6 @@ job "metrics-api" {
     }
 
     network {
-      mode = "bridge"
-
       port "http" {
         to = 8080
       }
@@ -51,26 +49,6 @@ job "metrics-api" {
         "traefik.http.routers.metrics-api.entrypoints=internal",
         "traefik.http.routers.metrics-api.tls.certresolver=letsencrypt",
       ]
-
-      connect {
-        sidecar_service {
-          proxy {
-            upstreams {
-              destination_name = "postgres"
-              local_bind_port  = 5432
-            }
-          }
-          tags = ["traefik.enable=false"]
-        }
-
-        # One upstream, receiving-only otherwise — 100/128 floor.
-        sidecar_task {
-          resources {
-            cpu    = 100
-            memory = 128
-          }
-        }
-      }
     }
 
     vault {
@@ -87,12 +65,13 @@ job "metrics-api" {
 
       env {
         PORT = "8080"
+        POSTGRES_ADDR = "postgres.service.consul:5432"
       }
 
       template {
         data = <<EOF
 {{ with secret "database/creds/metrics-api-#{Environment}" }}
-DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "NOMAD_UPSTREAM_ADDR_postgres" }}/metrics?sslmode=disable
+DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "POSTGRES_ADDR" }}/metrics?sslmode=disable
 {{ end }}
 EOF
         destination = "secrets/metrics-api-config.env"

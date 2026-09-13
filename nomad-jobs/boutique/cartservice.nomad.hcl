@@ -47,14 +47,7 @@ job "cartservice" {
       ]
 
       connect {
-        sidecar_service {
-          proxy {
-            upstreams {
-              destination_name = "redis"
-              local_bind_port  = 6379
-            }
-          }
-        }
+        sidecar_service {}
 
         # One upstream — 100/128 floor.
         sidecar_task {
@@ -87,7 +80,7 @@ job "cartservice" {
       template {
         data = <<EOF
 {{ with secret "kv/data/shared/redis" }}
-REDIS_ADDR={{ env "NOMAD_UPSTREAM_ADDR_redis" }},password={{ .Data.data.password }}
+REDIS_ADDR=redis.service.consul:6379,password={{ .Data.data.password }}
 {{ end }}
 PORT=7070
 EOF

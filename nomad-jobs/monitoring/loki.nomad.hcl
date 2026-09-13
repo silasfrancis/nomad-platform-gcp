@@ -21,8 +21,6 @@ job "loki" {
     }
 
     network {
-      mode = "bridge"
-
       port "http" {
         static = 3100
         to = 3100
@@ -31,8 +29,7 @@ job "loki" {
 
     service {
       name = "loki"
-      port = 3100
-      address_mode = "alloc"
+      port = "http"
 
       check {
         type     = "http"
@@ -50,19 +47,6 @@ job "loki" {
         "traefik.http.routers.loki.entrypoints=internal",
         "traefik.http.routers.loki.tls.certresolver=letsencrypt",
       ]
-
-      connect {
-        sidecar_service {
-          tags = ["traefik.enable=false"]
-        }
-
-        sidecar_task {
-          resources {
-            cpu    = 100
-            memory = 128
-          }
-        }
-      }
     }
 
     task "loki" {

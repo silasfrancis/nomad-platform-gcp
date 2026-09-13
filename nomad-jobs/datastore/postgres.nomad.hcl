@@ -28,8 +28,6 @@ job "postgres" {
     }
 
     network {
-      mode = "bridge"
-
       port "db" {
         static = 5432
         to = 5432
@@ -38,7 +36,7 @@ job "postgres" {
 
     service {
       name = "postgres"
-      port = 5432
+      port = "db"
 
       check {
         name     = "postgres-health"
@@ -58,19 +56,6 @@ job "postgres" {
         "traefik.tcp.routers.postgres.rule=HostSNI(`*`)",
         "traefik.tcp.routers.postgres.entrypoints=postgres",
       ]
-
-      connect {
-        sidecar_service {
-          tags = ["traefik.enable=false"]
-        }
-
-        sidecar_task {
-          resources {
-            cpu    = 100
-            memory = 128
-          }
-        }
-      }
     }
 
     vault {

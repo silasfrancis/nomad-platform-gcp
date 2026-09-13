@@ -18,9 +18,5 @@ locals {
     adservice              = ["frontend"]
     paymentservice         = ["checkoutservice"]
     emailservice           = ["checkoutservice"]
-    redis                  = ["cartservice"]
-    postgres               = ["metrics-api", "nomad-sentinel", "postgres-migrate"]
-    loki                   = ["falco-webhook"]
-    "nomad-sentinel"       = ["falco-webhook"]
   }
 }
