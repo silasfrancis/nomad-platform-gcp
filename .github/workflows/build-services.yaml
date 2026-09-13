@@ -80,7 +80,7 @@ jobs:
 
   publish-build-manifest:
     needs: build
-    if: ${{ contains(fromJson('["success", "failure", "cancelled"]'), needs.build.result) }}
+    if: ${{ contains(fromJson('["success", "failure"]'), needs.build.result) }}
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Set short SHA and Build ID
