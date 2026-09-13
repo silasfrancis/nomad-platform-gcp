@@ -21,7 +21,6 @@ job "redis" {
 
     network {
       port "redis" {
-        static = 6379
         to = 6379
       }
     }

@@ -25,7 +25,6 @@ job "nomad-sentinel" {
 
     network {
       port "http" {
-        static = 8090
         to = 8090
       }
     }

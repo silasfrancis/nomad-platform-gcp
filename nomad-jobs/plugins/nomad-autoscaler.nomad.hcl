@@ -90,7 +90,7 @@ job "nomad-autoscaler" {
 {{ .Data.private_key_data | base64Decode }}
 {{ end }}
 EOF
-        destination = "local/creds.json"
+        destination = "secrets/creds.json"
       }
 
       template {
@@ -127,7 +127,7 @@ apm "prometheus" {
 target "gce-mig" {
   driver = "gce-mig"
   config = {
-    credentials = "local/creds.json"
+    credentials = "secrets/creds.json"
   }
 }
 

@@ -107,10 +107,7 @@ locals {
           protocol = "tcp"
           ports =  [
               "5432", # Postgres
-              "6379", # Redis
               "9090", # Prometheus
-              "3100", # Loki
-              "8090", # Nomad sentinel (platforms ai agent)
             ]
         },
       ]
@@ -208,8 +205,6 @@ locals {
           ports =  [
               "5432", # Postgres
               "9090", # Prometheus
-              "3100", # Loki
-              "8090", # Nomad sentinel (platforms ai agent)
               "20000-32000",   # Nomad dynamic allocation ports
             ]
         },
@@ -239,7 +234,7 @@ locals {
     }
 
 
-    "mgmt-internal" = {
+    "traefik-internal-mgmt" = {
       description         = "Allow traefik-internal and mgmt-vm to reach each other on Vault/Octopus/Grafana ports, Traefik's own entrypoints, and Vault's Postgres TCP passthrough"
       direction           = "INGRESS"
       priority            = 1000
@@ -249,19 +244,6 @@ locals {
         { protocol = "tcp", ports = ["8200", "8080", "3000", "8443-8447", "15432", "15433"] },
       ]
       deny = []
-    }
-
-    "mgmt-to-env-discovery" = {
-      description   = "Allow Grafana on mgmt to reach Prometheus and Loki Nomad-scheduled workloads in dev/prod private via Consul catalog discovery"
-      direction     = "INGRESS"
-      priority      = 1000
-      source_ranges = [local.cidr["subnet-mgmt"]]
-      destination_ranges = [
-        local.cidr["subnet-dev-private"],
-        local.cidr["subnet-prod-private"],
-      ]
-      allow = [{ protocol = "tcp", ports = ["9090", "3100"] }]
-      deny  = []
     }
 
     "prometheus-scrape" = {

@@ -51,8 +51,20 @@ job "falco-webhook" {
 
       env {
         PORT          = "8080"
-        LOKI_ADDR     = "loki.service.consul:3100"
-        NOMAD_SENTINEL_ADDR = "nomad-sentinel.service.consul:8090"
+      }
+
+      template {
+        data = <<EOF
+{{ range service "loki" }}
+LOKI_ADDR={{ .Address }}:{{ .Port }}
+{{ end }}
+{{ range service "nomad-sentinel" }}
+NOMAD_SENTINEL_ADDR={{ .Address }}:{{ .Port }}
+{{ end }}
+EOF
+        destination = "secrets/runtime-addr.env"
+        env         = true
+        change_mode = "restart" 
       }
 
       resources {

@@ -22,7 +22,6 @@ job "loki" {
 
     network {
       port "http" {
-        static = 3100
         to = 3100
       }
     }
