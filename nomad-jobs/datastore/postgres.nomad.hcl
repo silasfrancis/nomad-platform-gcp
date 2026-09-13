@@ -38,7 +38,7 @@ job "postgres" {
 
     service {
       name = "postgres"
-      port = "db"
+      port = 5432
 
       check {
         name     = "postgres-health"
