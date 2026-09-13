@@ -29,7 +29,7 @@ job "redis" {
 
     service {
       name = "redis"
-      port = "redis"
+      port = 6379
 
       check {
         name     = "redis-health"
