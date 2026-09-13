@@ -33,7 +33,7 @@ job "metrics-api" {
 
     service {
       name = "metrics-api"
-      port = "http"
+      port = 8080
 
       check {
         type     = "http"

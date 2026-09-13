@@ -34,7 +34,7 @@ job "nomad-sentinel" {
 
     service {
       name = "nomad-sentinel"
-      port = "http"
+      port = 8090
 
       check {
         type     = "http"

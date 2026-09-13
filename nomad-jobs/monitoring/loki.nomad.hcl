@@ -30,7 +30,7 @@ job "loki" {
 
     service {
       name = "loki"
-      port = "http"
+      port = 3100
 
       check {
         type     = "http"
