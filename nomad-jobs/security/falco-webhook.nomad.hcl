@@ -29,6 +29,7 @@ job "falco-webhook" {
 
       check {
         type     = "http"
+        port     = "http"
         path     = "/health"
         interval = "10s"
         timeout  = "2s"

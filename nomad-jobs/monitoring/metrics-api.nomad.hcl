@@ -38,6 +38,7 @@ job "metrics-api" {
 
       check {
         type     = "http"
+        port     = "http"
         path     = "/health"
         interval = "10s"
         timeout  = "2s"

@@ -35,6 +35,7 @@ job "loki" {
 
       check {
         type     = "http"
+        port     = "http"
         path     = "/ready"
         interval = "10s"
         timeout  = "2s"
