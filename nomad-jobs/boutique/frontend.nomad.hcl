@@ -54,7 +54,6 @@ job "frontend" {
     service {
       name = "frontend"
       port = 8080
-      address_mode = "alloc"
 
       check {
         type     = "http"
@@ -67,6 +66,7 @@ job "frontend" {
       tags = [
         "metrics",
         "traefik.enable=true",
+        "traefik.consulcatalog.connect=true",
         "traefik.http.routers.frontend.rule=Host(`#{PublicHostname}`)",
         "traefik.http.routers.frontend.tls.certresolver=letsencrypt",
       ]

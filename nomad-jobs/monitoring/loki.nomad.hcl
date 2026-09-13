@@ -24,6 +24,7 @@ job "loki" {
       mode = "bridge"
 
       port "http" {
+        static = 3100
         to = 3100
       }
     }
@@ -31,7 +32,6 @@ job "loki" {
     service {
       name = "loki"
       port = 3100
-      address_mode = "alloc"
 
       check {
         type     = "http"
