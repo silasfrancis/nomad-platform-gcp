@@ -35,6 +35,7 @@ job "nomad-sentinel" {
     service {
       name = "nomad-sentinel"
       port = 8090
+      address_mode = "alloc"
 
       check {
         type     = "http"

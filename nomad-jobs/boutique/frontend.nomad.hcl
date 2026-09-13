@@ -54,6 +54,7 @@ job "frontend" {
     service {
       name = "frontend"
       port = 8080
+      address_mode = "alloc"
 
       check {
         type     = "http"

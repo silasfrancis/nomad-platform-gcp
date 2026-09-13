@@ -24,7 +24,8 @@ job "falco-webhook" {
 
     service {
       name = "falco-webhook"
-      port = "http"
+      port = 8080
+      address_mode = "alloc"
 
       check {
         type     = "http"

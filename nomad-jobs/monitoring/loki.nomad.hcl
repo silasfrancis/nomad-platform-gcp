@@ -31,6 +31,7 @@ job "loki" {
     service {
       name = "loki"
       port = 3100
+      address_mode = "alloc"
 
       check {
         type     = "http"
