@@ -31,8 +31,7 @@ job "metrics-api" {
 
     service {
       name = "metrics-api"
-      port = 8080
-      address_mode = "alloc"
+      port = "http"
 
       check {
         type     = "http"
