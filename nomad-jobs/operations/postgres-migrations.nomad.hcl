@@ -22,8 +22,6 @@ job "postgres-migrations" {
         image   = "postgres:16-alpine"
         command = "psql"
         args = [
-          "-h", "postgres.service.consul",
-          "-p", "5432",
           "-U", "postgres",
           "-d", "postgres",
           "-f", "/local/migrate.sql"
@@ -32,6 +30,10 @@ job "postgres-migrations" {
 
       template {
         data = <<EOF
+{{ range service "postgres" }}
+PGHOST={{ .Address }}
+PGPORT={{ .Port }}
+{{ end }}
 {{ with secret "kv/data/shared/postgres/admin" }}
 PGPASSWORD={{ .Data.data.superuser_password }}
 {{ end }}
