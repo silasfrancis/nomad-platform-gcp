@@ -102,8 +102,9 @@ SLACK_WEBHOOK_URL={{ .Data.data.slack_webhook_url }}
 {{ end }}
 
 {{ with secret "database/creds/monitoring-#{Environment}" }}
+{{ $cred := . }}
 {{ range service "postgres" }}
-HISTORY_DATABASE_URL=postgresql://{{ $.Data.username }}:{{ $.Data.password }}@{{ .Address }}:{{ .Port }}/monitoring?sslmode=disable
+HISTORY_DATABASE_URL=postgresql://{{ $cred.Data.username }}:{{ $cred.Data.password }}@{{ .Address }}:{{ .Port }}/monitoring?sslmode=disable
 {{ end }}
 {{ end }}
 EOF

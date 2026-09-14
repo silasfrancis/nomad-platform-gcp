@@ -128,7 +128,7 @@ apm "prometheus" {
 target "gce-mig" {
   driver = "gce-mig"
   config = {
-    credentials = "secrets/creds.json"
+    credentials = "/secrets/creds.json"
   }
 }
 
