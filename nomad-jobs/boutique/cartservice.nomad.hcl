@@ -74,7 +74,7 @@ job "cartservice" {
       template {
         data = <<EOF
 {{ with secret "kv/data/shared/redis" }}
-REDIS_ADDR={{  with (service "redis" | first) }}{{ .Address }}:{{ .Port }}{{ end }},password={{ .Data.data.password }}
+REDIS_ADDR={{ range service "redis" }}{{ .Address }}:{{ .Port }}{{ end }},password={{ .Data.data.password }}
 {{ end }}
 PORT=7070
 EOF
