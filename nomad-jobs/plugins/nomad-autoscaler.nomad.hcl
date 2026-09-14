@@ -113,7 +113,7 @@ http {
 }
 
 nomad {
-  address          = "https://{{ with (service "nomad" | first) }}{{ .Address }}:{{ .Port }}{{ end }}"
+  address = "https://{{ with service "http.nomad" }}{{ with index . 0 }}{{ .Address }}:{{ .Port }}{{ end }}{{ end }}"
   ca_cert          = "/secrets/tls/ca.pem"
   tls_server_name  = "server.${local.datacenter}.nomad"
 }
@@ -121,7 +121,7 @@ nomad {
 apm "prometheus" {
   driver = "prometheus"
   config = {
-    address = "http://{{ with (service "prometheus" | first) }}{{ .Address }}:{{ .Port }}{{ end }}"
+    address = "http://{{ range service "prometheus" }}{{ .Address }}:{{ .Port }}{{ end }}"
   }
 }
 

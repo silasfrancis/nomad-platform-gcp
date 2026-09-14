@@ -70,7 +70,9 @@ job "metrics-api" {
       template {
         data = <<EOF
 {{ with secret "database/creds/metrics-api-#{Environment}" }}
-DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "POSTGRES_ADDR" }}/metrics?sslmode=disable
+{{ range service "postgres" }}
+DATABASE_URL=postgresql://{{ $.Data.username }}:{{ $.Data.password }}@{{ .Address }}:{{ .Port }}/metrics?sslmode=disable
+{{ end }}
 {{ end }}
 EOF
         destination = "secrets/metrics-api-config.env"

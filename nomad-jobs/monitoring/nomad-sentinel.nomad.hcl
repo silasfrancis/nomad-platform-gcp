@@ -78,11 +78,21 @@ EOF
         env {
           HTTP_PORT             = "8090"
           REMEDIATION_MODE = "#{RemediationMode}"
-          NOMAD_ADDR= "https://nomad.service.consul:4646"
           NOMAD_CACERT = "/secrets/nomad-ca.pem"
           NOMAD_TLS_SERVER_NAME = "server.#{Datacenter}.nomad"
-          POSTGRES_ADDR = "postgres.service.consul:5432"
         }
+
+      template {
+        data = <<EOF
+{{ with service "http.nomad" }}
+{{ with index . 0 }}
+NOMAD_ADDR=https://{{ .Address }}:{{ .Port }}
+{{ end }}
+{{ end }}
+EOF
+        destination = "local/nomad-addr.env"
+        env         = true
+      }
 
       template {
         data = <<EOF
@@ -92,7 +102,9 @@ SLACK_WEBHOOK_URL={{ .Data.data.slack_webhook_url }}
 {{ end }}
 
 {{ with secret "database/creds/monitoring-#{Environment}" }}
-HISTORY_DATABASE_URL=postgresql://{{ .Data.username }}:{{ .Data.password }}@{{ env "POSTGRES_ADDR" }}/monitoring?sslmode=disable
+{{ range service "postgres" }}
+HISTORY_DATABASE_URL=postgresql://{{ $.Data.username }}:{{ $.Data.password }}@{{ .Address }}:{{ .Port }}/monitoring?sslmode=disable
+{{ end }}
 {{ end }}
 EOF
         destination = "secrets/nomad-sentinel-config.env"
