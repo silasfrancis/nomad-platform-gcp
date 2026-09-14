@@ -102,6 +102,7 @@ EOF
         destination = "secrets/tls/ca.pem"
       }
 
+
       template {
         data = <<EOF
 log_level = "DEBUG"
@@ -112,7 +113,7 @@ http {
 }
 
 nomad {
-  address          = "https://nomad.service.consul:4646"
+  address          = "https://{{ with (service "nomad" | first) }}{{ .Address }}:{{ .Port }}{{ end }}"
   ca_cert          = "/secrets/tls/ca.pem"
   tls_server_name  = "server.${local.datacenter}.nomad"
 }
@@ -120,7 +121,7 @@ nomad {
 apm "prometheus" {
   driver = "prometheus"
   config = {
-    address = "http://prometheus.service.consul:9090"
+    address = "http://{{ with (service "prometheus" | first) }}{{ .Address }}:{{ .Port }}{{ end }}"
   }
 }
 

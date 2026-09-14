@@ -107,7 +107,6 @@ locals {
           protocol = "tcp"
           ports =  [
               "5432", # Postgres
-              "9090", # Prometheus
             ]
         },
       ]
@@ -204,7 +203,6 @@ locals {
           protocol = "tcp"
           ports =  [
               "5432", # Postgres
-              "9090", # Prometheus
               "20000-32000",   # Nomad dynamic allocation ports
             ]
         },

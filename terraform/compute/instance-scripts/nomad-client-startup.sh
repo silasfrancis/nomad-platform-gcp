@@ -201,6 +201,10 @@ client {
   node_class = "${NODE_CLASS}"
   node_pool = "${NODE_POOL}"
 
+  template {
+    use_client_consul_token = true
+  }
+
   meta {
     node_pool = "${NODE_POOL}"
     env            = "${ENVIRONMENT}"

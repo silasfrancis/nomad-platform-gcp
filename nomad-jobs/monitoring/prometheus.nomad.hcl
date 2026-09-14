@@ -30,7 +30,6 @@ job "prometheus" {
 
     network {
       port "http" {
-        static = 9090
         to = 9090
       }
     }
