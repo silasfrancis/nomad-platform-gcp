@@ -55,15 +55,11 @@ job "falco-webhook" {
 
       template {
         data = <<EOF
-{{ with service "loki" }}
-{{ with index . 0 }}
+{{ range service "loki" }}
 LOKI_ADDR={{ .Address }}:{{ .Port }}
 {{ end }}
-{{ end }}
-{{ with service "nomad-sentinel" }}
-{{ with index . 0 }}
+{{ range service "nomad-sentinel" }}
 NOMAD_SENTINEL_ADDR={{ .Address }}:{{ .Port }}
-{{ end }}
 {{ end }}
 EOF
         destination = "secrets/runtime-addr.env"
