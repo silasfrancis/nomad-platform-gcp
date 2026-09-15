@@ -13,12 +13,10 @@ job "consul-snapshot" {
   group "consul-snapshot" {
     count = #{ReplicaCount}
 
-    # Short-lived, idempotent, retry-safe — soft Spot preference is
-    # fine, unlike the always-on services above.
     affinity {
       attribute = "${node.class}"
       operator  = "="
-      value     = "spot"
+      value     = "preemptible"
       weight    = 50
     }
 

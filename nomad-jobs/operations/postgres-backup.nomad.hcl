@@ -16,7 +16,7 @@ job "postgres-backup" {
     affinity {
       attribute = "${node.class}"
       operator  = "="
-      value     = "spot"
+      value     = "preemptible"
       weight    = 50
     }
 
