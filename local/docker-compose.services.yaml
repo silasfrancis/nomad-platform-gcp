@@ -17,7 +17,7 @@ services:
 
   frontend:
     build:
-      context: ./services/frontend
+      context: ../services/frontend
       dockerfile: Dockerfile
     image: local/frontend:dev
     container_name: frontend
@@ -46,7 +46,7 @@ services:
 
   currencyservice:
     build:
-      context: ./services/currencyservice
+      context: ../services/currencyservice
       dockerfile: Dockerfile
     image: local/currencyservice:dev
     container_name: currencyservice
@@ -60,7 +60,7 @@ services:
 
   productcatalogservice:
     build:
-      context: ./services/productcatalogservice
+      context: ../services/productcatalogservice
       dockerfile: Dockerfile
     image: local/productcatalogservice:dev
     container_name: productcatalogservice
@@ -74,7 +74,7 @@ services:
 
   checkoutservice:
     build:
-      context: ./services/checkoutservice
+      context: ../services/checkoutservice
       dockerfile: Dockerfile
     image: local/checkoutservice:dev
     container_name: checkoutservice
@@ -100,7 +100,7 @@ services:
 
   shippingservice:
     build:
-      context: ./services/shippingservice
+      context: ../services/shippingservice
       dockerfile: Dockerfile
     image: local/shippingservice:dev
     container_name: shippingservice
@@ -114,7 +114,7 @@ services:
 
   cartservice:
     build:
-      context: ./services/cartservice/src
+      context: ../services/cartservice/src
       dockerfile: Dockerfile
     image: local/cartservice:dev
     container_name: cartservice
@@ -130,7 +130,7 @@ services:
 
   emailservice:
     build:
-      context: ./services/emailservice
+      context: ../services/emailservice
       dockerfile: Dockerfile
     image: local/emailservice:dev
     container_name: emailservice
@@ -144,7 +144,7 @@ services:
 
   paymentservice:
     build:
-      context: ./services/paymentservice
+      context: ../services/paymentservice
       dockerfile: Dockerfile
     image: local/paymentservice:dev
     container_name: paymentservice
@@ -158,7 +158,7 @@ services:
 
   recommendationservice:
     build:
-      context: ./services/recommendationservice
+      context: ../services/recommendationservice
       dockerfile: Dockerfile
     image: local/recommendationservice:dev
     container_name: recommendationservice
@@ -175,7 +175,7 @@ services:
 
   adservice:
     build:
-      context: ./services/adservice
+      context: ../services/adservice
       dockerfile: Dockerfile
     image: local/adservice:dev
     container_name: adservice
@@ -217,7 +217,7 @@ services:
 
   loadgenerator:
     build:
-      context: ./services/loadgenerator
+      context: ../services/loadgenerator
       dockerfile: Dockerfile
     image: local/loadgenerator:dev
     container_name: loadgenerator

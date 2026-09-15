@@ -1,5 +1,5 @@
 #!/bin/bash
-# scripts/run-sentinel-native.sh
+# local/run-sentinel-native.sh
 #
 # Runs nomad-sentinel as a native Python process in WSL2.
 # Use this instead of the Docker container when running on WSL2, where
@@ -12,7 +12,7 @@
 #   3. .env file exists:        cp .env.example .env (and fill in values)
 #
 # Usage:
-#   ./scripts/run-sentinel-native.sh
+#   ./local/run-sentinel-native.sh
 
 set -e
 

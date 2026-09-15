@@ -18,8 +18,7 @@ services:
     ports:
       # Exposed on 5433 (not 5432) to avoid clashing with any native
       # PostgreSQL instance on the host. Used by nomad-sentinel when
-      # running natively on WSL2 via scripts/run-sentinel-native.sh.
-      # Not needed in production — remove or comment out if desired.
+      # running locally via local/run-sentinel-native.sh.
       - "5433:5432"
     healthcheck:
       test:
@@ -36,7 +35,7 @@ services:
 
   metrics-api:
     build:
-      context: ./monitoring/metrics-api
+      context: ../monitoring/metrics-api
       dockerfile: Dockerfile
     image: local/metrics-api:dev
     container_name: metrics-api
