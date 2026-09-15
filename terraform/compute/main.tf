@@ -87,7 +87,7 @@ locals {
         subnetwork            = local.network.subnets["subnet-dev-private"].self_link
         external_ip           = false
         service_account_email = local.nomad_server_sa_email_dev
-        boot_disk_type =  "pd-standard"
+        boot_disk_type           = "pd-standard"  #issues with quota limit so i switched to pd-standard from pd-balanced
         boot_disk_image       = "${var.project_id}/nomad-server"
         boot_disk_size_gb     = 20
         tags                  = ["nomad-server-dev", "consul-server-dev"]
@@ -127,12 +127,13 @@ locals {
         service_account_email = local.nomad_server_sa_email_prod
         boot_disk_image       = "${var.project_id}/nomad-server"
         boot_disk_size_gb     = 20
+        boot_disk_type        = "pd-standard"  #issues with quota limit so i switched to pd-standard from pd-balanced
         tags                  = ["nomad-server-prod", "consul-server-prod"]
         labels                = { role = "control-plane", environment = "prod" }
         startup_script        = local.nomad_server_startup_script
         additional_disks = [
-          { name = "nomad-data", size_gb = 20, disk_type = "pd-balanced" },
-          { name = "consul-data",  size_gb = 20, disk_type = "pd-balanced" },
+          { name = "nomad-data", size_gb = 20, disk_type = "pd-standard" }, #issues with quota limit so i switched to pd-standard from pd-balanced
+          { name = "consul-data",  size_gb = 20, disk_type = "pd-standard" },
         ]
       }
     },
@@ -146,6 +147,7 @@ locals {
         external_ip           = true
         service_account_email = local.traefik_vm_sa_email_prod
         boot_disk_size_gb     = 20
+        boot_disk_type           = "pd-standard"  #issues with quota limit so i switched to pd-standard from pd-balanced
         tags                  = ["traefik"]
         labels                = { role = "traefik-public", environment = "prod" }
       }
@@ -207,6 +209,7 @@ locals {
       spot                     = false
       service_account_email    = local.nomad_client_sa_email_prod
       boot_disk_image          = "${var.project_id}/nomad-client"
+      boot_disk_type           = "pd-standard"  #issues with quota limit so i switched to pd-standard from pd-balanced
       tags                     = ["nomad-client-prod", "consul-client-prod"]
       labels                   = { role = "worker", environment = "prod", pool = "on-demand" }
       startup_script           = local.nomad_client_startup_script
@@ -224,6 +227,7 @@ locals {
       spot                     = true
       service_account_email    = local.nomad_client_sa_email_prod
       boot_disk_image          = "${var.project_id}/nomad-client"
+      boot_disk_type           = "pd-standard" #issues with quota limit so i switched to pd-standard from pd-balanced
       tags                     = ["nomad-client-prod", "consul-client-prod"]
       labels                   = { role = "worker", environment = "prod", pool = "spot" }
       startup_script           = local.nomad_client_startup_script

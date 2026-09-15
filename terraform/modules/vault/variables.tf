@@ -8,18 +8,26 @@ variable "nomad_provisioned" {
   default     = true
 }
 
+variable "nomad_environments" {
+  type    = list(string)
+  default = ["dev", "prod"]
+}
+
+variable "nomad_addresses" {
+  type = map(string)
+
+  validation {
+    condition = alltrue([
+      for env in var.nomad_environments :
+      contains(keys(var.nomad_addresses), env)
+    ])
+
+    error_message = "nomad_addresses must contain an address for every nomad environment."
+  }
+}
+
 variable "vault_vm_member" {
   type = string
-}
-
-variable "nomad_address_dev" {
-  type        = string
-  description = "dev Nomad server address, reachable from wherever Vault runs (mgmt subnet) — used only to build the JWKS URL, not for API calls"
-}
-
-variable "nomad_address_prod" {
-  type        = string
-  description = "prod Nomad server address, same purpose as nomad_address_dev"
 }
 
 variable "github_oidc_audience" {

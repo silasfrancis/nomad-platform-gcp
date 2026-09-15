@@ -35,8 +35,6 @@ consul_ports:
   grpc_tls: 8503
 
 consul_connect_enabled: true
-consul_acl_enabled: true
-consul_acl_default_policy: "deny"
 consul_telemetry_prometheus_enabled: true
 
 consul_manual_root_token: ""

@@ -8,24 +8,28 @@ module "vault" {
 
   gcp_project_id            = var.project_id
   nomad_provisioned         = true
+  nomad_environments        = ["dev", "prod"]
+  nomad_addresses         =  {
+        dev = "https://nomad-dev.platform.lefrancis.org:8444",
+        prod = "https://nomad-prod.platform.lefrancis.org:8445"
+      }
   vault_vm_member           = local.bootstrap.service_accounts["management-vm-sa"].member
-  nomad_address_dev        = var.nomad_address_dev
-  nomad_address_prod       = var.nomad_address_prod
   github_oidc_audience     = var.github_oidc_audience
   github_repository        = var.github_repository
 }
 
-# NOTE: dev/ and prod/ must each have been applied at least once
+# NOTE: dev/ or prod/ should be applied at least once
 # before this module's first apply — it reads octopus-deploy-token-
 # {dev,prod} from Secret Manager, written by nomad/'s ACL token
 # resources in each environment.
-# If in the case this module should be applied before the dev/ and prod/
+# If in the case this module should be applied before the dev/ or prod/
 # set use_dummy_secrets = true to enable the this module to set dummy variables for the tokens
 # which can be overridden manually via the ocotpus ui or on the next apply when the tokens are available
 module "octopus" {
   source = "../../modules/octopus-deploy"
 
   gcp_project_id         = var.project_id
+  environments       = ["dev", "prod"]
   nomad_address_dev   = var.nomad_address_dev
   nomad_address_prod  = var.nomad_address_prod
   use_dummy_secrets = false

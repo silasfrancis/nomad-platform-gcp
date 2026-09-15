@@ -18,7 +18,7 @@ resource "google_compute_instance_template" "this" {
   disk {
     source_image = each.value.boot_disk_image
     disk_size_gb = each.value.boot_disk_size_gb
-    disk_type    = "pd-balanced"
+    disk_type    = each.value.boot_disk_type 
     boot         = true
     auto_delete  = true
     disk_encryption_key {

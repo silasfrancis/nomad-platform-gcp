@@ -58,7 +58,7 @@ locals {
 }
 
 locals {
-  environments = toset(["dev"])
+  environments = toset(var.environments)
 
   env_by_key = {
     dev  = octopusdeploy_environment.dev.id

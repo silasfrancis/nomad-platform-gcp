@@ -171,6 +171,9 @@ retry_join = ["${CONSUL_DISCOVER}"]
 encrypt = "${CONSUL_GOSSIP_KEY}"
 
 acl {
+  enabled                  = true
+  default_policy           = "deny"
+  enable_token_persistence = true
   tokens {
     agent = "${CONSUL_AGENT_TOKEN}"
     dns     = "${CONSUL_DNS_TOKEN}"
@@ -187,6 +190,11 @@ region     = "${ENVIRONMENT}"
 name       = "${NODE_NAME}"
 
 bind_addr = "0.0.0.0"
+
+
+acl {
+  enabled = true
+}
 
 advertise {
   http = "${PRIVATE_IP}"

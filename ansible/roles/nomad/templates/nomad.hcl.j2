@@ -18,10 +18,6 @@ advertise {
 }
 {% endif %}
 
-acl {
-  enabled = {{ nomad_acl_enabled | lower }}
-}
-
 consul {
   address = "127.0.0.1:8501"
   ssl     = true

@@ -15,7 +15,6 @@ nomad_log_dir: /var/log/nomad
 nomad_download_url: "https://releases.hashicorp.com/nomad/{{ nomad_version }}/nomad_{{ nomad_version }}_linux_amd64.zip"
 
 nomad_docker_driver_enabled: "{{ true if nomad_mode == 'client' else false }}"
-nomad_acl_enabled: true
 nomad_telemetry_prometheus_enabled: true
 
 nomad_vault_enabled: true

@@ -1,4 +1,8 @@
-variable "gcp_project" {
+variable "project_id" {
+  type = string
+}
+
+variable "region" {
   type = string
 }
 
@@ -8,6 +12,11 @@ variable "consul_token" {
 }
 
 variable "nomad_token" {
+  type      = string
+  sensitive = true
+}
+
+variable "vault_token" {
   type      = string
   sensitive = true
 }

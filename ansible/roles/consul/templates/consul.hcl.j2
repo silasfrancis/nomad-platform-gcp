@@ -62,12 +62,6 @@ ports {
   grpc_tls = {{ consul_ports.grpc_tls }}
 }
 
-acl {
-  enabled                  = {{ consul_acl_enabled | lower }}
-  default_policy           = "{{ consul_acl_default_policy }}"
-  enable_token_persistence = true
-}
-
 telemetry {
   prometheus_retention_time = "24h"
   disable_hostname          = true

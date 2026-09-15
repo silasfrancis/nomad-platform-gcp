@@ -4,8 +4,6 @@
 # No env Label Since It Serves Both Environments.
 
 environment_name: dev
-nomad_datacenter: "dc-dev"
-consul_datacenter: "dc-dev"
 vault_jwt_auth_backend_path: "jwt-nomad-dev"
 
 bootstrap_expect: 1

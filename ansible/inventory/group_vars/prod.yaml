@@ -3,8 +3,6 @@
 # inventory/gcp.yaml's keyed_groups).
 
 environment_name: prod
-nomad_datacenter: "dc-prod"
-consul_datacenter: "dc-prod"
 vault_jwt_auth_backend_path: "jwt-nomad-prod"
 
 bootstrap_expect: 3
