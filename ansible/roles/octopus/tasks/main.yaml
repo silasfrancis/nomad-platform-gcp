@@ -179,7 +179,7 @@
   no_log: true
   changed_when: true
 
-# --- Compose File + .env + Container Start ---
+# Compose File + .env + Container Start 
 - name: Ensure Octopus Compose Directory Exists
   ansible.builtin.file:
     path: "{{ octopus_compose_dir }}"
@@ -192,6 +192,12 @@
     dest: "{{ octopus_compose_dir }}/.env"
     mode: "0600"
   no_log: true
+
+- name: Configure Docker Auth for Artifact Registry - to pull Octopus worker image
+  ansible.builtin.command: gcloud auth configure-docker {{ gcp_registry_host }} --quiet
+  no_log: true
+  changed_when: false
+  failed_when: false
 
 - name: Template Octopus/Mssql Docker Compose File
   ansible.builtin.template:

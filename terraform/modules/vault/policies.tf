@@ -76,12 +76,3 @@ resource "vault_policy" "snapshot" {
     }
   EOT
 }
-
-resource "vault_policy" "grafana_admin" {
-  name = "grafana-admin"
-  policy = <<-EOT
-    path "kv/shared/grafana/admin/*" {
-      capabilities = ["read"]
-    }
-  EOT
-}

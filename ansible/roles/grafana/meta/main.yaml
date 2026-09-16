@@ -5,13 +5,11 @@ galaxy_info:
     Runs the pre-built Grafana image (monitoring/grafana/ — its own
     Dockerfile, provisioning configs and dashboards baked in at build
     time, same shared CI pipeline as every other monitoring tool) on
-    mgmt-vm via Docker Compose, not Nomad — the one central point for
+    mgmt-vm via Docker Compose. It is the one central point for
     viewing both dev's and prod's Prometheus/Loki data, so it doesn't
-    belong to either cluster. This role's only real job: fetch a Vault
-    token from GCP Secret Manager, use it to read the admin password
-    from Vault, run the compose stack.
+    belong to either cluster.
   min_ansible_version: "2.15"
 
 dependencies:
-  - common
-  - docker
+  # - common
+  # - docker

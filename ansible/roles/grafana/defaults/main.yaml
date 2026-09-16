@@ -10,18 +10,15 @@
 # role actually does is fetch the admin password and run the
 # pre-built image.
 
+gcp_project_id: "{{ gcp_project_id }}"
+
 grafana_base_dir: /opt/grafana
+
+gcp_registry_host:  europe-west1-docker.pkg.dev
+artifact_registry: "{{ gcp_registry_host }}/nomad-platform-gcp/nomad-platform-gcp"
+image_tag: 75c8c1e7
 grafana_image: "{{ artifact_registry }}/grafana:{{ image_tag }}"
+
 grafana_port: 3000
 
-# Secret Manager -> Vault token -> Vault KV chain, not a hardcoded
-# secret path or a static token: gcp_secret_vault_token_name is the
-# GCP Secret Manager secret holding a Vault token scoped (via the
-# policy/token resource already created in platform-config) to read
-# exactly kv/shared/grafana/admin and nothing else. This mirrors the
-# "bootstrap-only" use of Secret Manager the architecture doc
-# describes elsewhere — it's the one place a Vault token itself needs
-# bootstrapping from outside Vault.
-gcp_project: "REPLACE-with-actual-project"
-gcp_secret_vault_token_name: "grafana-vault-token"
-vault_addr: "https://vault.platform.lefrancis.org:8443"
+gcp_secret_grafana_admin_password: "grafana-admin-password"

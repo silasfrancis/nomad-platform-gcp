@@ -13,6 +13,9 @@ sql_data_disk_name: "sql-data"
 mssql_image: "mcr.microsoft.com/mssql/server:2022-latest"
 mssql_container_name: "octopus-mssql"
 
+gcp_registry_host:  europe-west1-docker.pkg.dev
+artifact_registry: "{{ gcp_registry_host }}/nomad-platform-gcp/nomad-platform-gcp"
+
 octopus_server_tag: "2026.2.13364"
 octopus_container_name: "octopus-server"
 octopus_worker_container_name: "octopus-worker"
@@ -36,4 +39,3 @@ mssql_backup_gcs_bucket: " nomad-platform-gcp-europe-west1-platform-artifacts"
 mssql_backup_gcs_prefix: "sql-backups"
 mssql_backup_schedule: "*-*-* 03:00:00"
 
-platform_docker_image_registry: "europe-west1-docker.pkg.dev/nomad-platform-gcp/nomad-platform-gcp"

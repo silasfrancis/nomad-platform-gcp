@@ -2,7 +2,9 @@
 # ansible-grafana-role/playbooks/grafana.yaml
 #
 # Runs against mgmt-vm only — Grafana is the one monitoring tool that
-# isn't per-environment (see meta/main.yaml).
+# isn't per-environment, rather it sources other tools like loki (dev and prod) and prometheus(dev and prod)
+# both running as nomad jobs in each cluster.
+# The grafana configs are already backed into the image (see monitorig/grafana)
 
 - name: Configure Grafana
   hosts: role_mgmt

@@ -3,42 +3,59 @@
 #
 # Much shorter than the prior version of this role — no more
 # templating provisioning configs or dashboards (baked into the image
-# at build time now). This role's whole job is: get a Vault token,
+# at build time now). This role's whole job is: get a Vault password,
 # use it to read one secret, run the pre-built image.
 #
 # Assumes the "docker" role (already in ansible/roles/) has already
 # run on mgmt-vm — this role doesn't install Docker itself, just
 # depends on it via meta/main.yaml.
 
-- name: Create Grafana Base Directory
+- name: Create Grafana Data Directory
   ansible.builtin.file:
     path: "{{ grafana_base_dir }}/data"
     state: directory
-    owner: root
-    group: root
+    owner: "472"  # grafana container runs as user: 472; docker inspect grafana --format '{{.Config.User}}'
+    group: "472"
     mode: "0750"
 
-- name: Read Grafana's Vault Token From GCP Secret Manager
+- name: Read Grafana's Admin Password From GCP Secret Manager
   ansible.builtin.command: >
     gcloud secrets versions access latest
-    --secret={{ gcp_secret_vault_token_name }} --project={{ gcp_project }}
-  register: vault_token_read
-  no_log: true
-  changed_when: false
-
-- name: Read Grafana Admin Password From Vault
-  ansible.builtin.command: vault kv get -field=password kv/shared/grafana/admin
-  environment:
-    VAULT_ADDR: "{{ vault_addr }}"
-    VAULT_TOKEN: "{{ vault_token_read.stdout }}"
+    --secret={{ gcp_secret_grafana_admin_password }} --project={{ gcp_project_id }}
   register: grafana_admin_password_read
   no_log: true
   changed_when: false
+  failed_when: grafana_admin_password_read.rc != 0
+  ignore_errors: true
+
+- name: Generate Random Password Using Openssl
+  ansible.builtin.command: openssl rand -base64 32
+  register: generated_password_result
+  when: grafana_admin_password_read.failed
+  no_log: true
+  changed_when: false
+
+- name: Push Newly Generated Password to GCP
+  ansible.builtin.command: >
+    gcloud secrets versions add {{ gcp_secret_grafana_admin_password }}
+    --project={{ gcp_project_id }}
+    --data-file=-
+  args:
+    stdin: "{{ generated_password_result.stdout }}"
+  when: grafana_admin_password_read.failed
+  no_log: true
+  changed_when: true
 
 - name: Set Admin Password Fact
   ansible.builtin.set_fact:
-    grafana_admin_password: "{{ grafana_admin_password_read.stdout }}"
+    grafana_admin_password: "{{ grafana_admin_password_read.stdout if not grafana_admin_password_read.failed else generated_password_result.stdout }}"
   no_log: true
+
+- name: Configure Docker Auth for Artifact Registry
+  ansible.builtin.command: gcloud auth configure-docker {{ gcp_registry_host }} --quiet
+  no_log: true
+  changed_when: false
+  failed_when: false
 
 - name: Template Docker Compose File
   ansible.builtin.template:
@@ -49,9 +66,21 @@
     mode: "0640"
   register: compose_file
 
-- name: Pull Grafana Image And (Re)Start The Stack
-  community.docker.docker_compose_v2:
-    project_src: "{{ grafana_base_dir }}"
-    pull: always
-    state: present
-    recreate: "{{ 'always' if compose_file.changed else 'auto' }}"
+- name: Start Grafana Container Via Docker Compose
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ grafana_base_dir }}"
+  register: grafana_compose_up
+  changed_when: "'Started' in grafana_compose_up.stdout or 'Created' in grafana_compose_up.stdout"
+
+- name: Wait For Grafana To Respond
+  ansible.builtin.uri:
+    url: "http://localhost:{{ grafana_port }}"
+    status_code:
+      - 200
+      - 302
+  register: grafana_api_check
+  until: grafana_api_check.status is defined and grafana_api_check.status in [200, 302]
+  retries: 30
+  delay: 10
+  ignore_errors: true

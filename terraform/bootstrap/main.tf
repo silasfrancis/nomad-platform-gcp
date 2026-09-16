@@ -882,6 +882,17 @@ module "secrets" {
         }
       }
     }
+
+  # Grafana
+  "grafana-admin-password"  = { 
+    labels = { purpose = "grafana", tier = "mgmt" } 
+    iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = [local.management_vm_member]
+        }
+      }
+    }
+    
   }
 
   depends_on = [ google_project_service.apis ]

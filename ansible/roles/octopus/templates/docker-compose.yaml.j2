@@ -75,7 +75,7 @@ services:
   # octopus-server's Own Container. Registers Itself As A Listening
   # Tentacle (ListeningPort) Into The TargetWorkerPool Named Below.
   octopus-worker:
-    image: {{ platform_docker_image_registry }}/octopus-worker:${OCTOPUS_WORKER_TAG}
+    image: {{ artifact_registry }}/octopus-worker:${OCTOPUS_WORKER_TAG}
     container_name: {{ octopus_worker_container_name }}
     restart: unless-stopped
     environment:

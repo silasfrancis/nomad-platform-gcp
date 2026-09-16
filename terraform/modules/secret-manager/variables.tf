@@ -34,7 +34,6 @@ variable "default_secrets" {
   }))
 default = {
     "vault-snapshot-token" = { labels = { purpose = "vault", tier = "mgmt" } }
-    "grafana-admin-token"  = { labels = { purpose = "grafana", tier = "mgmt" } }
     "github-nomad-repo-pat" = { labels = { purpose = "cicd", tier = "mgmt" } }
     "octopus-slack-webhook-url" = { labels = { purpose = "cicd", tier = "mgmt" } }
   }

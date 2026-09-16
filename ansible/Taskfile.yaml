@@ -112,38 +112,34 @@ tasks:
     cmds:
       - ansible-playbook {{.PLAYBOOK_DIR}}/grafana.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
 
-  site:
-    desc: "Convenience — runs exactly what playbooks/site.yaml chains: mgmt + nomad-servers + nomad-clients + traefik-public (both dev and prod together, in one pass — site.yaml itself doesn't split by --limit at all). Does NOT include vault-init, either ACL bootstrap, traefik-internal, or grafana — those are deliberately separate, run them individually."
+  mgmt-vm:
+    desc: "Configure the complete management layer: mgmt-vm, Vault initialization, and Grafana"
     deps: [check-env]
     cmds:
-      - ansible-playbook {{.PLAYBOOK_DIR}}/site.yaml -e gcp_project_id=$GCP_PROJECT_ID {{.CLI_ARGS}}
-
-  bootstrap-all:
-    desc: "Everything, in the one safe first-time order — runs each ENV-parameterized step for dev, then prod, separately"
-    deps: [check-env]
-    cmds:
-      - task: install
-      - task: inventory-check
-      - task: pki-reminder
       - task: mgmt
       - task: vault-init
-      - task: nomad-servers
-        vars: { ENV: dev }
-      - task: nomad-servers
-        vars: { ENV: prod }
-      - task: consul-acl-bootstrap
-        vars: { ENV: dev }
-      - task: consul-acl-bootstrap
-        vars: { ENV: prod }
-      - task: nomad-acl-bootstrap
-        vars: { ENV: dev }
-      - task: nomad-acl-bootstrap
-        vars: { ENV: prod }
-      - task: nomad-clients
+      - task: grafana
+
+  traefik:
+    desc: "Configure the complete Traefik layer: internal Traefik plus public Traefik for dev and prod"
+    deps: [check-env]
+    cmds:
       - task: traefik-internal
       - task: traefik-public
-        vars: { ENV: dev }
-      - task: traefik-public
-        vars: { ENV: prod }
-      - task: grafana
-      - echo "Bootstrap complete. Next -> apply terraform/platform-config."
+        vars:
+          ENV: '{{.ENV}}'
+
+  nomad-consul:
+    desc: "Configure the complete Nomad + Consul layer for dev and prod"
+    deps: [check-env]
+    cmds:
+      - task: nomad-servers
+        vars:
+          ENV: '{{.ENV}}'
+      - task: nomad-clients
+      - task: consul-acl-bootstrap
+        vars:
+          ENV: '{{.ENV}}'
+      - task: nomad-acl-bootstrap
+        vars:
+          ENV: '{{.ENV}}'
