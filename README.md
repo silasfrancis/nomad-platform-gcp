@@ -8,7 +8,7 @@ Supporting components handle infrastructure provisioning and configuration with 
 
 The platform also provides dynamic database credentials, autoscaling, observability, internal and public ingress, PKI and mTLS, runtime security, and backup and restore.
 
-Google's Online Boutique runs as the reference workload, alongside two custom monitoring services built for the platform: `metrics-api` (metrics collection and exposure) and `nomad-sentinel` (AI-assisted allocation health analysis and Slack reporting). Together they exercise the platform's service mesh, discovery, secrets, autoscaling, observability, and deployment flow.
+Google's Online Boutique runs as the reference workload, alongside two custom monitoring services built for the platform: `nomad-sentinel` (AI-assisted allocation health analysis and Slack reporting) and `metrics-api` (metrics collection and exposure). Together they exercise the platform's service mesh, discovery, secrets, autoscaling, observability, and deployment flow.
 
 ## Platform components
 
