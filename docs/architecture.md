@@ -2,7 +2,7 @@
 
 Platform architecture covering infrastructure, networking, compute, orchestration, autoscaling, secrets, ingress, monitoring, runtime security, and backup/restore.
 
-## Network — VPC & subnets
+## Network: VPC, subnets & firewalls
 
 One VPC contains five subnets: `subnet-mgmt`, plus private and public subnets for `dev` and `prod`. Dev and prod isolation is enforced with explicit firewall rules between the private subnets.
 

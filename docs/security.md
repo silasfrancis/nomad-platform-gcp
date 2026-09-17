@@ -1,6 +1,6 @@
 # Security
 
-Security controls for identity and access, network isolation, PKI, secrets, Consul/Nomad ACLs, and the software supply chain. Platform-wide limitations are documented in [`docs/architecture.md`](architecture.md#known-limitations).
+Security controls for identity and access, network isolation, PKI, secrets, Consul/Nomad ACLs, and the software supply chain.
 
 ## Identity and access
 
