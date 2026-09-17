@@ -1,6 +1,5 @@
 # All 4 reached through traefik-internal's dedicated "internal"
-# entrypoint (never the shared "websecure" one) — real Let's Encrypt
-# certs throughout, so no custom TLS config needed on any of them.
+# entrypoint with real Let's Encrypt certs throughout, so no custom TLS config needed on any of them.
 
 apiVersion: 1
 
