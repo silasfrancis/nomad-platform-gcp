@@ -8,101 +8,72 @@ Platform architecture covering infrastructure, networking, compute, orchestratio
 
 One VPC contains five subnets: `subnet-mgmt`, plus private and public subnets for `dev` and `prod`. Dev and prod isolation is enforced with explicit firewall rules between the private subnets.
 
-```
+```text
+                                    Internet
 
-                                    Internet
+                                        │
 
-                                        │
+                                  80/443 → public IPs
+                                        │
+                    ┌───────────────────┴───────────────────┐
+                    │                                       │
+                    ▼                                       ▼
+             ┌───────────────┐                       ┌───────────────┐
+             │  dev-public   │                       │  prod-public  │
+             │   Traefik     │                       │    Traefik    │
+             │ public — LE   │                       │ public — LE   │
+             └───────┬───────┘                       └───────┬───────┘
+                     │                                       │
+              dynamic ports                            dynamic ports
+                + 8501                                     + 8501
+                     │                                       │
+                     ▼                                       ▼
+             ┌───────────────┐                       ┌───────────────┐
+             │ dev-private   │                       │ prod-private  │
+             │ Nomad/Consul  │                       │ Nomad/Consul  │
+             │ servers/client│                       │ servers/client│
+             └───────┬───────┘                       └───────┬───────┘
+                     │                                       │
+                     └─────────────── X ────────────────────┘
+                              explicit deny
 
-                              80/443 -> public IPs
-
-                                        ▼
-
-                     ┌───────────────────────────────────────┐
-
-                     │  dev-public          prod-public        │
-
-                     │  (Traefik, public — Let's Encrypt HTTP-01) │
-
-                     └───────────────────┬─────────────────────┘
-
-                                          │ dynamic ports (20000-32000),
-
-                                          │ Consul catalog API (8501)
-
-                     ┌────────────────────┴──────────────────────┐
-
-                     │  dev-private          prod-private          │
-
-                     │  (Nomad + Consul servers & clients)          │
-
-                     │       dev ──X── prod   (explicit deny,       │
-
-                     │        both directions, no exceptions)       │
-
-                     └────────────────────┬──────────────────────┘
-
-                                          │ admin ports (4646, 8501) +
-
-                                          │ mesh dynamic ports + Postgres,
-
-                                          │ from subnet-mgmt only
-
-                     ┌────────────────────┴─────────────────────
-
-                     │                subnet-mgmt                  
-
-                     │  mgmt-vm:  Vault · Octopus · Grafana ·      │
-
-                     │            GitHub Actions runner            │
-
-                     │  traefik-internal: mgmt / dev-internal /    │
-
-                     │            prod-internal listeners          │
-
-                     │                — IAP tunnel only            │
-
-                     └─────────────────────────────────────────────┘
-
+                         ┌─────────────────────┐
+                         │    subnet-mgmt      │
+                         │                     │
+                         │ mgmt-vm:            │
+                         │ Vault · Octopus ·   │
+                         │ Grafana · GitHub     │
+                         │ Actions runner       │
+                         │                     │
+                         │ traefik-internal:   │
+                         │ mgmt / dev / prod   │
+                         │ internal listeners  │
+                         │                     │
+                         │ IAP tunnel only     │
+                         └─────────────────────┘
 ```
 
 | Subnet | CIDR | Purpose |
-
 |---|---|---|
-
 | `subnet-mgmt` | `10.2.1.0/24` | Vault, Octopus, Grafana, GitHub runner, internal Traefik — no public IPs |
-
-| `subnet-dev-private` | `10.0.1.0/24` | dev Nomad/Consul servers & clients — no public IPs |
-
-| `subnet-dev-public` | `10.0.2.0/24` | dev's public Traefik VM — external IP |
-
-| `subnet-prod-private` | `10.1.1.0/24` | prod Nomad/Consul servers & clients — no public IPs |
-
-| `subnet-prod-public` | `10.1.2.0/24` | prod's public Traefik VM — external IP |
+| `subnet-dev-private` | `10.0.1.0/24` | Dev Nomad/Consul servers & clients — no public IPs |
+| `subnet-dev-public` | `10.0.2.0/24` | Dev public Traefik VM — external IP |
+| `subnet-prod-private` | `10.1.1.0/24` | Prod Nomad/Consul servers & clients — no public IPs |
+| `subnet-prod-public` | `10.1.2.0/24` | Prod public Traefik VM — external IP |
 
 Firewall rules are grouped by purpose:
 
 | Purpose | Rules | What it allows |
-
 |---|---|---|
-
-| Admin access | `iap-ssh`, `iap-traefik-internal` | IAP range (`35.235.240.0/20`) only — SSH to every subnet, plus tunnels to `traefik-internal`'s 5 HTTPS entrypoints |
-
-| GCP health checks | `health-check-nomad-clients` | Google's own probe ranges → Nomad client API (4646), for MIG health |
-
+| Admin access | `iap-ssh`, `iap-traefik-internal` | IAP range (`35.235.240.0/20`) only — SSH to every subnet, plus tunnels to `traefik-internal`'s HTTPS entrypoints |
+| GCP health checks | `health-check-nomad-clients` | Google's probe ranges → Nomad client API (4646), for MIG health |
 | Environment isolation | `deny-dev-to-prod`, `deny-prod-to-dev` | Explicit deny, both directions, between the two private subnets |
-
-| Cluster protocols | `nomad-internal`, `consul-internal`, `consul-connect-sidecars` | Nomad RPC/Serf, Consul RPC/gossip/API, and Envoy sidecar traffic — within and across the two private subnets |
-
-| Public ingress | `traefik-public` | `0.0.0.0/0` → the two public subnets, 80/443 only |
-
-| Public Traefik → its own cluster | `traefik-backend-dev`, `traefik-backend-prod`, `consul-catalog-dev-public`, `consul-catalog-prod-public` | Each public Traefik reaches only its own environment's dynamic ports and Consul catalog API — never the other environment's |
-
-| Internal Traefik → both clusters | `traefik-internal-nomad`, `traefik-internal-nomad-consul-servers` | `subnet-mgmt` → both private subnets, admin ports + mesh dynamic ports + Postgres — the cross-environment access path, described below |
-
+| Cluster protocols | `nomad-internal`, `consul-internal`, `consul-connect-sidecars` | Nomad RPC/Serf, Consul RPC/gossip/API, and Envoy sidecar traffic within the private environments |
+| Public ingress | `traefik-public` | `0.0.0.0/0` → the two public subnets, ports 80/443 only |
+| Public Traefik → own cluster | `traefik-backend-dev`, `traefik-backend-prod`, `consul-catalog-dev-public`, `consul-catalog-prod-public` | Each public Traefik reaches only its own environment's dynamic ports and Consul catalog API |
+| Internal Traefik → both clusters | `traefik-internal-nomad`, `traefik-internal-nomad-consul-servers` | `subnet-mgmt` → both private subnets, admin ports + mesh dynamic ports + Postgres |
 | Internal Traefik ↔ mgmt-vm | `traefik-internal-mgmt`, `nomad-clients-to-traefik-internal` | Vault/Octopus/Grafana ports and Traefik's own entrypoints, both directions within `subnet-mgmt` |
-
-| Metrics scraping | `prometheus-scrape`, `prometheus-to-traefik-internal`, `prometheus-to-traefik-public-dev`, `prometheus-to-traefik-public-prod` | Prometheus (running in each private subnet) reaching every scrape target across subnets |
+| Metrics scraping | `prometheus-scrape`, `prometheus-to-traefik-internal`, `prometheus-to-traefik-public-dev`, `prometheus-to-traefik-public-prod` | Prometheus reaching scrape targets across the required subnets |
 
 ## Compute
 
@@ -131,7 +102,9 @@ Every Nomad server and client node also runs a Consul agent. Nomad servers are p
 
 Dev uses a configurable server count because a single server is sufficient for the non-HA development environment. Production uses three servers to provide a Raft quorum and tolerate the loss of one server.
 
+
 ![Nomad Server Nodes](images/nomad-servers.png)
+*Nomad Server Nodes*
 
 #### Client nodes
 
@@ -139,9 +112,13 @@ Nomad clients are deployed through managed instance groups (MIGs), split into **
 
 Each client runs a Nomad client and Consul client agent on the same VM. Client instances use the `nomad-client-{env}` and `consul-client-{env}` network tags.
 
+
 ![Nomad Client Nodes](images/nomad-clients.png)
+*Nomad Client Nodes*
+
 
 ![Consul Nodes](images/consul-nodes.png)
+*Consul Nodes*
 
 ### Machine images
 
@@ -227,9 +204,9 @@ the GCP backend for nomad autoscaler (static role)
 
 Full PKI/mTLS design (the CA chain, leaf rotation, gossip keys) and the Consul/Nomad ACL token model live in [`docs/security.md`](security.md) — they are documented in [`docs/security.md`](security.md).
 
-![Vault Secret Engines](images/vault-secret-engines.png)
 
 ![Vault JWT Backends](images/vault-auth-backends.png)
+*Vault JWT Backends*
 
 ## Ingress
 
@@ -311,7 +288,8 @@ One private Cloud DNS zone, `platform.<domain>`, resolvable only inside the VPC.
 
 - **`nomad-sentinel`**: an AI-assisted monitoring service that polls Nomad allocation state, filters out superseded/stopped allocations, and uses Gemini (`gemini-2.5-flash`, `thinking_budget=0`) to summarize allocation state in Slack and can propose remediations. Talks to Postgres via its own dynamic Vault credential, and to the Nomad API directly.
 
-![Grafana Dashboard](images/grafana-dashboard.png)
+![Grafana Dashboards](images/grafana-dashboard.png)
+*Grafana Dashboards*
 
 ## Runtime security
 
@@ -367,7 +345,9 @@ Restore procedures differ by component:
 
 Restore scripts that access private endpoints such as the Nomad API or Postgres print the required IAP tunnel command.
 
+
 ![Backup Operations Jobs](images/operations-namespace.png)
+*Backup Operations Jobs*
 
 ## Infrastructure as code
 
@@ -394,6 +374,10 @@ Google's Online Boutique runs as the reference workload, alongside two custom mo
 Together, these workloads exercise the platform's service mesh, service discovery, secrets management, autoscaling, observability, and application delivery flow.
 
 The Online Boutique consists of 11 services, with metrics-api providing additional platform-specific metrics functionality.
+
+
+![Online Boutique Frontend](images/frontend-ui.png)
+*Online Boutique Frontend*
 
 ## Known limitations
 
