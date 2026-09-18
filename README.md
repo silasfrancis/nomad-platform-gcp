@@ -29,21 +29,7 @@ Google's Online Boutique runs as the reference workload, alongside two custom mo
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    Dev["git push"] --> GHA["GitHub Actions\nbuild · scan · sign"]
-    GHA -->|OIDC, no static secret| Vault[("Vault")]
-    GHA --> AR[("Artifact Registry")]
-    GHA --> Octopus["Octopus Deploy"]
-    Octopus -->|dev| NomadDev["Nomad — dev"]
-    Octopus -->|prod, manual gate| NomadProd["Nomad — prod"]
-    NomadDev -->|workload identity / JWT| Vault
-    NomadProd -->|workload identity / JWT| Vault
-    Consul["Consul\nmesh + discovery"] --- NomadDev
-    Consul --- NomadProd
-    Traefik["Traefik\npublic + internal"] --> NomadDev
-    Traefik --> NomadProd
-```
+![Architecture](docs/images/platform-architecture.drawio.svg)
 
 See [`docs/architecture.md`](docs/architecture.md).
 
