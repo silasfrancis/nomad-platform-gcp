@@ -98,6 +98,9 @@ promote-deployment.sh
 
 `notify-slack.sh` handles notifications, while `common.sh` contains shared functions.
 
+![Octopus Deploy](images/octopus-deploy.png)
+*Octopus Deploy*
+
 ## Composite actions
 
 The workflows use these reusable composite actions:
