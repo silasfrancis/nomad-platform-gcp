@@ -14,7 +14,7 @@ One VPC contains five subnets: `subnet-mgmt`, plus private and public subnets fo
 
                                         │
 
-                              80/443 only, public IPs
+                              80/443 -> public IPs
 
                                         ▼
 
@@ -131,11 +131,17 @@ Every Nomad server and client node also runs a Consul agent. Nomad servers are p
 
 Dev uses a configurable server count because a single server is sufficient for the non-HA development environment. Production uses three servers to provide a Raft quorum and tolerate the loss of one server.
 
+![Nomad Server Nodes](images/nomad-servers.png)
+
 #### Client nodes
 
 Nomad clients are deployed through managed instance groups (MIGs), split into **on-demand** and **spot** pools for each environment. Both pools use `e2-standard-2` instances and are scaled by Nomad Autoscaler. See [Autoscaling](#autoscaling).
 
 Each client runs a Nomad client and Consul client agent on the same VM. Client instances use the `nomad-client-{env}` and `consul-client-{env}` network tags.
+
+![Nomad Client Nodes](images/nomad-clients.png)
+
+![Consul Nodes](images/consul-nodes.png)
 
 ### Machine images
 
@@ -221,6 +227,10 @@ the GCP backend for nomad autoscaler (static role)
 
 Full PKI/mTLS design (the CA chain, leaf rotation, gossip keys) and the Consul/Nomad ACL token model live in [`docs/security.md`](security.md) — they are documented in [`docs/security.md`](security.md).
 
+![Vault Secret Engines](images/vault-secret-engines.png)
+
+![Vault JWT Backends](images/vault-auth-backends.png)
+
 ## Ingress
 
 Ingress is split into public and internal paths.
@@ -301,6 +311,8 @@ One private Cloud DNS zone, `platform.<domain>`, resolvable only inside the VPC.
 
 - **`nomad-sentinel`**: an AI-assisted monitoring service that polls Nomad allocation state, filters out superseded/stopped allocations, and uses Gemini (`gemini-2.5-flash`, `thinking_budget=0`) to summarize allocation state in Slack and can propose remediations. Talks to Postgres via its own dynamic Vault credential, and to the Nomad API directly.
 
+![Grafana Dashboard](images/grafana-dashboard.png)
+
 ## Runtime security
 
 Falco runs on every Nomad client, monitoring kernel syscalls on Nomad clients. Trivy handles image scanning during CI; see [`docs/security.md`](security.md). Five custom rules supplement Falco's default set:
@@ -355,9 +367,9 @@ Restore procedures differ by component:
 
 Restore scripts that access private endpoints such as the Nomad API or Postgres print the required IAP tunnel command.
 
+![Backup Operations Jobs](images/operations-namespace.png)
+
 ## Infrastructure as code
-
-
 
 **Terraform** is split into four layers: `bootstrap` → `network` → `compute` → `platform-config`. Each layer has its own GCS state backend and reads outputs from earlier layers with `terraform_remote_state`.
 
