@@ -104,33 +104,82 @@ Firewall rules are grouped by purpose:
 
 ## Compute
 
-GCE instances are split by role rather than using a single node shape:
+GCE instances are split by role:
 
-- **Nomad servers** — static VMs, one per environment (dev configurable 1–3, prod fixed at 3 for a Raft quorum), `e2-small`, one per zone so a single-zone outage doesn't take out every server at once. Static because Raft consensus needs stable membership; a MIG replacing an instance mid-term would fight leader election.
+- **Nomad servers** — static VMs running the Nomad server and Consul server agent.
+- **Nomad clients** — MIGs split into on-demand and spot pools, running the Nomad client and Consul client agent.
+- **Management VM** (`mgmt-vm`) — one static `e2-standard-2` instance in `subnet-mgmt`, running Vault, Octopus Server, the GitHub Actions self-hosted runner, and Grafana.
+- **`traefik-internal`** — a separate static VM in `subnet-mgmt` running the platform's internal ingress. See [Ingress](#ingress).
+- **Public Traefik** — one VM per environment (`traefik-dev`: `e2-micro`, `traefik-prod`: `e2-small`) in the environment's public subnet, with an external IP.
 
-- **Nomad clients** — MIGs, split into **on-demand** and **spot** pools per environment (`e2-standard-2`), scaled by Nomad Autoscaler — see [Autoscaling](#autoscaling). Spot capacity absorbs the disposable, stateless boutique services; the on-demand pool is the floor that everything else runs on.
+### Nomad & Consul nodes
 
-- **Management VM** (`mgmt-vm`) — one static `e2-standard-2` in `subnet-mgmt`, running Vault, Octopus Server, the GitHub Actions self-hosted runner, and Grafana. A control-plane singleton; it is not horizontally scaled.
+Every Nomad server and client node also runs a Consul agent. Nomad servers are paired with Consul server agents, and Nomad clients are paired with Consul client agents. Nomad and Consul are therefore colocated on the same VMs rather than deployed as separate node pools.
 
-- **`traefik-internal`** — its own separate static VM in `subnet-mgmt` (not the same VM as `mgmt-vm`), running the platform's internal ingress. See [Ingress](#ingress).
+#### Server nodes
 
-- **Public Traefik** — one small VM per environment (`traefik-dev`: `e2-micro`, `traefik-prod`: `e2-small`) in that environment's public subnet, with an external IP.
+| | Dev | Prod |
+|---|---|---|
+| Count | 1 (configurable 1–3) | 3 — fixed for Raft quorum |
+| Machine type | `e2-small` | `e2-small` |
+| Zone | One instance per zone, cycled across the region's zones | One instance per zone, cycled across the region's zones |
+| Runs | Nomad server + Consul server agent | Nomad server + Consul server agent |
+| Tags | `nomad-server-dev`, `consul-server-dev` | `nomad-server-prod`, `consul-server-prod` |
+| Disks | Dedicated `nomad-data` and `consul-data` persistent disks, separate from the boot disk | Same |
 
-**Images are built with Packer** — one shared `nomad.pkr.hcl` template and two `.pkrvars.hcl` files (`nomad-server`, `nomad-client`), each pointing at the corresponding Ansible playbook. Server and client images share the base hardening and role set but run different services. Per-environment values (certificates, gossip keys, datacenter, and retry-join configuration) are supplied by the GCE startup script rather than baked into the image.
+Dev uses a configurable server count because a single server is sufficient for the non-HA development environment. Production uses three servers to provide a Raft quorum and tolerate the loss of one server.
 
-Data disks (`nomad-data`, `consul-data`, and `mgmt-vm`'s `vault-data`/`sql-data`/`docker-data`) are formatted and mounted by the GCE startup script. The script uses `blkid` and `mountpoint -q` checks so the operation is safe across reboots.
+#### Client nodes
+
+Nomad clients are deployed through managed instance groups (MIGs), split into **on-demand** and **spot** pools for each environment. Both pools use `e2-standard-2` instances and are scaled by Nomad Autoscaler. See [Autoscaling](#autoscaling).
+
+Each client runs a Nomad client and Consul client agent on the same VM. Client instances use the `nomad-client-{env}` and `consul-client-{env}` network tags.
+
+### Machine images
+
+The Packer image is shared by all Nomad server and client nodes. It contains the Nomad and Consul binaries, systemd units, and configuration that is common across environments.
+
+Server and client images use the same base hardening and role configuration, with separate Packer variables pointing to the corresponding Ansible playbooks.
+
+Environment-specific configuration is applied by the GCE startup script at boot. This includes the datacenter, gossip encryption key, TLS certificates, and, for clients, `node_pool` and `node_class`. These values are rendered into a `99-instance.hcl` configuration fragment.
+
+The startup script is idempotent and retrieves certificate and key material from Secret Manager on each boot rather than relying on credentials or certificates stored in the machine image.
+
+### Cluster join
+
+Nomad and Consul do not use static peer addresses. Server discovery uses the GCE Cloud Auto-Join provider with environment-specific network tags:
+
+```text
+CONSUL_DISCOVER = "provider=gce project_name=<project> tag_value=consul-server-<env>"
+NOMAD_DISCOVER  = "provider=gce project_name=<project> tag_value=nomad-server-<env>"
+```
+
+The discovery configuration queries the GCE API for instances matching the configured tag rather than relying on hardcoded IP addresses. This allows replaced server instances to be discovered without updating peer configuration.
+
+Dev and prod use different server tags (`consul-server-dev` / `consul-server-prod` and `nomad-server-dev` / `nomad-server-prod`). This keeps the environments from discovering each other's servers because the GCE auto-join provider itself does not have environment awareness; the environment-specific tags provide that isolation.
+
+### Data disks
+
+Data disks are separate from the boot disk and are formatted and mounted by the GCE startup script. This includes:
+
+- `nomad-data`
+- `consul-data`
+- `mgmt-vm`'s `vault-data`
+- `mgmt-vm`'s `sql-data`
+- `mgmt-vm`'s `docker-data`
+
+The startup script uses `blkid` and `mountpoint -q` checks so formatting and mounting are safe across reboots.
 
 ## Orchestration
 
-- **Workload Identity** is used where supported. Nomad tasks that need Vault or Nomad-API access use `identity { env = true }` and JWT auth.
+- **Workload Identity** is used where supported. Nomad tasks that need Vault or Nomad API access use `identity { env = true }` and JWT authentication.
 
-- **Namespaces:** `boutique`, `datastore`, `monitoring`, `security`, `operations`, `plugins` Each namespace maps to Nomad ACL scope and an Octopus project boundary, with the exceptions of the`plugins` namespace where CSI controller and Nomad Autoscaler runs. These plugins are deployed straight via `nomad-jobs/plugins/deploy-plugins.sh` rather than through Octopus, since these are cluster-level infrastructure jobs with no separate release lifecycle.
+- **Namespaces:** `boutique`, `datastore`, `monitoring`, `security`, `operations`, and `plugins`. Each namespace maps to a Nomad ACL scope and an Octopus project boundary. The exception is `plugins`, where cluster-level infrastructure such as the CSI controller and Nomad Autoscaler runs. These plugins are deployed directly through `nomad-jobs/plugins/deploy-plugins.sh` rather than through Octopus because they do not have a separate application release lifecycle.
 
-- **Consul Connect intentions.** Intentions are generated from `locals.intentions` in the Consul terraform module for services participating in the mesh. There's no explicit "deny all others" entry because the ACL `default_policy = "deny"` configurations on both client and server nodes enforce this already.
+- **Consul Connect intentions:** Intentions are generated from `locals.intentions` in the Consul Terraform module for services participating in the mesh. There is no explicit deny-all intention; the ACL `default_policy = "deny"` configuration on the Consul client and server nodes provides the default deny behavior.
 
-- **Secret Management.** Vault is used through a JWT authentication backend for workloads that require access to secrets or credentials. This includes dynamic database credentials, KV secrets, and the GCP credentials used by the Nomad Autoscaler. Credentials and secrets are rendered into allocations through Nomad's Vault integration.
+- **Secret management:** Vault is used through JWT authentication for workloads that require secrets or credentials. This includes dynamic database credentials, KV secrets, and the GCP credentials used by Nomad Autoscaler. Credentials and secrets are rendered into allocations through Nomad's Vault integration.
 
-- **Cluster membership** Consul and Nomad server and client nodes use GCE Cloud Auto-Join, configured in each node's startup script, to discover the appropriate servers and join the cluster.
 
 ## Autoscaling
 
