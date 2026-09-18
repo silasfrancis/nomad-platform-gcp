@@ -2,7 +2,7 @@
 
 Platform architecture covering infrastructure, networking, compute, orchestration, autoscaling, secrets, ingress, monitoring, runtime security, and backup/restore.
 
-![Architecture](docs/images/platform-architecture.drawio.svg)
+![Architecture](images/platform-architecture.drawio.svg)
 
 ## Network: VPC, subnets & firewalls
 
