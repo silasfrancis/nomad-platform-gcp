@@ -84,8 +84,11 @@ ACL bootstrap runs through Ansible playbooks (`consul-acl-bootstrap.yaml`, `noma
 
 ## Supply chain
 
-- Container images are scanned with **Trivy** before push. A failing scan blocks the pipeline and the report is archived.
-- Images are **signed with Cosign** and receive an **SBOM attestation**. Both the signature and attestation are verified in CI.
-- External GitHub Actions are pinned to commit SHAs.
-- CI authenticates to Vault with GitHub OIDC, scoped to the repository and branch.
-- Artifact Registry image tags are **immutable**.
+- Container images are scanned with Trivy before push. A failing scan blocks the pipeline and the report is archived.
+- Images are signed with Cosign and receive an SBOM attestation. Both the signature and attestation are verified in CI.
+- CI authenticates to Vault with GitHub OIDC for CI secrets, scoped to the repository and branch.
+- Build and Push to Artifact Registry with immutable tags.
+- CI creates octopus package and pushes release
+- Octopus deploys to Nomad via Nomad API
+
+See [`ci-cd.md`](ci-cd.md) for more information on the supply chain.

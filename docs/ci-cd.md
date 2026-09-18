@@ -1,6 +1,6 @@
 # CI/CD
 
-Build, security checks, release, and deployment flow using GitHub Actions and Octopus Deploy.
+The platform builds, conducts security checks, releases, and deploys using GitHub Actions and Octopus Deploy.
 
 ## Repository and branching
 
@@ -97,6 +97,7 @@ promote-deployment.sh
 ```
 
 `notify-slack.sh` handles notifications, while `common.sh` contains shared functions.
+
 
 ![Octopus Deploy](images/octopus-deploy.png)
 *Octopus Deploy*
