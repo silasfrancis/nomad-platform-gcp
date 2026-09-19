@@ -160,6 +160,13 @@ module "gcs_bucket" {
             module.service_account.service_accounts["nomad-client-sa-prod"].member,
             module.service_account.service_accounts["nomad-client-sa-dev"].member,
           ]
+        },
+        "roles/storage.bucketViewer" = {
+          members = [
+            module.service_account.service_accounts["management-vm-sa"].member,
+            module.service_account.service_accounts["nomad-client-sa-prod"].member,
+            module.service_account.service_accounts["nomad-client-sa-dev"].member,
+          ]
         }
       }
     }
@@ -172,6 +179,11 @@ module "gcs_bucket" {
       }
       iam = {
         "roles/storage.objectUser" = {
+          members = [
+            module.service_account.service_accounts["management-vm-sa"].member
+          ]
+        },
+        "roles/storage.bucketViewer" = {
           members = [
             module.service_account.service_accounts["management-vm-sa"].member
           ]

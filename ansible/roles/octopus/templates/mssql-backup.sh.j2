@@ -14,8 +14,8 @@ export SQLCMDPASSWORD="${SA_PASSWORD}"
 
 echo "$(date -u +%FT%TZ): backing up OctopusDeploy database"
 
-docker exec -e SQLCMDPASSWORD="${SQLCMDPASSWORD}" {{ mssql_container_name }} /opt/mssql-tools/bin/sqlcmd \
-  -S localhost -U sa \
+docker exec -e SQLCMDPASSWORD="${SQLCMDPASSWORD}" {{ mssql_container_name }} /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -No \
   -Q "BACKUP DATABASE [OctopusDeploy] TO DISK = N'/var/opt/mssql/octopus-sql-${TIMESTAMP}.bak'"
 
 docker cp "{{ mssql_container_name }}:/var/opt/mssql/octopus-sql-${TIMESTAMP}.bak" "${BACKUP_FILE}"

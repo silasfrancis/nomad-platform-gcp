@@ -37,7 +37,7 @@ Initial platform release covering the components documented in [`docs/architectu
 ### CI/CD
 
 - GitHub Actions: config-driven build matrix, Trivy scan, Cosign sign + SBOM attestation, all external actions pinned by commit SHA.
-- Octopus Deploy (self-hosted): 5 projects mapped to Nomad namespaces, dev → prod promotion with a manual approval gate, canary deployments with health-gated auto-promotion.
+- Octopus Deploy (self-hosted): 5 projects mapped to Nomad namespaces, dev → prod promotion with configurable approval, with deployment steps performing health checks and promoting healthy deployments.
 - Self-hosted GitHub Actions runner, registered with a short-lived token, authenticating to Vault via OIDC.
 
 ### Observability & runtime security

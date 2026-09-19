@@ -1,0 +1,75 @@
+name: PR Branch Policy
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  enforce-branch-policy:
+    name: Enforce Branch Policy
+    runs-on: ubuntu-24.04
+
+    env:
+      MAIN_BRANCH: "main"
+      FEATURE_PREFIX: "feature/"
+      HEAD: ${{ github.event.pull_request.head.ref }}
+      BASE: ${{ github.event.pull_request.base.ref }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      AUTHOR: ${{ github.event.pull_request.user.login }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      - name: Enforce branch policy
+        shell: bash
+        run: |
+          echo "PR #${PR_NUMBER} — ${HEAD} → ${BASE}"
+
+          ALLOWED=false
+
+          # Only feature/* branches may open PRs to main.
+          if [[ "${BASE}" == "${MAIN_BRANCH}" && "${HEAD}" == "${FEATURE_PREFIX}"* ]]; then
+            ALLOWED=true
+          fi
+
+          if [[ "${ALLOWED}" == "true" ]]; then
+            echo "Branch policy: allowed — ${HEAD} → ${BASE}"
+            exit 0
+          fi
+
+          if [[ "${BASE}" == "${MAIN_BRANCH}" ]]; then
+            REASON="PRs to \`${MAIN_BRANCH}\` must come from a \`${FEATURE_PREFIX}*\` branch."
+          else
+            REASON="PRs may only target \`${MAIN_BRANCH}\`."
+          fi
+
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "$(cat <<EOF
+          👋 Hi @${AUTHOR},
+
+          This PR has been closed because it does not follow the branch policy.
+
+          **Reason:** ${REASON}
+
+          ---
+          **Allowed Branch Path:**
+
+          | From | To |
+          |---|---|
+          | \`${FEATURE_PREFIX}*\` | \`${MAIN_BRANCH}\` |
+
+          Example: \`feature/silas\`
+
+          If you believe this was closed in error, please contact @silasfrancis.
+          EOF
+          )"
+
+          gh pr close "${PR_NUMBER}" --repo "${REPO}"
+
+          echo "::error::PR #${PR_NUMBER} closed — branch policy violation: ${HEAD} → ${BASE}"
+          exit 1

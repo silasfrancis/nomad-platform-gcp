@@ -28,7 +28,7 @@ vault_ui_enabled: true
 vault_manual_root_token: ""
 
 # Backup
-vault_snapshot_gcs_bucket: " nomad-platform-gcp-europe-west1-platform-artifacts"
+vault_snapshot_gcs_bucket: "nomad-platform-gcp-europe-west1-platform-artifacts"
 vault_snapshot_gcs_prefix: "vault-snapshots"
 vault_snapshot_schedule: "*-*-* 02:00:00"
 
