@@ -45,7 +45,13 @@ locals {
     "consul-snapshot" = {
       namespace = "operations"
       kv_paths  = ["backup/consul-token"]
-      pki_paths = []
+      pki_paths = ["consul-ca"]
+      db_role   = null
+    }
+    "nomad-snapshot" = {
+      namespace = "operations"
+      kv_paths  = []
+      pki_paths = ["nomad-ca"]
       db_role   = null
     }
     "postgres-backup" = {

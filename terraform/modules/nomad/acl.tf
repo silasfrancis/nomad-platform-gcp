@@ -35,6 +35,22 @@ resource "nomad_acl_policy" "nomad_autoscaler" {
   }
 }
 
+# Nomad Snapshot
+resource "nomad_acl_policy" "nomad_snapshot" {
+  name        = "nomad-snapshot-${var.environment}"
+  description = "Nomad snapshot - to save raft snapshot of the cluster"
+  rules_hcl   = <<-EOT
+    operator {
+      policy = "write"
+      capabilities = ["snapshot-save"]
+    }
+  EOT
+  job_acl {
+    job_id    = "nomad-snapshot"   # workload identity
+    namespace = "operations"
+  }
+}
+
 # No nomad_acl_token is created for nomad-sentinel and nomad autoscaler. The platform uses
 # Nomad Workload Identity by default: the job authenticates using its
 # own signed identity (`identity { env = true }` in the job spec),
