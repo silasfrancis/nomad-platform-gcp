@@ -31,7 +31,6 @@ job "consul-snapshot" {
         image        = "google/cloud-sdk:alpine"
         command      = "/bin/sh"
         args         = ["-c", "/local/backup.sh"]
-        network_mode = "host"
       }
 
       # google/cloud-sdk:alpine has gcloud but not the consul CLI
@@ -47,7 +46,7 @@ set -eu
 chmod +x /local/consul
 STAMP=$(date +%Y%m%dT%H%M%SZ)
 /local/consul snapshot save "/local/consul-#{Environment}-${STAMP}.snap"
-gcloud storage cp /local/consul-*.snap gs://#{PlatformGcsBucket}/consul-snapshots/#{Environment}/
+gsutil cp /local/consul-*.snap gs://#{PlatformGcsBucket}/consul-snapshots/#{Environment}/
 EOF
         destination = "local/backup.sh"
         perms       = "0755"
@@ -55,15 +54,26 @@ EOF
 
       template {
         data = <<EOF
+{{ with secret "kv/data/pki/#{Environment}/consul-ca" }}
+{{ .Data.data.ca_cert }}
+{{ end }}
+EOF
+        destination = "secrets/consul-ca.pem"
+      }
+
+      template {
+        data = <<EOF
 {{ with secret "kv/data/#{Environment}/backup/consul-token" }}
 CONSUL_HTTP_TOKEN={{ .Data.data.token }}
 {{ end }}
-CONSUL_HTTP_ADDR=http://localhost:8500
+
+CONSUL_HTTP_ADDR=https://{{ with service "consul" }}{{ with index . 0 }}{{ .Address }}:{{ .Port }}{{ end }}{{ end }}
+CONSUL_CACERT=/secrets/consul-ca.pem
+CONSUL_TLS_SERVER_NAME="server.dc-#{Environment}.consul"
 EOF
         destination = "secrets/consul-snapshot.env"
         env         = true
       }
-
       resources {
         cpu    = #{Cpu}
         memory = #{Memory}

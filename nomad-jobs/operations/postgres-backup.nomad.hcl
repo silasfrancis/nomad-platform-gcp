@@ -57,7 +57,7 @@ apk add --no-cache postgresql16-client >/dev/null
 STAMP=$(date +%Y%m%dT%H%M%SZ)
 for DB in metrics monitoring; do
   pg_dump "$DB" | gzip > "/local/${DB}-${STAMP}.sql.gz"
-  gcloud storage cp "/local/${DB}-${STAMP}.sql.gz" gs://#{PlatformGcsBucket}/pg-backups/#{Environment}/
+  gsutil cp "/local/${DB}-${STAMP}.sql.gz" gs://#{PlatformGcsBucket}/pg-backups/#{Environment}/
 done
 EOF
         destination = "local/backup.sh"
