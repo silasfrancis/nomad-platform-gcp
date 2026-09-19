@@ -25,6 +25,12 @@
       "octopus_project": "operations"
     },
     {
+      "name": "nomad-snapshot",
+      "path": "nomad-jobs/operations/nomad-snapshot.nomad.hcl",
+      "job_spec": "nomad-jobs/operations/nomad-snapshot.nomad.hcl",
+      "octopus_project": "operations"
+    },
+    {
       "name": "postgres-backup",
       "path": "nomad-jobs/operations/postgres-backup.nomad.hcl",
       "job_spec": "nomad-jobs/operations/postgres-backup.nomad.hcl",
