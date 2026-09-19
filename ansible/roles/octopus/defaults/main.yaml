@@ -35,7 +35,7 @@ octopus_disable_dind: "Y"
 octopus_privileged: "false"
 
 # Backup
-mssql_backup_gcs_bucket: " nomad-platform-gcp-europe-west1-platform-artifacts"
+mssql_backup_gcs_bucket: "nomad-platform-gcp-europe-west1-platform-artifacts"
 mssql_backup_gcs_prefix: "sql-backups"
 mssql_backup_schedule: "*-*-* 03:00:00"
 

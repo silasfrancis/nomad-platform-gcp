@@ -70,8 +70,9 @@ job "metrics-api" {
       template {
         data = <<EOF
 {{ with secret "database/creds/metrics-api-#{Environment}" }}
+{{ $cred := . }}
 {{ range service "postgres" }}
-DATABASE_URL=postgresql://{{ $.Data.username }}:{{ $.Data.password }}@{{ .Address }}:{{ .Port }}/metrics?sslmode=disable
+DATABASE_URL=postgresql://{{ $cred.Data.username }}:{{ $cred.Data.password }}@{{ .Address }}:{{ .Port }}/metrics?sslmode=disable
 {{ end }}
 {{ end }}
 EOF

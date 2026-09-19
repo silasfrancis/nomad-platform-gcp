@@ -12,7 +12,6 @@ Google's Online Boutique runs as the reference workload, alongside two custom mo
 
 ## Platform components
 
-| | |
 |---|---|
 | **Orchestrator** | Nomad — dev and prod clusters |
 | **Service mesh & discovery** | Consul Connect with service intentions, Consul Catalog |

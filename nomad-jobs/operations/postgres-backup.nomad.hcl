@@ -36,11 +36,14 @@ job "postgres-backup" {
       template {
         data = <<EOF
 {{ with secret "kv/data/shared/postgres/admin" }}
-PGPASSWORD={{ .Data.data.vault_admin_password }}
-{{ end }}
-PGHOST=postgres.service.consul
-PGPORT=5432
+{{ $cred := . }}
+{{ range service "postgres" }}
+PGPASSWORD={{ $cred.Data.data.vault_admin_password }}
+PGHOST={{ .Address }}
+PGPORT={{ .Port }}
 PGUSER=vault-admin
+{{ end }}
+{{ end }}
 EOF
         destination = "secrets/postgres-backup.env"
         env         = true
@@ -55,7 +58,7 @@ STAMP=$(date +%Y%m%dT%H%M%SZ)
 for DB in metrics monitoring; do
   pg_dump "$DB" | gzip > "/local/${DB}-${STAMP}.sql.gz"
 done
-gcloud storage cp /local/*.sql.gz gs://nomad-platform-gcp-europe-west1-platform-artifacts/pg-backups/#{Environment}/
+gcloud storage cp /local/*.sql.gz gs://#{PlatformGcsBucket}/pg-backups/#{Environment}/
 EOF
         destination = "local/backup.sh"
         perms       = "0755"
