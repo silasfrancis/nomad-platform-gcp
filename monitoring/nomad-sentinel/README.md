@@ -1,7 +1,7 @@
 # Nomad Sentinel (AI Monitoring & Remediation Agent)
 
 A Python control-loop agent that polls a Nomad cluster for anomalous allocations,
-sends context to Gemini 2.5 Flash for root-cause analysis, alerts via Slack, and
+sends context to Gemini 3.6 Flash for root-cause analysis, alerts via Slack, and
 performs bounded automated remediation. It also accepts Falco runtime security
 alerts over HTTP for triage and alerting alongside its own Nomad-native
 detection.

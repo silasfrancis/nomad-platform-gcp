@@ -88,7 +88,7 @@ MAX_REMEDIATION_ATTEMPTS: int = int(_optional("MAX_REMEDIATION_ATTEMPTS", "3"))
 COOLDOWN_SECONDS: int = int(_optional("COOLDOWN_SECONDS", "300"))
 
 # Gemini model to use
-GEMINI_MODEL: str = _optional("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL: str = _optional("GEMINI_MODEL", "gemini-3.6-flash")
 
 # Environment label for alerts and logs (e.g. dev, prod)
 ENVIRONMENT: str = _optional("ENVIRONMENT", "unknown")
