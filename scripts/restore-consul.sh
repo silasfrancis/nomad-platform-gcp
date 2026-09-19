@@ -37,13 +37,13 @@ SERVER_HOST="nomad-${TARGET_ENV}-server"   # Consul server runs alongside Nomad 
 
 confirm_destructive "About to OVERWRITE the Consul catalog, KV store, ACLs, and intentions for datacenter '$DATACENTER'. Services will briefly re-register as health checks re-run after restore."
 
-VAULT_ADDR="${VAULT_ADDR:?VAULT_ADDR must be set — needed to fetch the Consul management token}"
+VAULT_ADDR="${VAULT_ADDR:?VAULT_ADDR must be set — needed to fetch the Consul backup token}"
 VAULT_TOKEN="${VAULT_TOKEN:?VAULT_TOKEN must be set — a token with read access to kv/shared/consul}"
 export VAULT_ADDR VAULT_TOKEN
 
-log "fetching Consul management token from Vault"
-CONSUL_HTTP_TOKEN=$(vault kv get -field=management_token kv/shared/consul) \
-  || die "could not read kv/shared/consul/management_token from Vault"
+log "fetching Consul backup token from Vault"
+CONSUL_HTTP_TOKEN=$(vault kv get -field=backup_token kv/shared/consul) \
+  || die "could not read kv/shared/consul/backup_token from Vault"
 export CONSUL_HTTP_TOKEN
 
 snapshot_file=$(fetch_latest_from_gcs "consul-snapshots/${TARGET_ENV}/" "$SCRATCH_DIR")
