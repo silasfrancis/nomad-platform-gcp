@@ -36,7 +36,7 @@ job "alloy" {
       template {
         data = <<EOF
 {{ range service "loki" }}
-LOKI_URL={{ .Address }}:{{ .Port }}/loki/api/v1/push
+LOKI_URL=http://{{ .Address }}:{{ .Port }}/loki/api/v1/push
 {{ end }}
 EOF
         destination = "secrets/runtime-addr.env"
