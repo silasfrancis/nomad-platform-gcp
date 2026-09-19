@@ -29,7 +29,9 @@ job "alloy" {
           "/etc/alloy/config.alloy",
         ]
         volumes = [
-          "/var/nomad/alloc:/var/nomad/alloc:ro",
+          # nomad's data_dir is /opt/nomad/data (see /etc/nomad.d/nomad.hcl);
+          # mount must match host path so config.alloy's file_match glob resolves inside the container.
+          "/opt/nomad/data/alloc:/opt/nomad/data/alloc:ro",
         ]
       }
 
