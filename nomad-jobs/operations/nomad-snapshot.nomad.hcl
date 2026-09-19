@@ -28,7 +28,7 @@ job "nomad-snapshot" {
       driver = "docker"
 
       config {
-        image        = "google/cloud-sdk:alpine"
+        image        = "google/cloud-sdk:slim"
         command      = "/bin/sh"
         args         = ["-c", "/local/backup.sh"]
         network_mode = "host"
@@ -38,7 +38,7 @@ job "nomad-snapshot" {
         env = true
       }
 
-      # google/cloud-sdk:alpine has gcloud but not the nomad CLI
+      # google/cloud-sdk:slim has gcloud but not the nomad CLI
       artifact {
         source      = "https://releases.hashicorp.com/nomad/2.0.4/nomad_2.0.4_linux_amd64.zip"
         destination = "local/"
@@ -77,8 +77,8 @@ EOF
       }
 
       resources {
-        cpu    = 100
-        memory = 128
+        cpu    = 200
+        memory = 512
       }
     }
   }

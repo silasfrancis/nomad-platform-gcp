@@ -33,9 +33,17 @@ job "alloy" {
         ]
       }
 
-      env {
-      LOKI_URL = "http://loki.service.consul:3100/loki/api/v1/push"
-    }
+      template {
+        data = <<EOF
+{{ range service "loki" }}
+LOKI_URL={{ .Address }}:{{ .Port }}/loki/api/v1/push
+{{ end }}
+EOF
+        destination = "secrets/runtime-addr.env"
+        env         = true
+        change_mode = "restart" 
+      }
+
 
       resources {
         cpu    = #{Cpu}
