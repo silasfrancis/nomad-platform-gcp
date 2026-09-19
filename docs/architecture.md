@@ -282,14 +282,23 @@ One private Cloud DNS zone, `platform.<domain>`, resolvable only inside the VPC.
 
 - **Metrics**: Prometheus, scrapes using  Consul catalog service discovery, with the only static scrape targets being the traefik instances, because nomad clients scale in/out and also use Nomads dynamic port allocation to reschedule workloads. It also scrapes Nomad servers/clients and Consul agents.
 
+![Prometheus](images/prometheus.png)
+*Prometheus*
+
 - **Logs**: Loki, shipped by Grafana Alloy, labeled by `job`/`task`/`namespace`/`node_id`/`alloc_id`/`env`, with labels that identify the allocation and workload.
+
+![Loki](images/loki.png)
+*Loki*
 
 - **Dashboards**: Grafana, provisioned entirely from JSON baked into its image at build time, dashboards and datasource configuration are baked into the image, so Grafana does not use a persistent disk.
 
-- **`nomad-sentinel`**: an AI-assisted monitoring service that polls Nomad allocation state, filters out superseded/stopped allocations, and uses Gemini (`gemini-2.5-flash`, `thinking_budget=0`) to summarize allocation state in Slack and can propose remediations. Talks to Postgres via its own dynamic Vault credential, and to the Nomad API directly.
-
 ![Grafana Dashboards](images/grafana-dashboard.png)
 *Grafana Dashboards*
+
+- **`nomad-sentinel`**: an AI-assisted monitoring service that polls Nomad allocation state, filters out superseded/stopped allocations, and uses Gemini (`gemini-3.6-flash`, `thinking_budget=0`) to summarize allocation state in Slack and can propose remediations. Talks to Postgres via its own dynamic Vault credential, and to the Nomad API directly.
+
+![Nomad Sentinel Logs](images/nomad-sentinel-logs.png)
+*Nomad Sentinel Logs*
 
 ## Runtime security
 

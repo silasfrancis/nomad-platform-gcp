@@ -213,7 +213,7 @@ are never present in the Docker image or job spec.
 | `REMEDIATION_CONFIDENCE_THRESHOLD` | No | `0.8` | Minimum Gemini confidence to remediate/propose |
 | `MAX_REMEDIATION_ATTEMPTS` | No | `3` | Max attempts (executed or proposed) per job before escalating |
 | `COOLDOWN_SECONDS` | No | `300` | Cooldown after a remediation attempt |
-| `GEMINI_MODEL` | No | `gemini-2.5-flash` | Gemini model name |
+| `GEMINI_MODEL` | No | `gemini-3.6-flash` | Gemini model name |
 | `WATCH_NAMESPACES` | No | (all) | Comma-separated Nomad namespaces to watch |
 | `HISTORY_DATABASE_URL` | No | (disabled) | PostgreSQL connection string for anomaly history — see above. Unset disables persistence entirely. |
 | `HTTP_PORT` | No | `8090` | Port for the built-in Flask server (`/health`, `/summary`, `/anomaly`) |
