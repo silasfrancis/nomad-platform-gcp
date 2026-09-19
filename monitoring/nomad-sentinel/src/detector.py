@@ -58,6 +58,7 @@ from config import (
     LOG_TAIL_LINES,
     WATCH_NAMESPACES,
 )
+from nomad_client import session as _session
 
 log = structlog.get_logger()
 
@@ -77,7 +78,7 @@ def _headers() -> dict:
 def _get(path: str, params: Optional[dict] = None) -> Optional[dict | list]:
     url = f"{NOMAD_ADDR}{path}"
     try:
-        resp = requests.get(url, headers=_headers(), params=params, timeout=10)
+        resp = _session.get(url, headers=_headers(), params=params, timeout=10)
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.Timeout:
@@ -215,7 +216,7 @@ def fetch_logs(alloc_id: str, task_name: str, log_type: str = "stderr") -> str:
         url = f"{NOMAD_ADDR}/v1/client/fs/logs/{alloc_id}"
         params = {"task": task_name, "type": lt, "plain": "true"}
         try:
-            resp = requests.get(url, headers=_headers(), params=params, timeout=15)
+            resp = _session.get(url, headers=_headers(), params=params, timeout=15)
             resp.raise_for_status()
             content = resp.text.strip()
             if content and content != "NO_LOG_OUTPUT":

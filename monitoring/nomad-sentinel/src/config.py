@@ -30,6 +30,29 @@ NOMAD_ADDR: str = _require("NOMAD_ADDR")
 # Nomad ACL token — scoped read/write token for the agent
 NOMAD_TOKEN: str = _require("NOMAD_TOKEN")
 
+# TLS trust/identity for the Nomad API connection.
+# Unlike the Go-based Nomad/Consul/Vault CLIs, the `requests` library does
+# NOT read these automatically — they must be wired in explicitly wherever
+# the HTTP client is built (see detector.py's _build_session()).
+#
+# NOMAD_CACERT         — path to the CA bundle that signed the Nomad
+#                         server's cert. Optional: if unset, falls back to
+#                         the system/certifi trust store.
+# NOMAD_CLIENT_CERT /
+# NOMAD_CLIENT_KEY     — optional mTLS client identity, if the cluster
+#                         requires verify_https_client.
+# NOMAD_TLS_SERVER_NAME — hostname to verify the server cert against, used
+#                         when NOMAD_ADDR is a bare IP (e.g. resolved via
+#                         Consul) rather than the hostname the cert was
+#                         actually issued for. Optional: if unset, the
+#                         hostname in NOMAD_ADDR itself is used, which will
+#                         fail verification when NOMAD_ADDR is an IP and
+#                         the cert has no matching IP SAN.
+NOMAD_CACERT: str = _optional("NOMAD_CACERT", "")
+NOMAD_CLIENT_CERT: str = _optional("NOMAD_CLIENT_CERT", "")
+NOMAD_CLIENT_KEY: str = _optional("NOMAD_CLIENT_KEY", "")
+NOMAD_TLS_SERVER_NAME: str = _optional("NOMAD_TLS_SERVER_NAME", "")
+
 # Gemini API key — injected by Vault at runtime via Nomad template stanza
 GEMINI_API_KEY: str = _require("GEMINI_API_KEY")
 

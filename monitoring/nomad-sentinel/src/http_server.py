@@ -21,9 +21,10 @@ spec and Prometheus scrape config).
 import threading
 
 import structlog
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 import summarizer
+import falco
 from config import HTTP_PORT, ENVIRONMENT
 
 log = structlog.get_logger()
@@ -40,8 +41,9 @@ def index():
         status="ok",
         environment=ENVIRONMENT,
         endpoints={
-            "GET /health":  "liveness probe with instant response and no Nomad call",
-            "GET /summary": "on-demand cluster health summary which calls Nomad + Gemini and returns JSON",
+            "GET /health":   "liveness probe with instant response and no Nomad call",
+            "GET /summary":  "on-demand cluster health summary which calls Nomad + Gemini and returns JSON",
+            "POST /anomaly": "receives a Falco security alert for triage and alerting (see falco-webhook)",
         },
     ), 200
 
@@ -88,6 +90,52 @@ def summary():
     except Exception as e:
         log.error("summary_endpoint_error", error=str(e))
         return jsonify({"error": str(e), "environment": ENVIRONMENT}), 500
+
+
+@app.post("/anomaly")
+def anomaly():
+    """
+    Receives a Falco security alert (falco-webhook's native http_output
+    JSON shape — see monitoring/falco-webhook/main.go's FalcoAlert struct)
+    and queues it for triage.
+
+    Responds 202 immediately and processes in a background thread rather
+    than inline: analysis calls Gemini, which can take longer than
+    falco-webhook's own 5s HTTP client timeout, and there's no reason for
+    Falco's own request/response cycle to wait on Slack-alert latency.
+    falco-webhook already treats a failed/slow call here as non-fatal
+    (logs a WARN and moves on), so this endpoint doesn't need to guarantee
+    synchronous completion to be a reliable integration.
+
+    Expected request body (Falco's native http_output shape):
+    {
+      "output": str, "priority": str, "rule": str, "time": str (RFC3339),
+      "source": str, "hostname": str, "tags": [str],
+      "output_fields": {str: any}
+    }
+
+    Returns 202 on a structurally valid payload (processing continues in
+    the background), 400 if required fields (output/priority/rule) are
+    missing or the body isn't valid JSON.
+    """
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+
+    missing = [f for f in ("output", "priority", "rule") if not payload.get(f)]
+    if missing:
+        return jsonify({"error": f"missing required field(s): {', '.join(missing)}"}), 400
+
+    def _process():
+        try:
+            falco.handle_falco_alert(payload)
+        except Exception as e:
+            log.error("falco_alert_processing_failed", error=str(e))
+
+    threading.Thread(target=_process, name="falco-alert", daemon=True).start()
+
+    log.info("anomaly_endpoint_accepted", rule=payload.get("rule"), priority=payload.get("priority"))
+    return jsonify({"status": "accepted"}), 202
 
 
 # ── Thread startup ────────────────────────────────────────────────────────────

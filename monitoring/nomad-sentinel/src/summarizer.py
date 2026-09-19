@@ -32,6 +32,7 @@ import structlog
 from google import genai
 from google.genai import types
 
+from nomad_client import session as _session
 from config import (
     NOMAD_ADDR,
     NOMAD_TOKEN,
@@ -121,7 +122,7 @@ def _headers() -> dict:
 def _get(path: str, params: Optional[dict] = None) -> Optional[dict | list]:
     url = f"{NOMAD_ADDR}{path}"
     try:
-        resp = requests.get(url, headers=_headers(), params=params, timeout=10)
+        resp = _session.get(url, headers=_headers(), params=params, timeout=10)
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.Timeout:
