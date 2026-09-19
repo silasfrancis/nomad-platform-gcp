@@ -70,7 +70,7 @@ CONSUL_HTTP_TOKEN={{ .Data.data.token }}
 
 CONSUL_HTTP_ADDR=https://127.0.0.1:8501
 CONSUL_CACERT=/secrets/consul-ca.pem
-CONSUL_TLS_SERVER_NAME=server.dc-#{Environment}.consul
+CONSUL_TLS_SERVER_NAME=client.dc-#{Environment}.consul
 EOF
         destination = "secrets/consul-snapshot.env"
         env         = true
