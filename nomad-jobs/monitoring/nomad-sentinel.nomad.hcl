@@ -78,6 +78,7 @@ EOF
         env {
           HTTP_PORT             = "8090"
           REMEDIATION_MODE = "#{RemediationMode}"
+          GEMINI_MODEL = "gemini-3.6-flash"
           NOMAD_CACERT = "/secrets/nomad-ca.pem"
           NOMAD_TLS_SERVER_NAME = "server.#{Datacenter}.nomad"
         }
