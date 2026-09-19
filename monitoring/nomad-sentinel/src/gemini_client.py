@@ -102,8 +102,46 @@ Rules:
 - summary should be one sentence suitable for a Slack alert
 """
 
+# Falco security alerts are a fundamentally different kind of anomaly from a
+# Nomad workload crash, and none of the workload-remediation actions apply
+# to them — restarting or reverting a job does not address "a shell was
+# spawned in a container" and may destroy evidence. This agent never takes
+# automated action on a Falco-sourced anomaly regardless of what is
+# returned here (enforced in falco.py, not just by this prompt) — this
+# analysis exists purely to triage severity and surface a clear summary
+# for a human, same as a low-confidence Nomad anomaly would be.
+_FALCO_PROMPT_TEMPLATE = """\
+You are a platform security engineer triaging a Falco runtime security alert
+from a workload running on a Nomad cluster.
+
+Environment: {environment}
+Falco rule: {rule}
+Falco priority: {priority}
+Falco output: {output}
+Host: {hostname}
+Container/task (best-effort, may be "unknown"): {job_id}
+Process (best-effort, may be "unknown"): {task}
+Tags: {tags}
+Other output fields:
+{events}
+
+Determine the likely cause, severity, and suggested action.
+
+Rules:
+- suggested_action must be one of: increase_memory, restart, revert, check_image, manual_intervention, none
+- None of increase_memory, restart, revert, or check_image are ever appropriate here — they are Nomad workload-crash remediations, not security responses, and this agent will not execute them regardless of your answer. Use manual_intervention for anything a human should review, or none only if this is clearly benign/informational and needs no follow-up.
+- severity should reflect actual security risk, not Falco's own priority field verbatim — a "warning"-priority rule that fired on expected, benign behaviour is not automatically "medium" severity
+- likely_cause should explain what the underlying activity was and why Falco flagged it, in plain language for someone who may not know this rule
+- confidence reflects how certain you are that this is a genuine security concern (not a false positive) given the available evidence, from 0.0 to 1.0
+- summary should be one sentence suitable for a Slack alert
+- memory_increase_mb must be 0
+"""
+
 
 def _build_prompt(anomaly: dict) -> str:
+    if anomaly.get("source") == "falco":
+        return _build_falco_prompt(anomaly)
+
     events_str = json.dumps(anomaly.get("events", []), indent=2)
     logs = anomaly.get("logs", "")
     log_lines = len(logs.splitlines()) if logs else 0
@@ -121,6 +159,23 @@ def _build_prompt(anomaly: dict) -> str:
         log_type="stderr",
         log_lines=log_lines,
         logs=logs or "(no logs available)",
+    )
+
+
+def _build_falco_prompt(anomaly: dict) -> str:
+    falco = anomaly.get("falco", {})
+    output_fields = falco.get("output_fields", {})
+
+    return _FALCO_PROMPT_TEMPLATE.format(
+        environment=ENVIRONMENT,
+        rule=falco.get("rule", "unknown"),
+        priority=falco.get("priority", "unknown"),
+        output=falco.get("output", "(no output text)"),
+        hostname=falco.get("hostname", "unknown"),
+        job_id=anomaly.get("job_id", "unknown"),
+        task=anomaly.get("task", "unknown"),
+        tags=", ".join(falco.get("tags", []) or []) or "(none)",
+        events=json.dumps(output_fields, indent=2, default=str) or "(none)",
     )
 
 

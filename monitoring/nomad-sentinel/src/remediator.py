@@ -31,6 +31,7 @@ import requests
 import structlog
 
 from config import NOMAD_ADDR, NOMAD_TOKEN
+from nomad_client import session as _session
 
 log = structlog.get_logger()
 
@@ -78,7 +79,7 @@ def remediate(anomaly: dict, analysis: dict) -> dict:
 def _fetch_job(job_id: str, namespace: str) -> dict:
     url = f"{NOMAD_ADDR}/v1/job/{job_id}"
     try:
-        resp = requests.get(
+        resp = _session.get(
             url, headers=_headers(), params={"namespace": namespace}, timeout=10
         )
         resp.raise_for_status()
@@ -96,7 +97,7 @@ def _submit_job(job_id: str, job_spec: dict) -> None:
     url = f"{NOMAD_ADDR}/v1/job/{job_id}"
     payload = {"Job": job_spec}
     try:
-        resp = requests.post(
+        resp = _session.post(
             url,
             headers=_headers(),
             json=payload,
@@ -166,7 +167,7 @@ def _restart_allocation(anomaly: dict) -> dict:
     url = f"{NOMAD_ADDR}/v1/allocation/{alloc_id}/stop"
 
     try:
-        resp = requests.post(
+        resp = _session.post(
             url,
             headers=_headers(),
             params={"no_shutdown_delay": "false"},
@@ -207,7 +208,7 @@ def _revert_job(anomaly: dict) -> dict:
     }
 
     try:
-        resp = requests.post(
+        resp = _session.post(
             url,
             headers=_headers(),
             json=payload,

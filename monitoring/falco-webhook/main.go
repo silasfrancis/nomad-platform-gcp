@@ -1,5 +1,3 @@
-// monitoring/falco-webhook/main.go
-//
 // Receives Falco's native HTTP output payload, forwards every alert
 // to Loki (label: source=falco), and for severity >= WARNING also
 // calls nomad-sentinel over internal HTTP.
