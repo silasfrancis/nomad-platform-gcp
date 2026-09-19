@@ -28,9 +28,10 @@ job "consul-snapshot" {
       driver = "docker"
 
       config {
-        image   = "google/cloud-sdk:alpine"
-        command = "/bin/sh"
-        args    = ["-c", "/local/backup.sh"]
+        image        = "google/cloud-sdk:alpine"
+        command      = "/bin/sh"
+        args         = ["-c", "/local/backup.sh"]
+        network_mode = "host"
       }
 
       # google/cloud-sdk:alpine has gcloud but not the consul CLI
