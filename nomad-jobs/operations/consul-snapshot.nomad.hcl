@@ -31,6 +31,7 @@ job "consul-snapshot" {
         image        = "google/cloud-sdk:alpine"
         command      = "/bin/sh"
         args         = ["-c", "/local/backup.sh"]
+        network_mode = "host"
       }
 
       # google/cloud-sdk:alpine has gcloud but not the consul CLI
@@ -67,9 +68,9 @@ EOF
 CONSUL_HTTP_TOKEN={{ .Data.data.token }}
 {{ end }}
 
-CONSUL_HTTP_ADDR=https://{{ with service "consul" }}{{ with index . 0 }}{{ .Address }}:{{ .Port }}{{ end }}{{ end }}
+CONSUL_HTTP_ADDR=https://127.0.0.1:8501
 CONSUL_CACERT=/secrets/consul-ca.pem
-CONSUL_TLS_SERVER_NAME="server.dc-#{Environment}.consul"
+CONSUL_TLS_SERVER_NAME=server.dc-#{Environment}.consul
 EOF
         destination = "secrets/consul-snapshot.env"
         env         = true
