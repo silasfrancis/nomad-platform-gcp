@@ -28,9 +28,10 @@ job "postgres-backup" {
       driver = "docker"
 
       config {
-        image   = "google/cloud-sdk:alpine"
-        command = "/bin/sh"
-        args    = ["-c", "/local/backup.sh"]
+        image        = "google/cloud-sdk:alpine"
+        command      = "/bin/sh"
+        args         = ["-c", "/local/backup.sh"]
+        network_mode = "host"
       }
 
       template {
@@ -71,4 +72,3 @@ EOF
     }
   }
 }
-
