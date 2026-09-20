@@ -22,3 +22,8 @@ resource "vault_kv_secret_v2" "consul_snapshot_token" {
     token = "${data.consul_acl_token_secret_id.consul_snapshot.secret_id}"
   })
 }
+
+resource "google_secret_manager_secret_version" "consul_snapshot_token" {
+  secret      = "consul-snapshot-token-${var.environment}"
+  secret_data = data.consul_acl_token_secret_id.consul_snapshot.secret_id
+}

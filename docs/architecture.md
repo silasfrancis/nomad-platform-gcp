@@ -282,72 +282,79 @@ One private Cloud DNS zone, `platform.<domain>`, resolvable only inside the VPC.
 
 - **Metrics**: Prometheus, scrapes using  Consul catalog service discovery, with the only static scrape targets being the traefik instances, because nomad clients scale in/out and also use Nomads dynamic port allocation to reschedule workloads. It also scrapes Nomad servers/clients and Consul agents.
 
+![Prometheus](images/prometheus.png)
+*Prometheus*
+
 - **Logs**: Loki, shipped by Grafana Alloy, labeled by `job`/`task`/`namespace`/`node_id`/`alloc_id`/`env`, with labels that identify the allocation and workload.
 
-- **Dashboards**: Grafana, provisioned entirely from JSON baked into its image at build time, dashboards and datasource configuration are baked into the image, so Grafana does not use a persistent disk.
+![Loki](images/loki.png)
+*Loki*
 
-- **`nomad-sentinel`**: an AI-assisted monitoring service that polls Nomad allocation state, filters out superseded/stopped allocations, and uses Gemini (`gemini-2.5-flash`, `thinking_budget=0`) to summarize allocation state in Slack and can propose remediations. Talks to Postgres via its own dynamic Vault credential, and to the Nomad API directly.
+- **Dashboards**: Grafana, provisioned entirely from JSON baked into its image at build time, dashboards and datasource configuration are baked into the image, so Grafana does not use a persistent disk.
 
 ![Grafana Dashboards](images/grafana-dashboard.png)
 *Grafana Dashboards*
 
+- **`nomad-sentinel`**: an AI-assisted monitoring service that polls Nomad allocation state, filters out superseded/stopped allocations, and uses Gemini (`gemini-3.5-flash-lite`, `thinking_budget=0`) to summarize allocation state in Slack and can propose remediations. Talks to Postgres via its own dynamic Vault credential, and to the Nomad API directly.
+
+![Nomad Sentinel Logs](images/nomad-sentinel-logs.png)
+*Nomad Sentinel Logs*
+
 ## Runtime security
 
-Falco runs on every Nomad client, monitoring kernel syscalls on Nomad clients. Trivy handles image scanning during CI; see [`docs/security.md`](security.md). Five custom rules supplement Falco's default set:
+Falco runs on every Nomad client, monitoring kernel syscalls. Trivy handles image scanning during CI; see [`docs/security.md`](security.md).
 
-| Rule | Detects | Priority |
+Five custom rules supplement Falco's default rule set:
 
-|---|---|---|
+| Rule                            | Detects                                                                                          | Priority |
+| ------------------------------- | ------------------------------------------------------------------------------------------------ | -------- |
+| Unexpected privilege escalation | `setuid`/`setgid`/`capset`/`ptrace` inside a container                                           | CRITICAL |
+| Shell spawned in container      | An interactive shell process appearing after container start — a common post-exploitation signal | WARNING  |
+| Unexpected outbound connection  | A container process opening a connection to a port outside the platform's known service ports    | WARNING  |
+| Sensitive file read             | Reads of `/etc/shadow`, SSH keys, or paths containing `vault-token` from inside a container      | CRITICAL |
+| Suspected crypto mining         | A high-CPU process paired with an outbound connection to a known mining-pool port                | CRITICAL |
 
-| Unexpected privilege escalation | `setuid`/`setgid`/`capset`/`ptrace` inside a container | CRITICAL |
+Falco alerts are sent to the `monitoring/falco-webhook` service, which:
 
-| Shell spawned in container | An interactive shell process appearing post-start — a common post-exploitation signal | WARNING |
-
-| Unexpected outbound connection | A container process opening a connection on a port outside the platform's known service ports | WARNING |
-
-| Sensitive file read | Reads of `/etc/shadow`, SSH keys, or anything with `vault-token` in the path, from inside a container | CRITICAL |
-
-| Suspected crypto mining | High-CPU process paired with an outbound connection to a known mining-pool port | CRITICAL |
-
-Falco alerts are sent to the falco webhook service (`monitoring/falco-webhook`), which:
-
-1. Ships every alert to Loki, tagged `source=falco`, regardless of severity — full audit trail, nothing dropped.
-
-2. For anything `WARNING` or above, calls `nomad-sentinel` directly over internal HTTP — sends security alerts to the same `nomad-sentinel` triage service.
+1. Ships every alert to Loki, tagged `source=falco`, regardless of severity — providing a complete audit trail with nothing dropped.
+2. For anything `WARNING` or above, calls `nomad-sentinel` directly over internal HTTP, sending security alerts to the same triage service.
 
 ## Backup & restore
 
-Four stateful systems are backed up daily to the `platform-artifacts` GCS bucket, which uses CMEK and 90-day retention. Each component has its own restore script.
+Five stateful systems are backed up daily to the `platform-artifacts` GCS bucket, which uses CMEK and 90-day retention. Each component has its own restore script.
 
-| Component | Schedule | Mechanism | Destination |
+| Component            | Schedule        | Mechanism                                                       | Destination                                            |
+| --------------------- | --------------- | ---------------------------------------------------------------- | ------------------------------------------------------- |
+| Vault                 | Daily 02:00 UTC | Raft snapshot, mgmt-vm systemd timer                              | `gs://.../platform-artifacts/vault-snapshots/`           |
+| Consul                | Daily 02:30 UTC | `consul snapshot save`, periodic Nomad batch job (spot node)      | `gs://.../platform-artifacts/consul-snapshots/{env}/`    |
+| Nomad                 | Daily 02:00 UTC | `nomad operator snapshot save`, periodic Nomad batch job (spot node) | `gs://.../platform-artifacts/nomad-snapshots/{env}/`  |
+| Postgres              | Daily 03:00 UTC | `pg_dump` per database, periodic Nomad batch job (spot node)      | `gs://.../platform-artifacts/pg-backups/{env}/`          |
+| Octopus (SQL Server)  | Daily 03:00 UTC | T-SQL `BACKUP DATABASE`, mgmt-vm systemd timer                    | `gs://.../platform-artifacts/sql-backups/`               |
 
-|---|---|---|---|
-
-| Vault | Daily 02:00 UTC | Raft snapshot, mgmt-vm systemd timer | `gs://.../platform-artifacts/vault-snapshots/` |
-
-| Consul | Daily 02:30 UTC | `consul snapshot save`, periodic Nomad batch job (spot node) | `gs://.../platform-artifacts/consul-snapshots/{env}/` |
-
-| Postgres | Daily 03:00 UTC | `pg_dump` per database, periodic Nomad batch job (spot node) | `gs://.../platform-artifacts/pg-backups/{env}/` |
-
-| Octopus (SQL Server) | Daily 03:00 UTC | T-SQL `BACKUP DATABASE`, mgmt-vm systemd timer | `gs://.../platform-artifacts/sql-backups/` |
+Consul, Nomad, and Octopus authenticate their backup and restore jobs with dedicated tokens/credentials held in GCP Secret Manager rather than Vault, so each can be backed up or restored independently of Vault's own availability — including the case where Vault itself is what needs restoring. Vault and Postgres are the two exceptions: Vault's fresh-node restore path has no way around a one-time bootstrap credential, and Postgres restores specifically need the Vault-managed `vault-root` superuser, since a scoped application role lacks the privileges to drop and recreate schemas.
 
 Restore procedures differ by component:
 
-- **Vault** — Vault runs as a single node with GCP KMS auto-unseal. `restore-vault.sh` handles two cases: **same node / data corruption** (Vault's already up and unsealed — call the restore API directly with the live token) vs. **fresh node / full loss** (a brand-new Raft store has no keyring yet, so the script runs a throwaway `vault operator init` purely to get one authenticated call in, then discards it the instant the snapshot's own keyring takes over — verification then switches to the original root token stored in Secret Manager.
+* **Vault** — Vault runs as a single node with GCP KMS auto-unseal. `restore-vault.sh` handles two cases:
 
-- **Consul** — restores live, against a running agent, using a management-level ACL token pulled from Vault (not Secret Manager — Consul comes up after Vault in the dependency chain, so it can rely on Vault being available). dev and prod are two entirely separate single-server datacenters; restoring one never touches the other's catalog, ACLs, or intentions.
+  * **Same node / data corruption** — Vault is already running and unsealed. The script authenticates with a snapshot/restore-capable token (`vault-snapshot-token`, fetched from Secret Manager) and calls the restore API directly, unless a token has already been exported manually.
+  * **Fresh node / full loss** — A new Raft store has no keyring yet. The script runs a throwaway `vault operator init` purely to make one authenticated restore call, then discards those temporary credentials as soon as the snapshot's own keyring takes over. Verification then switches to the original root token, held in Secret Manager as `vault-root-token`.
 
-- **Postgres** — connects as the Vault-managed `vault-root` superuser, not a dynamic per-connection credential, since a scoped app role won't have privileges to drop/recreate schema during a restore. The two databases (`metrics`, `monitoring`) are restored independently — a bad restore of one is never allowed to touch the other.
+* **Consul** — `restore-consul.sh` exports `CONSUL_HTTP_ADDR` (through `traefik-internal`) and `CONSUL_HTTP_TOKEN` (`consul-snapshot-token-{env}`, from Secret Manager), pulls the latest snapshot, and runs `consul snapshot restore` directly against it — no SSH onto the server involved. Dev and prod are two entirely separate single-server datacenters; restoring one never touches the other's catalog, ACLs, or intentions.
 
-- **Octopus** — Octopus runs on SQL Server, so its restore procedure is different: stop the Octopus service (it holds open connections that block `RESTORE DATABASE`), run `sqlcmd`'s `RESTORE DATABASE ... WITH REPLACE` inside the SQL Server container, restart, then hit Octopus's own health API to confirm it can see its data again.
+* **Nomad** — Restores from a Raft snapshot using a management token (`nomad-snapshot-token-{env}`) read from Secret Manager, rather than simply replaying job specifications from Git — this preserves the Workload Identity signing keyring. Redeploying jobs from Git after a server loss would generate a new keyring, silently orphaning every `jwt-nomad-*` auth mount in Vault until each one is manually repointed at the new JWKS endpoint. Restoring the snapshot brings back the original keyring, allowing Vault authentication to continue working without repointing the mounts. Dev and prod are separate single-server clusters, same split as Consul.
 
-- **Nomad** — restoring from a Raft snapshot rather than just replaying job specs from git matters for one specific reason: it preserves the Workload Identity signing keyring. Redeploying jobs from git after a server loss would mint a *new* keyring, silently orphaning every `jwt-nomad-*` auth mount in Vault until each one is manually repointed at the new JWKS endpoint. Restoring from snapshot brings the same keyring back and Vault auth just keeps working.
+* **Postgres** — Connects as the Vault-managed `vault-root` superuser rather than using a dynamic per-connection credential, since a scoped application role does not have the privileges required to drop and recreate schemas during a restore. The two databases, `metrics` and `monitoring`, are restored independently, so a failed restore of one cannot affect the other.
 
-Restore scripts that access private endpoints such as the Nomad API or Postgres print the required IAP tunnel command.
+* **Octopus** — Octopus runs on SQL Server, so its restore procedure is different: stop the Octopus service to release its database connections, run `sqlcmd`'s `RESTORE DATABASE ... WITH REPLACE` inside the SQL Server container, restart Octopus, then query its health API to confirm that it can access its data again. The SQL Server `sa` password is read from Secret Manager (`octopus-mssql-admin-password`) rather than Vault.
 
+Vault, Consul, Nomad, and Postgres are only reachable from outside the VPC through `traefik-internal`'s per-instance ports (Vault `:8443`, Consul/Nomad admin UIs `:8444` dev / `:8445` prod, Postgres TCP passthrough `:15432` dev / `:15433` prod). Restore scripts that hit these endpoints check reachability first and print the exact IAP tunnel command if it isn't already open. Octopus is the one exception — its restore IAP-SSHes directly onto `mgmt-vm` and never traverses `traefik-internal`.
 
 ![Backup Operations Jobs](images/operations-namespace.png)
 *Backup Operations Jobs*
+
+![Snapshot GCS Bucket](images/snapshot-bucket.png)
+*Snapshot GCS Bucket*
 
 ## Infrastructure as code
 

@@ -8,14 +8,24 @@
 #
 # Consul's restore, unlike Vault's, does NOT require the node to be freshly
 # initialized first — `consul snapshot restore` works against a live,
-# running agent as long as you hold a management-level ACL token. That
-# token lives in Vault at kv/shared/consul/management-token (per
-# vault_consumers) rather than GCP Secret Manager, because Consul comes up
-# AFTER Vault in the dependency chain and can rely on Vault being available.
+# running agent as long as you hold a management-level ACL token.
+#
+# That token comes from GCP Secret Manager (consul-snapshot-token-${env}),
+# NOT Vault — deliberately. Consul must be restorable even when Vault is
+# the thing that's down (or is itself mid-restore), so this can't depend on
+# Vault being reachable. Same token the nightly consul-snapshot Nomad batch
+# job uses for `snapshot save`; it also carries `snapshot-force` (restore)
+# capability.
+#
+# Reachability: nomad-{env}-server has no route from outside the VPC.
+# Consul's API is only reachable through traefik-internal, at
+# consul-{env}.platform.lefrancis.org — a private Cloud DNS hostname that
+# needs an IAP tunnel into traefik-internal ITSELF before this script can
+# reach it at all (see preflight_traefik_route in lib/restore-common.sh for
+# the exact tunnel command it'll print if this isn't set up yet).
 #
 # Usage:
-#   GCP_PROJECT=my-project VAULT_ADDR=https://vault.platform.lefrancis.org:8200 \
-#     scripts/restore-consul.sh --env dev
+#   GCP_PROJECT=my-project scripts/restore-consul.sh --env dev
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -33,32 +43,38 @@ done
 require_env "$TARGET_ENV"
 
 DATACENTER="dc-${TARGET_ENV}"
-SERVER_HOST="nomad-${TARGET_ENV}-server"   # Consul server runs alongside Nomad server, §2.1
+CONSUL_HOSTNAME="consul-${TARGET_ENV}.platform.lefrancis.org"
+# dev-internal / prod-internal are two separate Traefik processes on
+# traefik-internal, each on their own port — not a shared 443.
+case "$TARGET_ENV" in
+  dev)  CONSUL_PORT="8444" ;;
+  prod) CONSUL_PORT="8445" ;;
+esac
 
 confirm_destructive "About to OVERWRITE the Consul catalog, KV store, ACLs, and intentions for datacenter '$DATACENTER'. Services will briefly re-register as health checks re-run after restore."
 
-VAULT_ADDR="${VAULT_ADDR:?VAULT_ADDR must be set — needed to fetch the Consul backup token}"
-VAULT_TOKEN="${VAULT_TOKEN:?VAULT_TOKEN must be set — a token with read access to kv/shared/consul}"
-export VAULT_ADDR VAULT_TOKEN
-
-log "fetching Consul backup token from Vault"
-CONSUL_HTTP_TOKEN=$(vault kv get -field=backup_token kv/shared/consul) \
-  || die "could not read kv/shared/consul/backup_token from Vault"
+# consul-snapshot-token-${env} (GCP Secret Manager), not Vault — see header.
+# A manually-exported CONSUL_HTTP_TOKEN still wins if already set (e.g. a
+# personal management token during a DR drill).
+if [[ -z "${CONSUL_HTTP_TOKEN:-}" ]]; then
+  log "CONSUL_HTTP_TOKEN not set — fetching consul-snapshot-token-${TARGET_ENV} from GCP Secret Manager"
+  CONSUL_HTTP_TOKEN=$(fetch_gcp_secret "consul-snapshot-token-${TARGET_ENV}")
+fi
 export CONSUL_HTTP_TOKEN
+export CONSUL_HTTP_ADDR="${CONSUL_HTTP_ADDR:-https://${CONSUL_HOSTNAME}:${CONSUL_PORT}}"
+
+log "checking route to ${CONSUL_HOSTNAME}:${CONSUL_PORT} via traefik-internal"
+preflight_traefik_route "$CONSUL_HOSTNAME" "$CONSUL_PORT"
 
 snapshot_file=$(fetch_latest_from_gcs "consul-snapshots/${TARGET_ENV}/" "$SCRATCH_DIR")
 log "using snapshot: $snapshot_file"
 
-log "copying snapshot to $SERVER_HOST via IAP"
-iap_scp_to "$snapshot_file" "$SERVER_HOST" "/tmp/consul-restore.snap"
-
 log "running: consul snapshot restore (datacenter=$DATACENTER)"
-iap_ssh "$SERVER_HOST" \
-  "CONSUL_HTTP_TOKEN='$CONSUL_HTTP_TOKEN' consul snapshot restore -datacenter=$DATACENTER /tmp/consul-restore.snap && rm -f /tmp/consul-restore.snap" \
-  || die "consul snapshot restore failed on $SERVER_HOST"
+consul snapshot restore -datacenter="$DATACENTER" "$snapshot_file" \
+  || die "consul snapshot restore failed — do not retry blindly, check 'consul operator raft list-peers' first to confirm the server didn't drop out of quorum mid-restore"
 
 log "restore submitted. Verifying cluster health..."
-iap_ssh "$SERVER_HOST" "CONSUL_HTTP_TOKEN='$CONSUL_HTTP_TOKEN' consul operator raft list-peers" \
+consul operator raft list-peers -datacenter="$DATACENTER" \
   || warn "could not confirm raft peers — check manually, this alone is not fatal on a single-server datacenter"
 
 log "manual follow-up checks (service catalog takes a few health-check"

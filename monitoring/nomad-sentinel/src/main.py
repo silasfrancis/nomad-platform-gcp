@@ -56,14 +56,26 @@ log = structlog.get_logger()
 
 def handle_anomaly(anomaly: dict, tracker: StateTracker) -> None:
     job_id = anomaly["job_id"]
+    anomaly_type = anomaly["anomaly_type"]
 
     if tracker.is_cooling_down(job_id):
         log.info("skipping_anomaly_cooldown", job=job_id)
         history.record(anomaly, analysis=None, outcome="skipped_cooldown")
         return
 
+    if tracker.is_alert_cooling_down(job_id, anomaly_type):
+        # Already analyzed and alerted on this exact (job, anomaly_type)
+        # recently, and it didn't clear the remediation bar last time
+        # either — skip the Gemini call entirely rather than re-running
+        # analysis on an unchanged condition every poll cycle. This is
+        # what actually bounds Gemini call volume for a persistently
+        # broken, non-remediable job; is_cooling_down above only bounds
+        # repeat *remediation* attempts, not repeat analysis.
+        log.debug("skipping_anomaly_alert_cooldown", job=job_id, anomaly_type=anomaly_type)
+        return
+
     analysis = gemini_client.analyze(anomaly)
-    tracker.record_anomaly_type(job_id, anomaly["anomaly_type"])
+    tracker.record_anomaly_type(job_id, anomaly_type)
 
     severity = analysis.get("severity", "medium")
     confidence = analysis.get("confidence", 0.0)
@@ -78,6 +90,7 @@ def handle_anomaly(anomaly: dict, tracker: StateTracker) -> None:
     if not should_remediate:
         alerter.send_alert(anomaly, analysis)
         history.record(anomaly, analysis, outcome="alerted_only")
+        tracker.record_alert(job_id, anomaly_type)
         log.info(
             "anomaly_logged_no_remediation",
             job=job_id,
@@ -154,6 +167,7 @@ def run() -> None:
     tracker = StateTracker(
         cooldown_seconds=config.COOLDOWN_SECONDS,
         max_attempts=config.MAX_REMEDIATION_ATTEMPTS,
+        alert_cooldown_seconds=config.ANOMALY_ALERT_COOLDOWN_SECONDS,
     )
 
     # Start HTTP server in a daemon thread.
