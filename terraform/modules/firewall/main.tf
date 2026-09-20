@@ -19,12 +19,12 @@ locals {
     }
 
     "iap-traefik-internal" = {
-      description         = "Allow IAP tunnel access to traefik-internal's 5 HTTPS entrypoints (mgmt 8443, dev-internal 8444, prod-internal 8445, Grafana/falco-webhook 8446-8447) for scripts/open-tunnel.sh"
+      description         = "Allow IAP tunnel access to traefik-internal's HTTPS entrypoints (mgmt 8443, dev-internal 8444, prod-internal 8445, internal-services 8446-8447) and Postgres TCP passthrough (dev 15432, prod 15433) for scripts/open-tunnel.sh"
       direction           = "INGRESS"
       priority            = 1000
       source_ranges       = ["35.235.240.0/20"]
       destination_ranges  = [local.cidr["subnet-mgmt"]]
-      allow               = [{ protocol = "tcp", ports = ["8443-8447"] }]
+      allow               = [{ protocol = "tcp", ports = ["8443-8447", "15432", "15433"] }]
       deny                = []
     }
 

@@ -31,6 +31,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 # shellcheck source=lib/restore-common.sh
 source lib/restore-common.sh
+require_cli consul "(e.g. brew install consul, or download v1.20.1 from releases.hashicorp.com/consul to match the platform's version)"
 
 TARGET_ENV=""
 while [[ $# -gt 0 ]]; do

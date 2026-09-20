@@ -71,6 +71,18 @@ ${MARKER}
 127.0.0.1 consul-dev.platform.lefrancis.org
 127.0.0.1 nomad-prod.platform.lefrancis.org
 127.0.0.1 consul-prod.platform.lefrancis.org
+127.0.0.1 nomad-sentinel-dev.platform.lefrancis.org
+127.0.0.1 nomad-sentinel-prod.platform.lefrancis.org
+127.0.0.1 postgres-dev.platform.lefrancis.org
+127.0.0.1 postgres-prod.platform.lefrancis.org
+127.0.0.1 loki-dev.platform.lefrancis.org
+127.0.0.1 loki-prod.platform.lefrancis.org
+127.0.0.1 prometheus-dev.platform.lefrancis.org
+127.0.0.1 prometheus-prod.platform.lefrancis.org
+127.0.0.1 falco-webhook-dev.platform.lefrancis.org
+127.0.0.1 falco-webhook-prod.platform.lefrancis.org
+127.0.0.1 metrics-api-dev.platform.lefrancis.org
+127.0.0.1 metrics-api-prod.platform.lefrancis.org
 EOF
 HOSTS_EOF
     echo "------------------------------------------------------------------"

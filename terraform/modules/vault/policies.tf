@@ -63,13 +63,19 @@ resource "vault_policy" "github_actions" {
   EOT
 }
 
-# Vault snapshots/backup policy
 resource "vault_policy" "snapshot" {
   name = "snapshot"
   policy = <<-EOT
     path "sys/storage/raft/snapshot" {
       capabilities = [
         "read",
+        "update",
+        "sudo",
+      ]
+    }
+
+    path "sys/storage/raft/snapshot-force" {
+      capabilities = [
         "update",
         "sudo",
       ]

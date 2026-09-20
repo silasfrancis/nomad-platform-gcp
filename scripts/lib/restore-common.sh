@@ -15,7 +15,7 @@ else
   C_RED=""; C_YEL=""; C_GRN=""; C_RST=""
 fi
 
-log()  { echo "${C_GRN}[restore]${C_RST} $*"; }
+log()  { echo "${C_GRN}[restore]${C_RST} $*" >&2; }
 warn() { echo "${C_YEL}[restore]${C_RST} $*" >&2; }
 die()  { echo "${C_RED}[restore] ERROR:${C_RST} $*" >&2; exit 1; }
 
@@ -50,6 +50,31 @@ confirm_destructive() {
   fi
 }
 
+# Same idea, for the two components that have no dev/prod split (Vault,
+# Octopus — both single shared instances on mgmt-vm serving both
+# environments at once). Typing an environment name back doesn't make
+# sense when there isn't one to pick between.
+confirm_yesno() {
+  local prompt="$1"
+  if [[ "${ASSUME_YES:-0}" == "1" ]]; then
+    warn "ASSUME_YES set — skipping interactive confirmation"
+    return 0
+  fi
+  echo ""
+  warn "$prompt"
+  read -r -p "Type 'yes' to proceed: " confirm_answer
+  [[ "$confirm_answer" == "yes" ]] || die "confirmation not received — aborting, nothing was touched"
+}
+
+# Fails fast with an actionable message if a required local CLI isn't
+# installed, instead of the confusing "command not found" a half-run
+# restore would otherwise die with midway through.
+require_cli() {
+  local bin="$1" hint="${2:-}"
+  command -v "$bin" >/dev/null 2>&1 \
+    || die "'$bin' is not installed locally — this script talks to the restored server directly, it needs the CLI on your PATH.${hint:+ $hint}"
+}
+
 # Downloads the latest object under a GCS prefix, or a specific one if
 # RESTORE_FILE is set (for restoring something other than "latest", e.g. a
 # point-in-time DR drill or rolling back a bad restore).
@@ -81,10 +106,14 @@ fetch_latest_from_gcs() {
   echo "${dest_dir}/$(basename "$latest")"
 }
 
-# IAP SSH wrapper — same access pattern Ansible uses (see ansible/inventory/
-# and §1.5). Avoids every script re-deriving zone/project flags.
+# IAP SSH wrapper — same access pattern Ansible uses. Avoids every script
+# re-deriving zone/project flags.
+#
+# GCP_ZONE defaults to where mgmt-vm and traefik-internal actually live
+# (europe-west1-b) — override it if you're pointing a script at something
+# in a different zone, e.g.: GCP_ZONE=europe-west1-c scripts/restore-x.sh ...
 GCP_PROJECT="${GCP_PROJECT:?set GCP_PROJECT before running any restore script}"
-GCP_ZONE="${GCP_ZONE:-us-central1-a}"
+GCP_ZONE="${GCP_ZONE:-europe-west1-b}"
 
 iap_ssh() {
   local instance="$1"; shift

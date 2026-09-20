@@ -7,13 +7,12 @@
 # same split as Consul).
 #
 # Why this exists even though nomad-jobs/ is git-tracked: git gets you back
-# the job SPECS, but not ACL tokens/policies, evaluation history, or —
-# critically — the Workload Identity signing keys that Vault's jwt-nomad-*
-# auth methods validate against. Redeploying every job from git after a
-# server loss would also silently mint a NEW keyring, which orphans every
-# JWT auth mount in Vault until they're manually repointed at the new JWKS
-# endpoint. Restoring from snapshot avoids that entirely — same keyring
-# comes back, Vault auth just keeps working.
+# the job SPECS, but not ACL tokens/policies, evaluation history, or the
+# Workload Identity signing keyring that Vault's jwt-nomad-* auth methods
+# validate against. Restoring from a Raft snapshot brings the whole server
+# state back as it was, keyring included, rather than starting from an
+# empty state and letting Nomad generate a fresh one — worth checking after
+# a restore (`nomad operator root keyring list`) rather than assuming.
 #
 # Reachability: nomad-{env}-server has no route from outside the VPC.
 # Nomad's API is only reachable through traefik-internal, at
@@ -29,6 +28,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 # shellcheck source=lib/restore-common.sh
 source lib/restore-common.sh
+require_cli nomad "(e.g. download v2.0.4 from releases.hashicorp.com/nomad to match the platform's version)"
 
 TARGET_ENV=""
 while [[ $# -gt 0 ]]; do
@@ -75,12 +75,12 @@ log "running: nomad operator snapshot restore (datacenter=$DATACENTER)"
 nomad operator snapshot restore "$snapshot_file" \
   || die "nomad operator snapshot restore failed — do not retry blindly, check 'nomad operator raft list-peers' first to confirm the server didn't drop out of quorum mid-restore"
 
-log "restore succeeded. Post-restore checks — the keyring point matters most:"
+log "restore succeeded. Post-restore checks:"
 cat <<EOF
   nomad server members                          # this server healthy and leading?
   nomad namespace list                          # all 6 present (boutique, datastore, monitoring, security, operations, plugins)?
   nomad acl policy list
-  nomad operator root keyring list              # same key IDs as before the incident? (confirms Vault JWT auth wasn't orphaned)
+  nomad operator root keyring list              # worth a look if Vault JWT auth (jwt-nomad-*) starts failing after this
   nomad job status -namespace=boutique frontend  # spot-check one running job
 EOF
 
