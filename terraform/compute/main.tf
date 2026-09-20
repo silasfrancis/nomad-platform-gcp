@@ -9,14 +9,14 @@ locals {
   network   = data.terraform_remote_state.network.outputs
 
   # Service account emails
-  management_vm_sa_email = local.bootstrap.service_accounts["management-vm-sa"].email
-  nomad_client_sa_email_prod  = local.bootstrap.service_accounts["nomad-client-sa-prod"].email
-  nomad_client_sa_email_dev  = local.bootstrap.service_accounts["nomad-client-sa-dev"].email
-  nomad_server_sa_email_prod  = local.bootstrap.service_accounts["nomad-server-sa-prod"].email
-  nomad_server_sa_email_dev  = local.bootstrap.service_accounts["nomad-server-sa-dev"].email
-  traefik_vm_sa_email_prod       = local.bootstrap.service_accounts["traefik-vm-sa-prod"].email
-  traefik_vm_sa_email_dev       = local.bootstrap.service_accounts["traefik-vm-sa-dev"].email
-  traefik_vm_sa_email_internal = local.bootstrap.service_accounts["traefik-vm-sa-internal"].email
+  management_vm_sa_email = null
+  nomad_client_sa_email_prod  = null
+  nomad_client_sa_email_dev  = null
+  nomad_server_sa_email_prod  = null
+  nomad_server_sa_email_dev  = null
+  traefik_vm_sa_email_prod       = null
+  traefik_vm_sa_email_dev       = null
+  traefik_vm_sa_email_internal = null
 
 
   zones = slice(data.google_compute_zones.available.names, 0, 3)

@@ -9,7 +9,7 @@
 
  
 locals {
-  bootstrap = data.terraform_remote_state.bootstrap.outputs
+  bootstrap = null
 
   labels = {
     "environment" = "shared"
