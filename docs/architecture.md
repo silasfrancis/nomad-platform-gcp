@@ -410,7 +410,7 @@ Current limitations:
 
 Planned changes:
 
-* **Postgres dedicated-node scheduling** - pin Postgres to a specific/reserved node via Nomad client config and/or a dedicated node pool/class. Effort is not yet scoped.
+* **Postgres dedicated-node scheduling** - pin Postgres to a specific/reserved node via Nomad client config and/or a dedicated node pool/class. This effort is not yet scoped because the current setup is sufficient at the current scale.
 
 * **Dynamic DB credential reloading** - update `metrics-api` and `nomad-sentinel` to watch the Vault-rendered credential file and reload their connection pool on change, removing the restart-on-rotation limitation above.
 
