@@ -18,12 +18,10 @@
 # no route from outside the VPC. Postgres is reachable from outside only via
 # traefik-internal's dedicated TCP passthrough entrypoint (currently
 # sslmode=disable / HostSNI(*) — see the pending TLS-passthrough CHANGELOG
-# item), at postgres-{env}.platform.lefrancis.org. That hostname needs an
-# IAP tunnel into traefik-internal ITSELF first (see preflight_traefik_route
-# in lib/restore-common.sh for the exact tunnel command it'll print if this
-# isn't set up yet). PG_PORT below is a placeholder for whatever port that
-# TCP entrypoint is actually configured on in configs/traefik/ — confirm
-# and override via PG_PORT before the first real (non-dry-run) use.
+# item), at postgres-{env}.platform.lefrancis.org:{15432 dev / 15433 prod}.
+# That hostname needs an IAP tunnel into traefik-internal ITSELF first (see
+# preflight_traefik_route in lib/restore-common.sh for the exact tunnel
+# command it'll print if this isn't set up yet).
 #
 # Usage:
 #   VAULT_ADDR=... VAULT_TOKEN=... scripts/restore-postgres.sh --env dev --database metrics
@@ -52,11 +50,15 @@ esac
 confirm_destructive "About to DROP and restore the '$DATABASE' database in the $TARGET_ENV PostgreSQL instance. The other database on the same instance ('$([[ "$DATABASE" == "metrics" ]] && echo monitoring || echo metrics)') is not touched, but metrics-api and/or nomad-sentinel using '$DATABASE' will see connection errors for the duration."
 
 VAULT_ADDR="${VAULT_ADDR:?VAULT_ADDR must be set}"
-VAULT_TOKEN="${VAULT_TOKEN:?VAULT_TOKEN must be set — needs read on the database engine root config}"
+VAULT_TOKEN="${VAULT_TOKEN:?VAULT_TOKEN must be set — needs read on the database shared kv path for vault admin creds}"
 export VAULT_ADDR VAULT_TOKEN
 
 PG_HOST="postgres-${TARGET_ENV}.platform.lefrancis.org"   # via traefik-internal's TCP passthrough entrypoint
-PG_PORT="${PG_PORT:-5432}"   # TODO: confirm against the actual entrypoint port in configs/traefik/ before first real use
+case "$TARGET_ENV" in
+  dev)  DEFAULT_PG_PORT="15432" ;;
+  prod) DEFAULT_PG_PORT="15433" ;;
+esac
+PG_PORT="${PG_PORT:-$DEFAULT_PG_PORT}"
 
 log "checking route to ${PG_HOST}:${PG_PORT} via traefik-internal"
 preflight_traefik_route "$PG_HOST" "$PG_PORT"

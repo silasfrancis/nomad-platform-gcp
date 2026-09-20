@@ -103,6 +103,20 @@ iap_scp_to() {
     --tunnel-through-iap
 }
 
+# Fetches a secret from GCP Secret Manager. Used for every credential that
+# must not depend on Vault being up — the whole point of storing these in
+# Secret Manager rather than Vault KV is so Consul/Nomad/Octopus can be
+# restored even when Vault itself is the thing that's down. Vault's own
+# restore is the one exception with genuinely no way around depending on
+# Vault (see restore-vault.sh's --fresh-node path), which is why it alone
+# still reads a bootstrap token (vault-root-token) via this same helper
+# rather than from Vault.
+fetch_gcp_secret() {
+  local secret_name="$1"
+  gcloud secrets versions access latest --secret="$secret_name" --project="$GCP_PROJECT" \
+    || die "could not fetch secret '$secret_name' from GCP Secret Manager"
+}
+
 # Vault, Nomad, and Postgres are only reachable from outside the VPC through
 # traefik-internal's *.platform.lefrancis.org routes — platform.lefrancis.org
 # is a private Cloud DNS zone and traefik-internal has no public IP. This

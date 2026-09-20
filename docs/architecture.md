@@ -295,7 +295,7 @@ One private Cloud DNS zone, `platform.<domain>`, resolvable only inside the VPC.
 ![Grafana Dashboards](images/grafana-dashboard.png)
 *Grafana Dashboards*
 
-- **`nomad-sentinel`**: an AI-assisted monitoring service that polls Nomad allocation state, filters out superseded/stopped allocations, and uses Gemini (`gemini-3.6-flash`, `thinking_budget=0`) to summarize allocation state in Slack and can propose remediations. Talks to Postgres via its own dynamic Vault credential, and to the Nomad API directly.
+- **`nomad-sentinel`**: an AI-assisted monitoring service that polls Nomad allocation state, filters out superseded/stopped allocations, and uses Gemini (`gemini-3.5-flash-lite`, `thinking_budget=0`) to summarize allocation state in Slack and can propose remediations. Talks to Postgres via its own dynamic Vault credential, and to the Nomad API directly.
 
 ![Nomad Sentinel Logs](images/nomad-sentinel-logs.png)
 *Nomad Sentinel Logs*
@@ -321,34 +321,40 @@ Falco alerts are sent to the `monitoring/falco-webhook` service, which:
 
 ## Backup & restore
 
-Four stateful systems are backed up daily to the `platform-artifacts` GCS bucket, which uses CMEK and 90-day retention. Each component has its own restore script.
+Five stateful systems are backed up daily to the `platform-artifacts` GCS bucket, which uses CMEK and 90-day retention. Each component has its own restore script.
 
-| Component            | Schedule        | Mechanism                                                    | Destination                                           |
-| -------------------- | --------------- | ------------------------------------------------------------ | ----------------------------------------------------- |
-| Vault                | Daily 02:00 UTC | Raft snapshot, mgmt-vm systemd timer                         | `gs://.../platform-artifacts/vault-snapshots/`        |
-| Consul               | Daily 02:30 UTC | `consul snapshot save`, periodic Nomad batch job (spot node) | `gs://.../platform-artifacts/consul-snapshots/{env}/` |
-| Postgres             | Daily 03:00 UTC | `pg_dump` per database, periodic Nomad batch job (spot node) | `gs://.../platform-artifacts/pg-backups/{env}/`       |
-| Octopus (SQL Server) | Daily 03:00 UTC | T-SQL `BACKUP DATABASE`, mgmt-vm systemd timer               | `gs://.../platform-artifacts/sql-backups/`            |
+| Component            | Schedule        | Mechanism                                                       | Destination                                            |
+| --------------------- | --------------- | ---------------------------------------------------------------- | ------------------------------------------------------- |
+| Vault                 | Daily 02:00 UTC | Raft snapshot, mgmt-vm systemd timer                              | `gs://.../platform-artifacts/vault-snapshots/`           |
+| Consul                | Daily 02:30 UTC | `consul snapshot save`, periodic Nomad batch job (spot node)      | `gs://.../platform-artifacts/consul-snapshots/{env}/`    |
+| Nomad                 | Daily 02:00 UTC | `nomad operator snapshot save`, periodic Nomad batch job (spot node) | `gs://.../platform-artifacts/nomad-snapshots/{env}/`  |
+| Postgres              | Daily 03:00 UTC | `pg_dump` per database, periodic Nomad batch job (spot node)      | `gs://.../platform-artifacts/pg-backups/{env}/`          |
+| Octopus (SQL Server)  | Daily 03:00 UTC | T-SQL `BACKUP DATABASE`, mgmt-vm systemd timer                    | `gs://.../platform-artifacts/sql-backups/`               |
+
+Consul, Nomad, and Octopus authenticate their backup and restore jobs with dedicated tokens/credentials held in GCP Secret Manager rather than Vault, so each can be backed up or restored independently of Vault's own availability — including the case where Vault itself is what needs restoring. Vault and Postgres are the two exceptions: Vault's fresh-node restore path has no way around a one-time bootstrap credential, and Postgres restores specifically need the Vault-managed `vault-root` superuser, since a scoped application role lacks the privileges to drop and recreate schemas.
 
 Restore procedures differ by component:
 
 * **Vault** — Vault runs as a single node with GCP KMS auto-unseal. `restore-vault.sh` handles two cases:
 
-  * **Same node / data corruption** — Vault is already running and unsealed, so the script calls the restore API directly using the live token.
-  * **Fresh node / full loss** — A new Raft store has no keyring yet. The script runs a throwaway `vault operator init` purely to make one authenticated restore call, then discards those temporary credentials as soon as the snapshot's own keyring takes over. Verification then switches to the original root token stored in Secret Manager.
+  * **Same node / data corruption** — Vault is already running and unsealed. The script authenticates with a snapshot/restore-capable token (`vault-snapshot-token`, fetched from Secret Manager) and calls the restore API directly, unless a token has already been exported manually.
+  * **Fresh node / full loss** — A new Raft store has no keyring yet. The script runs a throwaway `vault operator init` purely to make one authenticated restore call, then discards those temporary credentials as soon as the snapshot's own keyring takes over. Verification then switches to the original root token, held in Secret Manager as `vault-root-token`.
 
-* **Consul** — Restores live against a running agent using a management-level ACL token pulled from Vault, rather than Secret Manager. Consul comes up after Vault in the dependency chain, so Vault is available when the restore runs. Dev and prod are two entirely separate single-server datacenters; restoring one never touches the other's catalog, ACLs, or intentions.
+* **Consul** — `restore-consul.sh` exports `CONSUL_HTTP_ADDR` (through `traefik-internal`) and `CONSUL_HTTP_TOKEN` (`consul-snapshot-token-{env}`, from Secret Manager), pulls the latest snapshot, and runs `consul snapshot restore` directly against it — no SSH onto the server involved. Dev and prod are two entirely separate single-server datacenters; restoring one never touches the other's catalog, ACLs, or intentions.
+
+* **Nomad** — Restores from a Raft snapshot using a management token (`nomad-snapshot-token-{env}`) read from Secret Manager, rather than simply replaying job specifications from Git — this preserves the Workload Identity signing keyring. Redeploying jobs from Git after a server loss would generate a new keyring, silently orphaning every `jwt-nomad-*` auth mount in Vault until each one is manually repointed at the new JWKS endpoint. Restoring the snapshot brings back the original keyring, allowing Vault authentication to continue working without repointing the mounts. Dev and prod are separate single-server clusters, same split as Consul.
 
 * **Postgres** — Connects as the Vault-managed `vault-root` superuser rather than using a dynamic per-connection credential, since a scoped application role does not have the privileges required to drop and recreate schemas during a restore. The two databases, `metrics` and `monitoring`, are restored independently, so a failed restore of one cannot affect the other.
 
-* **Octopus** — Octopus runs on SQL Server, so its restore procedure is different: stop the Octopus service to release its database connections, run `sqlcmd`'s `RESTORE DATABASE ... WITH REPLACE` inside the SQL Server container, restart Octopus, then query its health API to confirm that it can access its data again.
+* **Octopus** — Octopus runs on SQL Server, so its restore procedure is different: stop the Octopus service to release its database connections, run `sqlcmd`'s `RESTORE DATABASE ... WITH REPLACE` inside the SQL Server container, restart Octopus, then query its health API to confirm that it can access its data again. The SQL Server `sa` password is read from Secret Manager (`octopus-mssql-admin-password`) rather than Vault.
 
-* **Nomad** — Restoring from a Raft snapshot rather than simply replaying job specifications from Git preserves the Workload Identity signing keyring. Redeploying jobs from Git after a server loss would generate a new keyring, silently orphaning every `jwt-nomad-*` auth mount in Vault until each one is manually repointed at the new JWKS endpoint. Restoring the snapshot brings back the original keyring, allowing Vault authentication to continue working without repointing the mounts.
-
-Restore scripts that access private endpoints such as the Nomad API or Postgres print the required IAP tunnel command.
+Vault, Consul, Nomad, and Postgres are only reachable from outside the VPC through `traefik-internal`'s per-instance ports (Vault `:8443`, Consul/Nomad admin UIs `:8444` dev / `:8445` prod, Postgres TCP passthrough `:15432` dev / `:15433` prod). Restore scripts that hit these endpoints check reachability first and print the exact IAP tunnel command if it isn't already open. Octopus is the one exception — its restore IAP-SSHes directly onto `mgmt-vm` and never traverses `traefik-internal`.
 
 ![Backup Operations Jobs](images/operations-namespace.png)
 *Backup Operations Jobs*
+
+![Snapshot GCS Bucket](images/snapshot-bucket.png)
+*Snapshot GCS Bucket*
 
 ## Infrastructure as code
 

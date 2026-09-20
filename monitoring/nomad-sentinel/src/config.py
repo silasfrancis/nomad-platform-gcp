@@ -87,8 +87,18 @@ MAX_REMEDIATION_ATTEMPTS: int = int(_optional("MAX_REMEDIATION_ATTEMPTS", "3"))
 # Cooldown period after a remediation attempt (seconds)
 COOLDOWN_SECONDS: int = int(_optional("COOLDOWN_SECONDS", "300"))
 
+# Separate from COOLDOWN_SECONDS above (which only governs repeat
+# *remediation* attempts). Without this, an anomaly that never clears the
+# remediation confidence/severity bar takes the alert-only path every
+# single poll cycle forever, with nothing to stop it — re-running the full
+# Gemini analysis every POLL_INTERVAL_SECONDS (30s default) for as long as
+# the underlying condition persists. This cooldown is keyed per
+# (job_id, anomaly_type) so a genuinely new anomaly on the same job is
+# never suppressed by an unrelated one still cooling down.
+ANOMALY_ALERT_COOLDOWN_SECONDS: int = int(_optional("ANOMALY_ALERT_COOLDOWN_SECONDS", "300"))
+
 # Gemini model to use
-GEMINI_MODEL: str = _optional("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_MODEL: str = _optional("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 # Environment label for alerts and logs (e.g. dev, prod)
 ENVIRONMENT: str = _optional("ENVIRONMENT", "unknown")

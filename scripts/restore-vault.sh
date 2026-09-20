@@ -66,16 +66,19 @@ if [[ "$TARGET_ENV" == "dev" || "$TARGET_ENV" == "prod" ]]; then
   warn "snapshot prefix to pull the backup file from."
 fi
 
-VAULT_ADDR="${VAULT_ADDR:-https://vault.platform.lefrancis.org}"
+VAULT_HOSTNAME="vault.platform.lefrancis.org"
+VAULT_PORT="8443"   # mgmt Traefik instance's https_port, per traefik_instance_catalog
+VAULT_ADDR="${VAULT_ADDR:-https://${VAULT_HOSTNAME}:${VAULT_PORT}}"
 export VAULT_ADDR
 
 # Reachability: vault.platform.lefrancis.org is a private Cloud DNS hostname,
-# only reachable through traefik-internal (no public IP on that VM). Needs
-# an IAP tunnel into traefik-internal ITSELF before this script can reach it
-# — preflight_traefik_route prints the exact tunnel command if it isn't set
-# up yet.
-log "checking route to vault.platform.lefrancis.org via traefik-internal"
-preflight_traefik_route "vault.platform.lefrancis.org" 443
+# only reachable through traefik-internal (no public IP on that VM), on its
+# mgmt instance's port (8443 — distinct from the dev/prod internal instances'
+# 8444/8445). Needs an IAP tunnel into traefik-internal ITSELF before this
+# script can reach it — preflight_traefik_route prints the exact tunnel
+# command if it isn't set up yet.
+log "checking route to ${VAULT_HOSTNAME}:${VAULT_PORT} via traefik-internal"
+preflight_traefik_route "$VAULT_HOSTNAME" "$VAULT_PORT"
 
 confirm_destructive "About to OVERWRITE the live Vault instance (mgmt-vm) with a Raft snapshot. This replaces ALL secrets engines, policies, auth methods, and the encryption keyring for both dev and prod."
 
@@ -93,7 +96,17 @@ if [[ "$FRESH_NODE" == "1" ]]; then
   export VAULT_TOKEN="$throwaway_root_token"
   log "throwaway root token acquired (will be invalidated automatically by the restore below)"
 else
-  [[ -n "${VAULT_TOKEN:-}" ]] || die "VAULT_TOKEN not set — export a sudo-capable token for the already-running Vault instance, or pass --fresh-node if this is a full node rebuild"
+  # vault-snapshot-token (GCP Secret Manager) is the same token the nightly
+  # vault-backup.service on mgmt-vm uses for `snapshot save` — it also has
+  # `snapshot-force` (restore) capability, so it covers this path too and
+  # keeps the restore from depending on the operator having a personal
+  # sudo-capable token handy. A manually-exported VAULT_TOKEN still wins if
+  # you've set one (e.g. for a DR drill against a scoped-down test token).
+  if [[ -z "${VAULT_TOKEN:-}" ]]; then
+    log "VAULT_TOKEN not set — fetching vault-snapshot-token from GCP Secret Manager"
+    VAULT_TOKEN=$(fetch_gcp_secret "vault-snapshot-token")
+    export VAULT_TOKEN
+  fi
 fi
 
 log "running: vault operator raft snapshot restore -force"
@@ -103,8 +116,7 @@ vault operator raft snapshot restore -force "$snapshot_file" \
 log "restore call succeeded — switching to the original root token for verification"
 unset VAULT_TOKEN
 if [[ "$FRESH_NODE" == "1" ]]; then
-  ORIGINAL_ROOT_TOKEN=$(gcloud secrets versions access latest \
-    --secret="vault-root-token" --project="$GCP_PROJECT") \
+  ORIGINAL_ROOT_TOKEN=$(fetch_gcp_secret "vault-root-token") \
     || die "could not retrieve vault-root-token from GCP Secret Manager — this is the one bootstrap credential that must come from Secret Manager rather than Vault itself, since Vault's own keyring was just replaced"
   export VAULT_TOKEN="$ORIGINAL_ROOT_TOKEN"
 else

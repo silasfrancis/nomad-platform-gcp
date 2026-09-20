@@ -1,7 +1,7 @@
 # Nomad Sentinel (AI Monitoring & Remediation Agent)
 
 A Python control-loop agent that polls a Nomad cluster for anomalous allocations,
-sends context to Gemini 3.6 Flash for root-cause analysis, alerts via Slack, and
+sends context to Gemini 3.5 Flash Lite for root-cause analysis, alerts via Slack, and
 performs bounded automated remediation. It also accepts Falco runtime security
 alerts over HTTP for triage and alerting alongside its own Nomad-native
 detection.
@@ -31,7 +31,12 @@ connection, sensitive file read, etc.) is forwarded here by a separate
 ## What it does
 
 1. Polls the Nomad API every `POLL_INTERVAL_SECONDS` (default 30s)
-2. For each anomalous allocation found, fetches recent logs and task events
+2. For each anomalous allocation found, checks whether this exact
+   (job, anomaly type) was already analyzed and alerted on within
+   `ANOMALY_ALERT_COOLDOWN_SECONDS` — if so, skips it entirely rather than
+   re-running analysis on an unchanged condition every poll cycle (see
+   [Alert cooldown](#alert-cooldown-bounding-gemini-call-volume) below).
+   Otherwise, fetches recent logs and task events
 3. Sends the full context to Gemini, which returns a structured analysis:
    `likely_cause`, `severity`, `suggested_action`, `confidence`, `summary`
 4. Always logs the analysis (structured JSON to stdout — picked up by
@@ -48,10 +53,40 @@ connection, sensitive file read, etc.) is forwarded here by a separate
    stops attempting/proposing and sends an escalation alert instead
 7. Applies a cooldown (`COOLDOWN_SECONDS`) after any remediation attempt
    (executed or proposed) to avoid rapid repeated action on the same job
+8. If the anomaly instead took the alert-only path (didn't clear the
+   remediation bar), starts the separate `ANOMALY_ALERT_COOLDOWN_SECONDS`
+   cooldown from step 2 — this is what actually bounds how often a
+   persistently broken, non-remediable job gets re-sent to Gemini
 
-This is the Nomad-native detection path (steps 1–7 above). Falco alerts
+This is the Nomad-native detection path (steps 1–8 above). Falco alerts
 arrive separately over HTTP and are triaged with the same Gemini-analysis-
 and-alert machinery, but with remediation deliberately excluded — see below.
+
+## Alert cooldown — bounding Gemini call volume
+
+`COOLDOWN_SECONDS` only governs repeat **remediation** attempts — it's set
+after `execute`/`propose`, never after a plain alert. Left on its own, an
+anomaly that never clears the severity/confidence bar for remediation (a
+`medium`-severity restart loop, for instance) gets re-analyzed by Gemini and
+re-alerted on *every single poll cycle* for as long as the underlying
+condition persists — every 30 seconds by default, indefinitely, for however
+many jobs are in that state at once.
+
+`ANOMALY_ALERT_COOLDOWN_SECONDS` (default `1800`, i.e. 30 minutes) closes
+that gap: after an alert-only outcome, the same `(job, anomaly type)` pair
+is skipped — no Gemini call, no re-alert — until this cooldown expires. It's
+tracked per `(job_id, anomaly_type)` pair rather than per job, so a
+genuinely different problem on the same job (say `oom_killed` appearing
+while `restart_loop` is still cooling down) is never masked by an unrelated
+cooldown.
+
+This is independent of `COOLDOWN_SECONDS`/`MAX_REMEDIATION_ATTEMPTS` — it
+doesn't affect remediation-attempt counting or escalation, only how often a
+non-remediated anomaly gets re-analyzed. Lower it (e.g. `300` for 5 minutes)
+for faster re-notification at the cost of more Gemini calls per persistently
+alerting job; raise it to spend less of your Gemini quota on jobs nobody's
+acted on yet.
+
 
 ## Remediation mode — autonomous vs human-in-the-loop
 
@@ -212,8 +247,9 @@ are never present in the Docker image or job spec.
 | `LOG_TAIL_LINES` | No | `200` | Log lines fetched per anomaly |
 | `REMEDIATION_CONFIDENCE_THRESHOLD` | No | `0.8` | Minimum Gemini confidence to remediate/propose |
 | `MAX_REMEDIATION_ATTEMPTS` | No | `3` | Max attempts (executed or proposed) per job before escalating |
-| `COOLDOWN_SECONDS` | No | `300` | Cooldown after a remediation attempt |
-| `GEMINI_MODEL` | No | `gemini-3.6-flash` | Gemini model name |
+| `COOLDOWN_SECONDS` | No | `300` | Cooldown after a remediation attempt (executed or proposed) — does not apply to alert-only outcomes, see `ANOMALY_ALERT_COOLDOWN_SECONDS` |
+| `ANOMALY_ALERT_COOLDOWN_SECONDS` | No | `300` | Cooldown per `(job, anomaly type)` after an **alert-only** outcome (no remediation attempted) — bounds how often a persistently broken, non-remediable job re-triggers a Gemini call. See [Alert cooldown](#alert-cooldown-bounding-gemini-call-volume) above. |
+| `GEMINI_MODEL` | No | `gemini-3.5-flash-lite` | Gemini model name |
 | `WATCH_NAMESPACES` | No | (all) | Comma-separated Nomad namespaces to watch |
 | `HISTORY_DATABASE_URL` | No | (disabled) | PostgreSQL connection string for anomaly history — see above. Unset disables persistence entirely. |
 | `HTTP_PORT` | No | `8090` | Port for the built-in Flask server (`/health`, `/summary`, `/anomaly`) |

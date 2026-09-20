@@ -904,7 +904,56 @@ module "secrets" {
         }
       }
     }
+
+  # Backup and restore
+    "nomad-snapshot-token-dev" = {
+      labels = { purpose = "nomad", tier = "operator", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+        "roles/secretmanager.secretAccessor" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+      }
+    }
     
+    "nomad-snapshot-token-prod" = {
+      labels = { purpose = "nomad", tier = "operator", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+        "roles/secretmanager.secretAccessor" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+      }
+    }
+
+    "consul-snapshot-token-dev" = {
+      labels = { purpose = "nomad", tier = "operator", environment = "dev" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+        "roles/secretmanager.secretAccessor" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+      }
+    }
+
+    "consul-snapshot-token-prod" = {
+      labels = { purpose = "nomad", tier = "operator", environment = "prod" }
+      iam = {
+        "roles/secretmanager.secretVersionAdder" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+        "roles/secretmanager.secretAccessor" = {
+          members = ["user:${var.platform_admin_email}"]
+        }
+      }
+    }
+
   }
 
   depends_on = [ google_project_service.apis ]

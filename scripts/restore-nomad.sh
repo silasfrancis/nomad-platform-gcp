@@ -42,15 +42,31 @@ require_env "$TARGET_ENV"
 
 DATACENTER="dc-${TARGET_ENV}"
 NOMAD_HOSTNAME="nomad-${TARGET_ENV}.platform.lefrancis.org"
+# dev-internal / prod-internal are two separate Traefik processes on
+# traefik-internal, each on their own port — not a shared 443.
+case "$TARGET_ENV" in
+  dev)  NOMAD_PORT="8444" ;;
+  prod) NOMAD_PORT="8445" ;;
+esac
 
 confirm_destructive "About to OVERWRITE Nomad server state for '$DATACENTER' — jobs, allocations, evaluations, ACL tokens/policies, and the Workload Identity signing keyring. This is a low-level Raft operation; a failure mid-restore is not designed to self-heal."
 
-NOMAD_TOKEN="${NOMAD_TOKEN:?NOMAD_TOKEN must be set — needs the operator:write policy (or operator:snapshot-save/restore capability) for datacenter $DATACENTER}"
+# nomad-snapshot-token-${env} (GCP Secret Manager), not Vault — same
+# reasoning as Consul: a Nomad restore can't depend on Vault being up,
+# especially since Vault's own JWT auth against Nomad is one of the things
+# this restore is trying to bring back. Same token the nightly
+# nomad-snapshot batch job uses for `operator snapshot save`; also carries
+# snapshot-restore capability. A manually-exported NOMAD_TOKEN still wins if
+# already set (e.g. a personal management token during a DR drill).
+if [[ -z "${NOMAD_TOKEN:-}" ]]; then
+  log "NOMAD_TOKEN not set — fetching nomad-snapshot-token-${TARGET_ENV} from GCP Secret Manager"
+  NOMAD_TOKEN=$(fetch_gcp_secret "nomad-snapshot-token-${TARGET_ENV}")
+fi
 export NOMAD_TOKEN
-export NOMAD_ADDR="${NOMAD_ADDR:-https://${NOMAD_HOSTNAME}}"
+export NOMAD_ADDR="${NOMAD_ADDR:-https://${NOMAD_HOSTNAME}:${NOMAD_PORT}}"
 
-log "checking route to $NOMAD_HOSTNAME via traefik-internal"
-preflight_traefik_route "$NOMAD_HOSTNAME" 443
+log "checking route to ${NOMAD_HOSTNAME}:${NOMAD_PORT} via traefik-internal"
+preflight_traefik_route "$NOMAD_HOSTNAME" "$NOMAD_PORT"
 
 snapshot_file=$(fetch_latest_from_gcs "nomad-snapshots/${TARGET_ENV}/" "$SCRATCH_DIR")
 log "using snapshot: $snapshot_file"
