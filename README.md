@@ -13,13 +13,13 @@ Google's Online Boutique runs as the reference workload, alongside two custom mo
 ## Platform components
 
 |---|---|
-| **Orchestrator** | Nomad — dev and prod clusters |
+| **Orchestrator** | Nomad - dev and prod clusters |
 | **Service mesh & discovery** | Consul Connect with service intentions, Consul Catalog |
-| **Secrets** | Vault — Workload Identity/JWT auth, dynamic Postgres credentials, GCP secrets backend |
-| **Autoscaling** | Nomad Autoscaler — on-demand and spot node pools, driven by Prometheus metrics |
+| **Secrets** | Vault - Workload Identity/JWT auth, dynamic Postgres credentials, GCP secrets backend |
+| **Autoscaling** | Nomad Autoscaler - on-demand and spot node pools, driven by Prometheus metrics |
 | **CI** | GitHub Actions, self-hosted runner |
 | **CD** | Octopus Deploy (self-hosted) |
-| **Ingress** | Traefik — 3 VMs, 5 routed instances (public dev, public prod, internal mgmt/dev/prod) |
+| **Ingress** | Traefik - 3 VMs, 5 routed instances (public dev, public prod, internal mgmt/dev/prod) |
 | **PKI** | Self-signed, 3 CAs, per-environment leaf certs, mTLS between Nomad/Consul agents |
 | **IaC** | Terraform, Ansible, Packer (server and client images) |
 | **Observability** | Prometheus, Loki, Grafana Alloy, Grafana, `nomad-sentinel` (AI-assisted monitoring) |
@@ -37,9 +37,9 @@ See [`docs/architecture.md`](docs/architecture.md).
 ```
 .
 ├── .github/          # CI: composite actions, config-driven build/deploy workflows
-├── ansible/           # Config management — 10 roles, Taskfile-orchestrated
+├── ansible/           # Config management - 10 roles, Taskfile-orchestrated
 ├── docs/              # Documentation
-├── local/             # Docker Compose and scripts — local dev/test only
+├── local/             # Docker Compose and scripts - local dev/test only
 ├── monitoring/        # Grafana, Loki, Alloy, Falco webhook, metrics-api, nomad-sentinel
 ├── nomad-jobs/        # All Nomad job specs, one directory per namespace
 ├── octopus/           # Octopus worker image + deployment scripts
@@ -53,42 +53,42 @@ See [`docs/architecture.md`](docs/architecture.md).
 
 The platform is deployed in dependency order:
 
-1. **`terraform/bootstrap`** — project-wide primitives: APIs, KMS, GCS state/artifact buckets, Artifact Registry, service accounts (including `packer-builder-sa`). Applied once.
-2. **`terraform/network`** — the VPC, dev/prod/mgmt subnets, firewall rules, Cloud DNS. Packer's build VM lives on `subnet-mgmt`, so this has to exist before step 3.
-3. **`packer build`** — `terraform/compute` sets `boot_disk_image` to the `nomad-client`/`nomad-server` image families directly; those families don't exist until Packer creates them, and `compute` will fail outright without this step first:
+1. **`terraform/bootstrap`** - project-wide primitives: APIs, KMS, GCS state/artifact buckets, Artifact Registry, service accounts (including `packer-builder-sa`). Applied once.
+2. **`terraform/network`** - the VPC, dev/prod/mgmt subnets, firewall rules, Cloud DNS. Packer's build VM lives on `subnet-mgmt`, so this has to exist before step 3.
+3. **`packer build`** - `terraform/compute` sets `boot_disk_image` to the `nomad-client`/`nomad-server` image families directly; those families don't exist until Packer creates them, and `compute` will fail outright without this step first:
 ```bash
    cd packer && packer init .
    packer build -var-file="nomad-server.pkrvars.hcl" .
    packer build -var-file="nomad-client.pkrvars.hcl" .
 ```
-   One shared template and two variable files, each pointing to an Ansible playbook (`nomad-servers.yaml` / `nomad-clients.yaml`) — see [`packer/README.md`](packer/README.md). Per-environment values (certificates, gossip keys, and datacenter) are not baked into the images; they're fetched at boot, which is why this step has no dependency on PKI existing yet.
-4. **`scripts/generate-and-push-pki.sh`** — generates the three CAs and every leaf cert/gossip key, pushes them to Secret Manager. Must run before step 5's instances actually boot — every startup script fetches its TLS material from Secret Manager with nothing to fall back to.
-5. **`terraform/compute`** — creates the real VMs/MIGs from the images built in step 3. Instances boot, run their startup scripts, and fetch the PKI material from step 4.
+   One shared template and two variable files, each pointing to an Ansible playbook (`nomad-servers.yaml` / `nomad-clients.yaml`) - see [`packer/README.md`](packer/README.md). Per-environment values (certificates, gossip keys, and datacenter) are not baked into the images; they're fetched at boot, which is why this step has no dependency on PKI existing yet.
+4. **`scripts/generate-and-push-pki.sh`** - generates the three CAs and every leaf cert/gossip key, pushes them to Secret Manager. Must run before step 5's instances actually boot - every startup script fetches its TLS material from Secret Manager with nothing to fall back to.
+5. **`terraform/compute`** - creates the real VMs/MIGs from the images built in step 3. Instances boot, run their startup scripts, and fetch the PKI material from step 4.
 6. **Ansible, one step at a time**:
 ```bash
    cd ansible
    task install                       # collections + control-node deps
-   task mgmt                          # Vault, Octopus, GitHub runner, backup timers — mgmt-vm
+   task mgmt                          # Vault, Octopus, GitHub runner, backup timers - mgmt-vm
    task vault-init                    # one-time Vault operator init (after mgmt succeeds)
-   task consul-acl-bootstrap ENV=dev  # repeat with ENV=prod — must precede step 7
-   task nomad-acl-bootstrap ENV=dev   # repeat with ENV=prod — must precede step 7
+   task consul-acl-bootstrap ENV=dev  # repeat with ENV=prod - must precede step 7
+   task nomad-acl-bootstrap ENV=dev   # repeat with ENV=prod - must precede step 7
    task traefik-internal
    task traefik-public ENV=dev        # repeat with ENV=prod
    task grafana
 ```
    `task bootstrap-all` runs the same sequence unattended. See [`ansible/Taskfile.yaml`](ansible/Taskfile.yaml) for the task definitions.
-7. **`terraform/platform-config`** (`mgmt` → `dev` → `prod`) — Vault engines/policies, Consul/Nomad ACL tokens, Octopus projects and environments. Needs the operator tokens step 6 produced.
-8. **`nomad-jobs/plugins/deploy-plugins.sh`** — CSI plugin and Autoscaler, deployed directly (outside Octopus, since these are cluster infrastructure with no real release lifecycle).
+7. **`terraform/platform-config`** (`mgmt` → `dev` → `prod`) - Vault engines/policies, Consul/Nomad ACL tokens, Octopus projects and environments. Needs the operator tokens step 6 produced.
+8. **`nomad-jobs/plugins/deploy-plugins.sh`** - CSI plugin and Autoscaler, deployed directly (outside Octopus, since these are cluster infrastructure with no real release lifecycle).
 9. Pushes to `main` trigger GitHub Actions. Octopus deploys to dev automatically. The build is promoted to prod after the manual approval gate.
 
 ## Bringing your own workload
 
-The platform doesn't care what's running on it — Online Boutique just proves it works. To add your own service:
+The platform doesn't care what's running on it - Online Boutique just proves it works. To add your own service:
 
 1. Drop a job spec in `nomad-jobs/<namespace>/` (pick the namespace that fits, or add one).
 2. If the job requires a new namespace, add the namespace to `local.intentions` in `terraform/modules/nomad/locals.tf` before apply.
-3. Add it to `local.intentions` in `terraform/modules/consul/locals.tf` if it needs to talk to another mesh service — deny-by-default means nothing connects until it's listed.
-4. Give it a Vault policy by adding an entry to `platform-config`'s `vault_consumers` map — the JWT role and KV/database access get derived from that automatically.
+3. Add it to `local.intentions` in `terraform/modules/consul/locals.tf` if it needs to talk to another mesh service - deny-by-default means nothing connects until it's listed.
+4. Give it a Vault policy by adding an entry to `platform-config`'s `vault_consumers` map - the JWT role and KV/database access get derived from that automatically.
 5. Add it to the matching `.github/configs/*.json` so CI picks it up, and give it an Octopus project (or fold it into an existing one) for deployment.
 
 
@@ -104,4 +104,4 @@ The platform doesn't care what's running on it — Online Boutique just proves i
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT - see [`LICENSE`](LICENSE).

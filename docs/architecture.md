@@ -21,7 +21,7 @@ One VPC contains five subnets: `subnet-mgmt`, plus private and public subnets fo
              ┌───────────────┐                       ┌───────────────┐
              │  dev-public   │                       │  prod-public  │
              │   Traefik     │                       │    Traefik    │
-             │ public — LE   │                       │ public — LE   │
+             │ public - LE   │                       │ public - LE   │
              └───────┬───────┘                       └───────┬───────┘
                      │                                       │
               dynamic ports                            dynamic ports
@@ -55,17 +55,17 @@ One VPC contains five subnets: `subnet-mgmt`, plus private and public subnets fo
 
 | Subnet | CIDR | Purpose |
 |---|---|---|
-| `subnet-mgmt` | `10.2.1.0/24` | Vault, Octopus, Grafana, GitHub runner, internal Traefik — no public IPs |
-| `subnet-dev-private` | `10.0.1.0/24` | Dev Nomad/Consul servers & clients — no public IPs |
-| `subnet-dev-public` | `10.0.2.0/24` | Dev public Traefik VM — external IP |
-| `subnet-prod-private` | `10.1.1.0/24` | Prod Nomad/Consul servers & clients — no public IPs |
-| `subnet-prod-public` | `10.1.2.0/24` | Prod public Traefik VM — external IP |
+| `subnet-mgmt` | `10.2.1.0/24` | Vault, Octopus, Grafana, GitHub runner, internal Traefik - no public IPs |
+| `subnet-dev-private` | `10.0.1.0/24` | Dev Nomad/Consul servers & clients - no public IPs |
+| `subnet-dev-public` | `10.0.2.0/24` | Dev public Traefik VM - external IP |
+| `subnet-prod-private` | `10.1.1.0/24` | Prod Nomad/Consul servers & clients - no public IPs |
+| `subnet-prod-public` | `10.1.2.0/24` | Prod public Traefik VM - external IP |
 
 Firewall rules are grouped by purpose:
 
 | Purpose | Rules | What it allows |
 |---|---|---|
-| Admin access | `iap-ssh`, `iap-traefik-internal` | IAP range (`35.235.240.0/20`) only — SSH to every subnet, plus tunnels to `traefik-internal`'s HTTPS entrypoints |
+| Admin access | `iap-ssh`, `iap-traefik-internal` | IAP range (`35.235.240.0/20`) only - SSH to every subnet, plus tunnels to `traefik-internal`'s HTTPS entrypoints |
 | GCP health checks | `health-check-nomad-clients` | Google's probe ranges → Nomad client API (4646), for MIG health |
 | Environment isolation | `deny-dev-to-prod`, `deny-prod-to-dev` | Explicit deny, both directions, between the two private subnets |
 | Cluster protocols | `nomad-internal`, `consul-internal`, `consul-connect-sidecars` | Nomad RPC/Serf, Consul RPC/gossip/API, and Envoy sidecar traffic within the private environments |
@@ -79,11 +79,11 @@ Firewall rules are grouped by purpose:
 
 GCE instances are split by role:
 
-- **Nomad servers** — static VMs running the Nomad server and Consul server agent.
-- **Nomad clients** — MIGs split into on-demand and spot pools, running the Nomad client and Consul client agent.
-- **Management VM** (`mgmt-vm`) — one static `e2-standard-2` instance in `subnet-mgmt`, running Vault, Octopus Server, the GitHub Actions self-hosted runner, and Grafana.
-- **`traefik-internal`** — a separate static VM in `subnet-mgmt` running the platform's internal ingress. See [Ingress](#ingress).
-- **Public Traefik** — one VM per environment (`traefik-dev`: `e2-micro`, `traefik-prod`: `e2-small`) in the environment's public subnet, with an external IP.
+- **Nomad servers** - static VMs running the Nomad server and Consul server agent.
+- **Nomad clients** - MIGs split into on-demand and spot pools, running the Nomad client and Consul client agent.
+- **Management VM** (`mgmt-vm`) - one static `e2-standard-2` instance in `subnet-mgmt`, running Vault, Octopus Server, the GitHub Actions self-hosted runner, and Grafana.
+- **`traefik-internal`** - a separate static VM in `subnet-mgmt` running the platform's internal ingress. See [Ingress](#ingress).
+- **Public Traefik** - one VM per environment (`traefik-dev`: `e2-micro`, `traefik-prod`: `e2-small`) in the environment's public subnet, with an external IP.
 
 ### Nomad & Consul nodes
 
@@ -93,7 +93,7 @@ Every Nomad server and client node also runs a Consul agent. Nomad servers are p
 
 | | Dev | Prod |
 |---|---|---|
-| Count | 1 (configurable 1–3) | 3 — fixed for Raft quorum |
+| Count | 1 (configurable 1–3) | 3 - fixed for Raft quorum |
 | Machine type | `e2-small` | `e2-small` |
 | Zone | One instance per zone, cycled across the region's zones | One instance per zone, cycled across the region's zones |
 | Runs | Nomad server + Consul server agent | Nomad server + Consul server agent |
@@ -174,11 +174,11 @@ Nomad Autoscaler is used for both node-count and task-count scaling.
 
 Nomad Autoscaler manages the client MIGs rather than the native GCE autoscaler for two reasons:
 
-1. **It scales on Nomad's allocated resources** The policy queries Prometheus for `nomad_client_allocated_*` vs `nomad_client_unallocated_*` — the fraction of CPU/memory allocated by Nomad — rather than host-level utilization, which can be misleading if workloads are memory-bound while CPU sits idle, or vice versa.
+1. **It scales on Nomad's allocated resources** The policy queries Prometheus for `nomad_client_allocated_*` vs `nomad_client_unallocated_*` - the fraction of CPU/memory allocated by Nomad - rather than host-level utilization, which can be misleading if workloads are memory-bound while CPU sits idle, or vice versa.
 
-Each environment has two policies: `cluster_policy_ondemand` and `cluster_policy_spot` — each with its own min/max (dev: 1–5 per pool; prod: 1–10), each targeting 70% CPU/memory. Both checks in each policy share a `group` label, so either metric alone can trigger scale-in.
+Each environment has two policies: `cluster_policy_ondemand` and `cluster_policy_spot` - each with its own min/max (dev: 1–5 per pool; prod: 1–10), each targeting 70% CPU/memory. Both checks in each policy share a `group` label, so either metric alone can trigger scale-in.
 
-2. **GCE's native autoscaler has no idea what Nomad has scheduled.** It scales based on GCP metrics like CPU utilization and will happily terminate an instance that's hosting live allocations, with no coordination. Nomad Autoscaler's `gce-mig` target sets `node_drain_deadline = "10m"` and `node_purge = true` — before an instance leaves the MIG, Nomad drains it first, rescheduling its allocations elsewhere. Each client already have shutdown scripts or their own however built in functions these are good to options to have as well.
+2. **GCE's native autoscaler has no idea what Nomad has scheduled.** It scales based on GCP metrics like CPU utilization and will happily terminate an instance that's hosting live allocations, with no coordination. Nomad Autoscaler's `gce-mig` target sets `node_drain_deadline = "10m"` and `node_purge = true` - before an instance leaves the MIG, Nomad drains it first, rescheduling its allocations elsewhere. Each client already have shutdown scripts or their own however built in functions these are good to options to have as well.
 
 ### Workload scaling
 
@@ -194,15 +194,15 @@ the database secrets engine (`database/`) for dynamic Postgres roles.
 
 the GCP backend for nomad autoscaler (static role)
 
-- **One JWT auth backend per environment** (`jwt-nomad-dev`, `jwt-nomad-prod`), each pointed at that environment's own Nomad JWKS endpoint — a dev workload identity can't authenticate against prod, and vice versa, by construction.
+- **One JWT auth backend per environment** (`jwt-nomad-dev`, `jwt-nomad-prod`), each pointed at that environment's own Nomad JWKS endpoint - a dev workload identity can't authenticate against prod, and vice versa, by construction.
 
-- **One Vault policy per (consumer, environment) pair** — `postgres-dev`, `nomad-sentinel-prod`, etc. — rather than one broad policy per service.
+- **One Vault policy per (consumer, environment) pair** - `postgres-dev`, `nomad-sentinel-prod`, etc. - rather than one broad policy per service.
 
 - **Dynamic-only Postgres credentials** The `metrics-api` and `nomad-sentinel` demonstrate Vault's dynamic database credential capabilities and are referenced via Nomad's Vault template configuration on their respective jobs(`database/creds/metrics-api-{env}`, `database/creds/monitoring-{env}`).
 
 - **GitHub OIDC into Vault** A `jwt-github-actions` backend with `bound_claims` pinned to the specific repo (and currently `refs/heads/main`), granting read on `kv/data/cicd/*`. The self-hosted runner living on the same box as Vault means CI never needs a long-lived Vault token to exist at all.
 
-Full PKI/mTLS design (the CA chain, leaf rotation, gossip keys) and the Consul/Nomad ACL token model live in [`docs/security.md`](security.md) — they are documented in [`docs/security.md`](security.md).
+Full PKI/mTLS design (the CA chain, leaf rotation, gossip keys) and the Consul/Nomad ACL token model live in [`docs/security.md`](security.md) - they are documented in [`docs/security.md`](security.md).
 
 
 ![Vault JWT Backends](images/vault-auth-backends.png)
@@ -256,13 +256,13 @@ Ingress is split into public and internal paths.
 
 ```
 
-- **`mgmt`** — static file-provider routes only, no Consul Catalog (`mgmt` never joins Consul): `vault.platform.<domain>` → Vault (8200), `octopus.platform.<domain>` → Octopus (8080), `grafana.platform.<domain>` → Grafana (3000).
+- **`mgmt`** - static file-provider routes only, no Consul Catalog (`mgmt` never joins Consul): `vault.platform.<domain>` → Vault (8200), `octopus.platform.<domain>` → Octopus (8080), `grafana.platform.<domain>` → Grafana (3000).
 
-- **`dev-internal`** / **`prod-internal`** — two providers side by side, per environment:
+- **`dev-internal`** / **`prod-internal`** - two providers side by side, per environment:
 
   1. **Static routes** for that environment's own admin surfaces: `nomad-dev.platform.<domain>`/`nomad-prod...` → that environment's Nomad servers (4646), `consul-dev...`/`consul-prod...` → Consul's HTTPS API (8501).
 
-  2. **A Consul Catalog provider**, scoped to that environment's own catalog token, for anything registered in the mesh that's internal-only — `nomad-sentinel`, `metrics-api`, `falco-webhook`, `prometheus`, `loki`. These are tagged onto a **second, distinct HTTPS entrypoint** (named `internal`, port 8446/8447) rather than the instance's normal `websecure` entrypoint — to keep internal-only services separate from the public entrypoint.
+  2. **A Consul Catalog provider**, scoped to that environment's own catalog token, for anything registered in the mesh that's internal-only - `nomad-sentinel`, `metrics-api`, `falco-webhook`, `prometheus`, `loki`. These are tagged onto a **second, distinct HTTPS entrypoint** (named `internal`, port 8446/8447) rather than the instance's normal `websecure` entrypoint - to keep internal-only services separate from the public entrypoint.
 
   3. Each also owns a **TCP passthrough entrypoint** (`15432`/`15433`) straight to Postgres. This is used mainly by Vault for managing dynamic db credentials.
 
@@ -272,7 +272,7 @@ Internal instances use **Cloudflare DNS-01** for TLS certificate issuance. Traef
 
 ### DNS
 
-One private Cloud DNS zone, `platform.<domain>`, resolvable only inside the VPC. Every internal hostname — Vault, Octopus, Grafana, both environments' Nomad/Consul, both Postgres aliases, `nomad-sentinel`, `metrics-api`, `falco-webhook`, `prometheus`, `loki` — resolves to the exact same address: `traefik-internal`'s internal IP. Traefik selects the route from the request `Host()` header. Public hostnames (`boutique.<domain>`, `dev.boutique.<domain>`) live in Cloudflare instead, entirely separate from this zone.
+One private Cloud DNS zone, `platform.<domain>`, resolvable only inside the VPC. Every internal hostname - Vault, Octopus, Grafana, both environments' Nomad/Consul, both Postgres aliases, `nomad-sentinel`, `metrics-api`, `falco-webhook`, `prometheus`, `loki` - resolves to the exact same address: `traefik-internal`'s internal IP. Traefik selects the route from the request `Host()` header. Public hostnames (`boutique.<domain>`, `dev.boutique.<domain>`) live in Cloudflare instead, entirely separate from this zone.
 
 ### Dev/prod access
 
@@ -309,14 +309,14 @@ Five custom rules supplement Falco's default rule set:
 | Rule                            | Detects                                                                                          | Priority |
 | ------------------------------- | ------------------------------------------------------------------------------------------------ | -------- |
 | Unexpected privilege escalation | `setuid`/`setgid`/`capset`/`ptrace` inside a container                                           | CRITICAL |
-| Shell spawned in container      | An interactive shell process appearing after container start — a common post-exploitation signal | WARNING  |
+| Shell spawned in container      | An interactive shell process appearing after container start - a common post-exploitation signal | WARNING  |
 | Unexpected outbound connection  | A container process opening a connection to a port outside the platform's known service ports    | WARNING  |
 | Sensitive file read             | Reads of `/etc/shadow`, SSH keys, or paths containing `vault-token` from inside a container      | CRITICAL |
 | Suspected crypto mining         | A high-CPU process paired with an outbound connection to a known mining-pool port                | CRITICAL |
 
 Falco alerts are sent to the `monitoring/falco-webhook` service, which:
 
-1. Ships every alert to Loki, tagged `source=falco`, regardless of severity — providing a complete audit trail with nothing dropped.
+1. Ships every alert to Loki, tagged `source=falco`, regardless of severity - providing a complete audit trail with nothing dropped.
 2. For anything `WARNING` or above, calls `nomad-sentinel` directly over internal HTTP, sending security alerts to the same triage service.
 
 ## Backup & restore
@@ -331,24 +331,24 @@ Five stateful systems are backed up daily to the `platform-artifacts` GCS bucket
 | Postgres              | Daily 03:00 UTC | `pg_dump` per database, periodic Nomad batch job (spot node)      | `gs://.../platform-artifacts/pg-backups/{env}/`          |
 | Octopus (SQL Server)  | Daily 03:00 UTC | T-SQL `BACKUP DATABASE`, mgmt-vm systemd timer                    | `gs://.../platform-artifacts/sql-backups/`               |
 
-Consul, Nomad, and Octopus authenticate their backup and restore jobs with dedicated tokens/credentials held in GCP Secret Manager rather than Vault, so each can be backed up or restored independently of Vault's own availability — including the case where Vault itself is what needs restoring. Vault and Postgres are the two exceptions: Vault's fresh-node restore path has no way around a one-time bootstrap credential, and Postgres restores specifically need the Vault-managed `vault-root` superuser, since a scoped application role lacks the privileges to drop and recreate schemas.
+Consul, Nomad, and Octopus authenticate their backup and restore jobs with dedicated tokens/credentials held in GCP Secret Manager rather than Vault, so each can be backed up or restored independently of Vault's own availability - including the case where Vault itself is what needs restoring. Vault and Postgres are the two exceptions: Vault's fresh-node restore path has no way around a one-time bootstrap credential, and Postgres restores specifically need the Vault-managed `vault-root` superuser, since a scoped application role lacks the privileges to drop and recreate schemas.
 
 Restore procedures differ by component:
 
-* **Vault** — Vault runs as a single node with GCP KMS auto-unseal. `restore-vault.sh` handles two cases:
+* **Vault** - Vault runs as a single node with GCP KMS auto-unseal. `restore-vault.sh` handles two cases:
 
-  * **Same node / data corruption** — Vault is already running and unsealed. The script authenticates with a snapshot/restore-capable token (`vault-snapshot-token`, fetched from Secret Manager) and calls the restore API directly, unless a token has already been exported manually.
-  * **Fresh node / full loss** — A new Raft store has no keyring yet. The script runs a throwaway `vault operator init` purely to make one authenticated restore call, then discards those temporary credentials as soon as the snapshot's own keyring takes over. Verification then switches to the original root token, held in Secret Manager as `vault-root-token`.
+  * **Same node / data corruption** - Vault is already running and unsealed. The script authenticates with a snapshot/restore-capable token (`vault-snapshot-token`, fetched from Secret Manager) and calls the restore API directly, unless a token has already been exported manually.
+  * **Fresh node / full loss** - A new Raft store has no keyring yet. The script runs a throwaway `vault operator init` purely to make one authenticated restore call, then discards those temporary credentials as soon as the snapshot's own keyring takes over. Verification then switches to the original root token, held in Secret Manager as `vault-root-token`.
 
-* **Consul** — `restore-consul.sh` exports `CONSUL_HTTP_ADDR` (through `traefik-internal`) and `CONSUL_HTTP_TOKEN` (`consul-snapshot-token-{env}`, from Secret Manager), pulls the latest snapshot, and runs `consul snapshot restore` directly against it — no SSH onto the server involved. Dev and prod are two entirely separate single-server datacenters; restoring one never touches the other's catalog, ACLs, or intentions.
+* **Consul** - `restore-consul.sh` exports `CONSUL_HTTP_ADDR` (through `traefik-internal`) and `CONSUL_HTTP_TOKEN` (`consul-snapshot-token-{env}`, from Secret Manager), pulls the latest snapshot, and runs `consul snapshot restore` directly against it - no SSH onto the server involved. Dev and prod are two entirely separate single-server datacenters; restoring one never touches the other's catalog, ACLs, or intentions.
 
-* **Nomad** — Restores from a Raft snapshot using a management token (`nomad-snapshot-token-{env}`) read from Secret Manager, rather than simply replaying job specifications from Git — this preserves the Workload Identity signing keyring. Redeploying jobs from Git after a server loss would generate a new keyring, silently orphaning every `jwt-nomad-*` auth mount in Vault until each one is manually repointed at the new JWKS endpoint. Restoring the snapshot brings back the original keyring, allowing Vault authentication to continue working without repointing the mounts. Dev and prod are separate single-server clusters, same split as Consul.
+* **Nomad** - Restores from a Raft snapshot using a management token (`nomad-snapshot-token-{env}`) read from Secret Manager, rather than simply replaying job specifications from Git - this preserves the Workload Identity signing keyring. Redeploying jobs from Git after a server loss would generate a new keyring, silently orphaning every `jwt-nomad-*` auth mount in Vault until each one is manually repointed at the new JWKS endpoint. Restoring the snapshot brings back the original keyring, allowing Vault authentication to continue working without repointing the mounts. Dev and prod are separate single-server clusters, same split as Consul.
 
-* **Postgres** — Connects as the Vault-managed `vault-root` superuser rather than using a dynamic per-connection credential, since a scoped application role does not have the privileges required to drop and recreate schemas during a restore. The two databases, `metrics` and `monitoring`, are restored independently, so a failed restore of one cannot affect the other.
+* **Postgres** - Connects as the Vault-managed `vault-root` superuser rather than using a dynamic per-connection credential, since a scoped application role does not have the privileges required to drop and recreate schemas during a restore. The two databases, `metrics` and `monitoring`, are restored independently, so a failed restore of one cannot affect the other.
 
-* **Octopus** — Octopus runs on SQL Server, so its restore procedure is different: stop the Octopus service to release its database connections, run `sqlcmd`'s `RESTORE DATABASE ... WITH REPLACE` inside the SQL Server container, restart Octopus, then query its health API to confirm that it can access its data again. The SQL Server `sa` password is read from Secret Manager (`octopus-mssql-admin-password`) rather than Vault.
+* **Octopus** - Octopus runs on SQL Server, so its restore procedure is different: stop the Octopus service to release its database connections, run `sqlcmd`'s `RESTORE DATABASE ... WITH REPLACE` inside the SQL Server container, restart Octopus, then query its health API to confirm that it can access its data again. The SQL Server `sa` password is read from Secret Manager (`octopus-mssql-admin-password`) rather than Vault.
 
-Vault, Consul, Nomad, and Postgres are only reachable from outside the VPC through `traefik-internal`'s per-instance ports (Vault `:8443`, Consul/Nomad admin UIs `:8444` dev / `:8445` prod, Postgres TCP passthrough `:15432` dev / `:15433` prod). Restore scripts that hit these endpoints check reachability first and print the exact IAP tunnel command if it isn't already open. Octopus is the one exception — its restore IAP-SSHes directly onto `mgmt-vm` and never traverses `traefik-internal`.
+Vault, Consul, Nomad, and Postgres are only reachable from outside the VPC through `traefik-internal`'s per-instance ports (Vault `:8443`, Consul/Nomad admin UIs `:8444` dev / `:8445` prod, Postgres TCP passthrough `:15432` dev / `:15433` prod). Restore scripts that hit these endpoints check reachability first and print the exact IAP tunnel command if it isn't already open. Octopus is the one exception - its restore IAP-SSHes directly onto `mgmt-vm` and never traverses `traefik-internal`.
 
 ![Backup Operations Jobs](images/operations-namespace.png)
 *Backup Operations Jobs*
@@ -362,9 +362,9 @@ Vault, Consul, Nomad, and Postgres are only reachable from outside the VPC throu
 
 `platform-config` is split by concern and environment:
 
-- **`mgmt/`** — Vault and Octopus. Both are project-wide singletons, so this applies once and manages both environments' resources internally (Vault's module takes `nomad_environments = ["dev", "prod"]` and creates a JWT backend per environment; Octopus's module takes the same list and creates environments/projects and deployment steps for both).
+- **`mgmt/`** - Vault and Octopus. Both are project-wide singletons, so this applies once and manages both environments' resources internally (Vault's module takes `nomad_environments = ["dev", "prod"]` and creates a JWT backend per environment; Octopus's module takes the same list and creates environments/projects and deployment steps for both).
 
-- **`dev/`** and **`prod/`** — each owns only that environment's own Consul and Nomad ACL setup. A Vault policy change never touches a Consul/Nomad token, and a dev ACL change can never reach prod, because they're different Terraform states entirely.
+- **`dev/`** and **`prod/`** - each owns only that environment's own Consul and Nomad ACL setup. A Vault policy change never touches a Consul/Nomad token, and a dev ACL change can never reach prod, because they're different Terraform states entirely.
 
 Terraform also manages configuration for GCP, Vault, Consul, Nomad, and Octopus Deploy. Their policies, ACL tokens, namespaces, and Octopus projects are defined as code.
 
@@ -392,17 +392,17 @@ Current limitations:
 
 - **Postgres and Redis aren't pinned to a dedicated node pool.** They're scheduled like anything else and can land on a node alongside unrelated workloads. At larger scale or with stricter isolation requirements, this would need a dedicated node pool/class if traffic or blast-radius requirements grew.
 
-- **No TLS on the Postgres connection itself** — `sslmode=disable` over a dedicated, non-TLS TCP entrypoint.
+- **No TLS on the Postgres connection itself** - `sslmode=disable` over a dedicated, non-TLS TCP entrypoint.
 
-- **No entrypoint-level TLS backstop.** Traefik's `websecure` entrypoint doesn't force `tls {}` as a fallback — it's reachable HTTP-only if a router were ever misconfigured without a TLS block.
+- **No entrypoint-level TLS backstop.** Traefik's `websecure` entrypoint doesn't force `tls {}` as a fallback - it's reachable HTTP-only if a router were ever misconfigured without a TLS block.
 
-- **No per-consumer Redis ACL users** — Redis auth is a single shared password, not per-consumer key isolation.
+- **No per-consumer Redis ACL users** - Redis auth is a single shared password, not per-consumer key isolation.
 
-- **No disaster-recovery runbook for a destroyed persistent disk.** The `restore-*.sh` scripts restore *data* onto an already-healthy, already-mounted disk. Recovering from a lost PD — detach/replace, remount, then run the matching restore script — isn't automated.
+- **No disaster-recovery runbook for a destroyed persistent disk.** The `restore-*.sh` scripts restore *data* onto an already-healthy, already-mounted disk. Recovering from a lost PD - detach/replace, remount, then run the matching restore script - isn't automated.
 
 - **No Nomad-native admission control.** Nomad OSS has no equivalent to Kyverno-style mandatory image-signature verification at the scheduler level. The practical mitigation is a `cosign verify` step inside the Octopus deployment scripts, which only covers jobs going through that pipeline.
 
-- **Database credentials require an allocation restart to rotate.** Vault-rendered credential files update on disk when a lease renews, but the application doesn't currently watch that file and reconnect — a rotation means restarting the allocation, not a live pool swap.
+- **Database credentials require an allocation restart to rotate.** Vault-rendered credential files update on disk when a lease renews, but the application doesn't currently watch that file and reconnect - a rotation means restarting the allocation, not a live pool swap.
 
 - **Canary promotion is health-based, not traffic-split.** Octopus auto-promotes a canary once its allocations report healthy; Traefik doesn't yet weight live traffic between the canary and stable allocations during that window.
 
@@ -410,8 +410,10 @@ Current limitations:
 
 Planned changes:
 
-- **Postgres dedicated-node scheduling** — pin Postgres to a specific/reserved node via Nomad client config and/or a dedicated node pool/class. Effort is not yet scoped.
+* **Postgres dedicated-node scheduling** - pin Postgres to a specific/reserved node via Nomad client config and/or a dedicated node pool/class. Effort is not yet scoped.
 
-- **Dynamic DB credential reloading** — update `metrics-api` and `nomad-sentinel` to watch the Vault-rendered credential file and reload their connection pool on change, removing the restart-on-rotation limitation above.
+* **Dynamic DB credential reloading** - update `metrics-api` and `nomad-sentinel` to watch the Vault-rendered credential file and reload their connection pool on change, removing the restart-on-rotation limitation above.
 
-- **Traefik canary traffic splitting** — weighted traffic between canary and stable allocations via `traefik.consulcatalog.canary`-style tags during a canary deployment, in addition to Octopus's health-based auto-promotion.
+* **Traefik canary traffic splitting** - weighted traffic between canary and stable allocations via `traefik.consulcatalog.canary`-style tags during a canary deployment, in addition to Octopus's health-based auto-promotion.
+
+* **Nomad Pack for Boutique services** - introduce Nomad Pack to template and dynamically manage the microservice jobs in the `boutique` namespace, providing a consistent job definition and reducing duplication across the Boutique service deployments.
