@@ -56,7 +56,7 @@ resource "google_secret_manager_secret" "secret" {
   project   = var.project_id
   secret_id = each.key
 
-  deletion_policy     = "PREVENT"
+  deletion_policy     = "DELETE"
   deletion_protection = true
 
   replication {

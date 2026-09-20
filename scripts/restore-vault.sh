@@ -70,7 +70,7 @@ export VAULT_ADDR
 log "checking route to ${VAULT_HOSTNAME}:${VAULT_PORT} via traefik-internal"
 preflight_traefik_route "$VAULT_HOSTNAME" "$VAULT_PORT"
 
-confirm_yesno "About to OVERWRITE the live Vault instance (mgmt-vm) with a Raft snapshot — this is the ONE shared Vault instance for both dev and prod, so this replaces ALL secrets engines, policies, auth methods, and the encryption keyring for both."
+confirm_yesno "About to OVERWRITE the live Vault instance (mgmt-vm) with a Raft snapshot — this is the ONE shared Vault instance for both dev and prod, so this replaces ALL secrets engines, policies, auth methods, and the encryption keyring for both. Any token created AFTER the snapshot's timestamp — including vault-root-token and vault-operator-token in Secret Manager — will stop working post-restore; recovering from that needs the ORIGINAL vault-recovery-keys (from initial setup, not a --fresh-node drill) to run vault operator generate-root."
 
 snapshot_file=$(fetch_latest_from_gcs "vault-snapshots/" "$SCRATCH_DIR")
 log "using snapshot: $snapshot_file"
