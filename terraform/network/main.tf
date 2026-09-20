@@ -9,7 +9,7 @@
 
  
 locals {
-  bootstrap = null
+  bootstrap = data.terraform_remote_state.bootstrap.outputs
 
   labels = {
     "environment" = "shared"
@@ -69,12 +69,14 @@ module "logging" {
   default_cmek_key            = local.bootstrap.kms_keys["platform/storage-cmek"].id
 
     # Add more here as new logging needs come up, e.g.:
+    # log_buckets = {
     # "secret-access" = {
     #   location       = optional(string)
     #   retention_days = 30
     #   filter         = "resource.type=\"audited_resource\" AND protoPayload.serviceName=\"secretmanager.googleapis.com\""
     #   description = ""
     #   cmek_key       = optional(string)
+    #  }
     # }
 }
 
