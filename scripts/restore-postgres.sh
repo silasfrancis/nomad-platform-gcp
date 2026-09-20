@@ -7,29 +7,38 @@
 # They are backed up and restored independently — a bad restore of one must
 # never touch the other.
 #
-# Auth note: this connects as the Vault-managed `vault-root` superuser
-# (§5.4), NOT through a dynamic per-connection credential — dynamic creds
-# are scoped to metrics-api's own app role and won't have privileges to
-# drop/recreate schema during a restore. vault-root's password lives only
-# in Vault's database secrets engine config, never in a job spec; this
-# script reads it fresh from Vault each run rather than caching it.
+# Auth note: this connects as `vault-admin` — a static role the postgres
+# Nomad job itself creates via its bootstrap.sql on first init (CREATEROLE,
+# owns both `metrics` and `monitoring` outright). This is NOT a dynamic
+# Vault database-engine credential — there is no dynamic engine in play
+# here, vault-admin already has the privileges a restore needs (drop/
+# recreate schema) on both databases it owns. Its password lives in Vault
+# KV at kv/data/shared/postgres/admin (vault_admin_password), read fresh
+# each run rather than cached.
+#
+# VAULT_ADDR/VAULT_TOKEN: same shared Vault instance and same
+# vault-operator-token (GCP Secret Manager) restore-vault.sh uses — no need
+# to export these manually unless overriding for a DR drill.
 #
 # Reachability: postgres.service.consul is internal-only Consul DNS and has
 # no route from outside the VPC. Postgres is reachable from outside only via
 # traefik-internal's dedicated TCP passthrough entrypoint (currently
 # sslmode=disable / HostSNI(*) — see the pending TLS-passthrough CHANGELOG
 # item), at postgres-{env}.platform.lefrancis.org:{15432 dev / 15433 prod}.
-# That hostname needs an IAP tunnel into traefik-internal ITSELF first (see
-# preflight_traefik_route in lib/restore-common.sh for the exact tunnel
-# command it'll print if this isn't set up yet).
+# That hostname needs an IAP tunnel into traefik-internal ITSELF first —
+# scripts/open-tunnel.sh dev|prod opens both the admin-UI port AND this
+# Postgres port together (see preflight_traefik_route in
+# lib/restore-common.sh for the exact fallback command if you're not using
+# open-tunnel.sh).
 #
 # Usage:
-#   VAULT_ADDR=... VAULT_TOKEN=... scripts/restore-postgres.sh --env dev --database metrics
+#   GCP_PROJECT=my-project scripts/restore-postgres.sh --env dev --database metrics
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 # shellcheck source=lib/restore-common.sh
 source lib/restore-common.sh
+require_cli vault
 
 TARGET_ENV=""
 DATABASE=""
@@ -49,8 +58,11 @@ esac
 
 confirm_destructive "About to DROP and restore the '$DATABASE' database in the $TARGET_ENV PostgreSQL instance. The other database on the same instance ('$([[ "$DATABASE" == "metrics" ]] && echo monitoring || echo metrics)') is not touched, but metrics-api and/or nomad-sentinel using '$DATABASE' will see connection errors for the duration."
 
-VAULT_ADDR="${VAULT_ADDR:?VAULT_ADDR must be set}"
-VAULT_TOKEN="${VAULT_TOKEN:?VAULT_TOKEN must be set — needs read on the database shared kv path for vault admin creds}"
+VAULT_ADDR="${VAULT_ADDR:-https://vault.platform.lefrancis.org:8443}"
+if [[ -z "${VAULT_TOKEN:-}" ]]; then
+  log "VAULT_TOKEN not set — fetching vault-operator-token from GCP Secret Manager"
+  VAULT_TOKEN=$(fetch_gcp_secret "vault-operator-token")
+fi
 export VAULT_ADDR VAULT_TOKEN
 
 PG_HOST="postgres-${TARGET_ENV}.platform.lefrancis.org"   # via traefik-internal's TCP passthrough entrypoint
@@ -63,10 +75,13 @@ PG_PORT="${PG_PORT:-$DEFAULT_PG_PORT}"
 log "checking route to ${PG_HOST}:${PG_PORT} via traefik-internal"
 preflight_traefik_route "$PG_HOST" "$PG_PORT"
 
-log "fetching vault-root Postgres credentials from Vault (${TARGET_ENV})"
-PGUSER="vault-root"
-PGPASSWORD=$(vault read -field=password "database/config/${TARGET_ENV}-postgres" 2>/dev/null) \
-  || die "could not read vault-root credentials for ${TARGET_ENV} — check the database/ engine mount path matches platform-config"
+log "checking route to vault.platform.lefrancis.org:8443 via traefik-internal"
+preflight_traefik_route "vault.platform.lefrancis.org" 8443
+
+log "fetching vault-admin Postgres password from Vault"
+PGUSER="vault-admin"
+PGPASSWORD=$(vault kv get -field=vault_admin_password kv/shared/postgres/admin) \
+  || die "could not read vault_admin_password from kv/data/shared/postgres/admin — check the secret still exists at that path"
 export PGPASSWORD
 
 backup_file=$(fetch_latest_from_gcs "pg-backups/${TARGET_ENV}/${DATABASE}/" "$SCRATCH_DIR")
@@ -98,8 +113,4 @@ else
   psql -h $PG_HOST -p $PG_PORT -U $PGUSER -d monitoring -c "SELECT count(*), max(detected_at) FROM agent_anomalies;"
 EOF
 fi
-log "and confirm Vault's dynamic credentials still issue cleanly against the restored schema:"
-cat <<EOF
-  vault read database/creds/${TARGET_ENV}-metrics-api
-EOF
 log "done."

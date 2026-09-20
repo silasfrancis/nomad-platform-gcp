@@ -20,51 +20,41 @@
 #   FRESH / REPLACEMENT NODE (full mgmt-vm loss — Terraform + Ansible have
 #   already rebuilt the VM and installed Vault with the seal "gcpckms" {}
 #   stanza pointed at the same KMS key ring before this script runs):
-#     A brand-new Raft store has no data and no keyring, so there is nothing
-#     for a token to authenticate against yet. `vault operator init` bootstraps
-#     a THROWAWAY keyring + root token good for exactly one thing: making the
-#     authenticated restore call. The instant the restore succeeds, that
-#     throwaway keyring is discarded and replaced by the snapshot's own
-#     keyring — the throwaway token stops working. All post-restore
-#     verification must switch to the ORIGINAL root token, which per §1.4 is
-#     the one artifact GCP Secret Manager holds for bootstrap purposes
-#     (`vault-root-token`). This is the one credential that cannot come from
-#     Vault itself, because Vault isn't up yet — hence Secret Manager, not KV.
+#     A brand-new Raft store has no data yet, so there's nothing for a
+#     token to authenticate against. `vault operator init` bootstraps a
+#     throwaway root token good for exactly one thing: making the
+#     authenticated restore call. Auto-unseal via GCP KMS means init
+#     doesn't hand back unseal keys to manage — just recovery keys, which
+#     this script discards along with the throwaway token once the restore
+#     succeeds. Post-restore verification switches to the ORIGINAL root
+#     token from before the incident, held in Secret Manager
+#     (`vault-root-token`) since Vault itself isn't a valid source for it
+#     at this point.
 #
 # Usage:
-#   GCP_PROJECT=my-project scripts/restore-vault.sh --env dev [--fresh-node]
+#   GCP_PROJECT=my-project scripts/restore-vault.sh [--fresh-node]
 #
 #   --fresh-node   This is a full node rebuild (Scenario 2 above). Without
 #                  this flag the script assumes Scenario 1 (same node,
 #                  already unsealed) and will refuse to run `operator init`.
+#
+#   GCP_ZONE defaults to europe-west1-b (where mgmt-vm actually lives) —
+#   override it if that ever changes.
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 # shellcheck source=lib/restore-common.sh
 source lib/restore-common.sh
+require_cli vault
 
-TARGET_ENV=""
 FRESH_NODE=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --env) TARGET_ENV="$2"; shift 2 ;;
     --fresh-node) FRESH_NODE=1; shift ;;
     --yes) ASSUME_YES=1; shift ;;
     *) die "unknown argument: $1" ;;
   esac
 done
-require_env "$TARGET_ENV"
-
-# Vault is single-instance on mgmt-vm and serves both environments — "env"
-# here only selects which snapshot prefix to pull from, not a different
-# target host. Restoring dev's snapshot restores the WHOLE Vault instance,
-# including prod's secrets engines and policies. Make that unambiguous.
-if [[ "$TARGET_ENV" == "dev" || "$TARGET_ENV" == "prod" ]]; then
-  warn "Vault is a single shared instance on mgmt-vm — restoring ANY snapshot"
-  warn "restores secrets engines and policies for BOTH dev and prod, not just"
-  warn "the environment named below. The --env flag only selects which"
-  warn "snapshot prefix to pull the backup file from."
-fi
 
 VAULT_HOSTNAME="vault.platform.lefrancis.org"
 VAULT_PORT="8443"   # mgmt Traefik instance's https_port, per traefik_instance_catalog
@@ -80,21 +70,18 @@ export VAULT_ADDR
 log "checking route to ${VAULT_HOSTNAME}:${VAULT_PORT} via traefik-internal"
 preflight_traefik_route "$VAULT_HOSTNAME" "$VAULT_PORT"
 
-confirm_destructive "About to OVERWRITE the live Vault instance (mgmt-vm) with a Raft snapshot. This replaces ALL secrets engines, policies, auth methods, and the encryption keyring for both dev and prod."
+confirm_yesno "About to OVERWRITE the live Vault instance (mgmt-vm) with a Raft snapshot — this is the ONE shared Vault instance for both dev and prod, so this replaces ALL secrets engines, policies, auth methods, and the encryption keyring for both."
 
 snapshot_file=$(fetch_latest_from_gcs "vault-snapshots/" "$SCRATCH_DIR")
 log "using snapshot: $snapshot_file"
 
 if [[ "$FRESH_NODE" == "1" ]]; then
-  log "fresh-node mode: bootstrapping a throwaway keyring to authenticate the restore call"
-  # GCP KMS auto-unseal means no unseal keys are returned here — only
-  # recovery keys, which we discard. We only need the root token, and only
-  # for the few seconds it takes to issue the restore call.
+  log "fresh-node mode: bootstrapping a throwaway root token to authenticate the restore call"
   init_output=$(vault operator init -format=json -recovery-shares=1 -recovery-threshold=1) \
     || die "vault operator init failed — check the gcpckms seal stanza was applied by Ansible before running this script"
   throwaway_root_token=$(echo "$init_output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["root_token"])')
   export VAULT_TOKEN="$throwaway_root_token"
-  log "throwaway root token acquired (will be invalidated automatically by the restore below)"
+  log "throwaway token acquired"
 else
   # vault-snapshot-token (GCP Secret Manager) is the same token the nightly
   # vault-backup.service on mgmt-vm uses for `snapshot save` — it also has

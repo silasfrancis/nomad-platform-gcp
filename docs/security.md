@@ -42,15 +42,15 @@ Internal Nomad and Consul cluster traffic uses TLS with a self-signed trust chai
 
 Two systems are used:
 
-- **Vault** — runtime secrets for workloads, including dynamic Postgres credentials and KV configuration, plus CI secrets accessed through GitHub OIDC.
-- **GCP Secret Manager** — secrets required by Terraform, Ansible, and VM startup, including PKI material, ACL bootstrap tokens, and Octopus credentials. Access is divided by consumer:
+- **Vault** - runtime secrets for workloads, including dynamic Postgres credentials and KV configuration, plus CI secrets accessed through GitHub OIDC.
+- **GCP Secret Manager** - secrets required by Terraform, Ansible, and VM startup, including PKI material, ACL bootstrap tokens, and Octopus credentials. Access is divided by consumer:
 
 | Tier | Readable by | Example |
 |---|---|---|
 | `root` | Human operator only | CA private keys, Vault recovery keys |
 | `operator` | Human operator only, for `platform-config` runs | Vault/Consul/Nomad operator tokens |
 | `mgmt` | `management-vm-sa` only | Octopus admin credentials, Vault TLS key |
-| `scoped` | Explicit per-secret IAM binding | PKI leaf material, per-env agent/ACL tokens — each carries its own precise grant instead of inheriting a tier-wide one |
+| `scoped` | Explicit per-secret IAM binding | PKI leaf material, per-env agent/ACL tokens - each carries its own precise grant instead of inheriting a tier-wide one |
 
 Secret Manager, the state/artifact GCS buckets, and Artifact Registry use CMEK (customer-managed KMS keys).
 
@@ -67,16 +67,16 @@ Nomad server's Consul token ──► agent:read, node:write, service:write,
                                  (Nomad manages Connect config entries)
 
 Nomad client's Consul token ──► agent:read, node:write, service:write
-                                 (no acl/mesh write — clients don't
+                                 (no acl/mesh write - clients don't
                                   manage Connect config)
 
 Consul DNS token ─────────────► DNS interface only, nothing else
 ```
 
-1. **Consul agent token** — narrow, node-identity scope (self-registration, anti-entropy). Same shape for server and client agents.
-2. **Nomad server's own Consul token** — Nomad-as-a-Consul-client, for service registration, auto-join discovery, and Connect config-entry management (`agent`/`node`/`service` write, `acl`/`mesh` write).
-3. **Nomad client's own Consul token** — same purpose, narrower policy (no `acl`/`mesh` write — clients don't manage Connect config).
-4. **Consul's DNS token**, separate again — used only for the DNS interface, not agent operations.
+1. **Consul agent token** - narrow, node-identity scope (self-registration, anti-entropy). Same shape for server and client agents.
+2. **Nomad server's own Consul token** - Nomad-as-a-Consul-client, for service registration, auto-join discovery, and Connect config-entry management (`agent`/`node`/`service` write, `acl`/`mesh` write).
+3. **Nomad client's own Consul token** - same purpose, narrower policy (no `acl`/`mesh` write - clients don't manage Connect config).
+4. **Consul's DNS token**, separate again - used only for the DNS interface, not agent operations.
 
 Eight ACL secrets are used in total (four types per environment). Tokens are applied through the node configuration at boot (`acl.tokens.agent`, `consul.token`) rather than through a post-start CLI command.
 
