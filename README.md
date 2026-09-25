@@ -24,7 +24,7 @@ Google's Online Boutique runs as the reference workload, alongside two custom mo
   - [4. Generate and Push PKI](#4-generate-and-push-pki)
   - [5. Provision Compute](#5-provision-compute)
   - [6. Configure with Ansible](#6-configure-with-ansible)
-  - [7. Configure Platform](#7-configure-platform)
+  - [7. Configure Core Platform Runtime Services](#7-configure-core-platform-runtime-services)
   - [8. Deploy Cluster Plugins](#8-deploy-cluster-plugins)
   - [9. Deploy Workloads](#9-deploy-workloads)
 - [Bringing Your Own Workload](#bringing-your-own-workload)
@@ -120,7 +120,7 @@ task grafana
 
 `task bootstrap-all` runs the same sequence unattended. See [`ansible/Taskfile.yaml`](ansible/Taskfile.yaml) for the task definitions.
 
-### 7. Configure platform
+### 7. Configure core platform runtime services
 
 **`terraform/platform-config`** (`mgmt` → `dev` → `prod`) - Vault engines/policies, Consul/Nomad ACL tokens, Octopus projects and environments.
 
