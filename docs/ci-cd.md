@@ -2,6 +2,15 @@
 
 The platform builds, conducts security checks, releases, and deploys using GitHub Actions and Octopus Deploy.
 
+## Table of Contents
+
+- [Repository and Branching](#repository-and-branching)
+- [Pipeline Shape](#pipeline-shape)
+- [Build and Release](#build-and-release)
+- [Octopus](#octopus)
+- [Composite Actions](#composite-actions)
+- [Runner](#runner)
+
 ## Repository and branching
 
 The platform uses a trunk-based deployment model with a single `main` branch. Changes are merged into `main`, and the CI pipeline runs from that branch.

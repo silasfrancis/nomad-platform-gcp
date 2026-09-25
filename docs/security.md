@@ -2,6 +2,15 @@
 
 Security controls for identity and access, network isolation, PKI, secrets, Consul/Nomad ACLs, and the software supply chain.
 
+## Table of Contents
+
+- [Identity and Access](#identity-and-access)
+- [Network](#network)
+- [PKI & mTLS](#pki--mtls)
+- [Secrets Management](#secrets-management)
+- [Consul / Nomad ACL Model](#consul--nomad-acl-model)
+- [Supply Chain](#supply-chain)
+
 ## Identity and access
 
 - VMs are accessed through IAP using SSH or TCP tunnels and OS Login. Static SSH keys are not used.

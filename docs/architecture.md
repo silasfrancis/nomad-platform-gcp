@@ -4,6 +4,34 @@ Platform architecture covering infrastructure, networking, compute, orchestratio
 
 ![Architecture](images/platform-architecture.drawio.svg)
 
+## Table of Contents
+
+- [Network: VPC, Subnets & Firewalls](#network-vpc-subnets--firewalls)
+- [Compute](#compute)
+  - [Nomad & Consul Nodes](#nomad--consul-nodes)
+    - [Server Nodes](#server-nodes)
+    - [Client Nodes](#client-nodes)
+  - [Machine Images](#machine-images)
+  - [Cluster Join](#cluster-join)
+  - [Data Disks](#data-disks)
+- [Orchestration](#orchestration)
+- [Autoscaling](#autoscaling)
+  - [Cluster Scaling](#cluster-scaling)
+  - [Workload Scaling](#workload-scaling)
+- [Secret Management](#secret-management)
+- [Ingress](#ingress)
+  - [Public](#public)
+  - [Internal](#internal)
+  - [DNS](#dns)
+  - [Dev/prod Access](#devprod-access)
+- [Monitoring](#monitoring)
+- [Runtime Security](#runtime-security)
+- [Backup & Restore](#backup--restore)
+- [Infrastructure as Code](#infrastructure-as-code)
+- [Application Layer](#application-layer)
+- [Known Limitations](#known-limitations)
+- [Planned Improvements](#planned-improvements)
+
 ## Network: VPC, subnets & firewalls
 
 One VPC contains five subnets: `subnet-mgmt`, plus private and public subnets for `dev` and `prod`. Dev and prod isolation is enforced with explicit firewall rules between the private subnets.
