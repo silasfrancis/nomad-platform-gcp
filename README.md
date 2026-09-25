@@ -11,7 +11,6 @@ The platform also provides dynamic database credentials, autoscaling, observabil
 Google's Online Boutique runs as the reference workload, alongside two custom monitoring services built for the platform: `nomad-sentinel` (AI-assisted allocation health analysis and Slack reporting) and `metrics-api` (metrics collection and exposure). Together they exercise the platform's service mesh, discovery, secrets, autoscaling, observability, and deployment flow.
 
 ![Architecture](docs/images/platform-architecture.drawio.svg)
-
 *Platform Architecture.*
 
 ## Table of contents
