@@ -13,24 +13,23 @@ Google's Online Boutique runs as the reference workload, alongside two custom mo
 ![Architecture](docs/images/platform-architecture.drawio.svg)
 *Platform Architecture.*
 
-## Table of contents
+## Table of Contents
 
-* [Platform components](#platform-components)
-* [Repo layout](#repo-layout)
-* [Getting Started](#getting-started)
-
-  * [1. Bootstrap](#1-bootstrap)
-  * [2. Network](#2-network)
-  * [3. Build machine images](#3-build-machine-images)
-  * [4. Generate and push PKI](#4-generate-and-push-pki)
-  * [5. Provision compute](#5-provision-compute)
-  * [6. Configure with Ansible](#6-configure-with-ansible)
-  * [7. Configure platform](#7-configure-platform)
-  * [8. Deploy cluster plugins](#8-deploy-cluster-plugins)
-  * [9. Deploy workloads](#9-deploy-workloads)
-* [Bringing your own workload](#bringing-your-own-workload)
-* [Documentation](#documentation)
-* [License](#license)
+- [Platform Components](#platform-components)
+- [Repository Structure](#repository-structure)
+- [Getting Started](#getting-started)
+  - [1. Bootstrap](#1-bootstrap)
+  - [2. Network](#2-network)
+  - [3. Build Machine Images](#3-build-machine-images)
+  - [4. Generate and Push PKI](#4-generate-and-push-pki)
+  - [5. Provision Compute](#5-provision-compute)
+  - [6. Configure with Ansible](#6-configure-with-ansible)
+  - [7. Configure Platform](#7-configure-platform)
+  - [8. Deploy Cluster Plugins](#8-deploy-cluster-plugins)
+  - [9. Deploy Workloads](#9-deploy-workloads)
+- [Bringing Your Own Workload](#bringing-your-own-workload)
+- [Documentation](#documentation)
+- [License](#license)
 
 ## Platform components
 
