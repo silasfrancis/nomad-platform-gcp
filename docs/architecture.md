@@ -4,6 +4,8 @@ Platform architecture covering infrastructure, networking, compute, orchestratio
 
 ![Architecture](images/platform-architecture.drawio.svg)
 
+*Platform Architecture.*
+
 ## Network: VPC, subnets & firewalls
 
 One VPC contains five subnets: `subnet-mgmt`, plus private and public subnets for `dev` and `prod`. Dev and prod isolation is enforced with explicit firewall rules between the private subnets.

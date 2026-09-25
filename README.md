@@ -12,7 +12,7 @@ Google's Online Boutique runs as the reference workload, alongside two custom mo
 
 ![Architecture](docs/images/platform-architecture.drawio.svg)
 
-See [`docs/architecture.md`](docs/architecture.md).
+*Platform Architecture.*
 
 ## Table of contents
 
