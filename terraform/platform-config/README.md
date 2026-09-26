@@ -1,144 +1,34 @@
 # platform-config
 
-Four modules under `modules/` (`vault`, `octopus`, `consul`, `nomad`) —
-the actual resource logic, parameterized by `var.environment` where it
-matters. Three root directories call them: `mgmt/` (Vault + Octopus —
-single instances, serving both environments internally), `dev/`, and
-`prod/` (Consul + Nomad — two genuinely separate clusters, one
-directory each). Each root directory is its own Terraform state and
-its own `terraform apply`.
+Vault engines/policies, Consul/Nomad ACL tokens, and Octopus projects/environments for the platform, as three separate root modules: `mgmt/` (Vault + Octopus, single instances serving both environments), `dev/`, and `prod/` (Consul + Nomad, two genuinely independent clusters). Split into three because dev/prod are non-federated with different credentials and CA chains — separate states mean one `apply` can never touch the wrong environment.
 
-## Why three roots, not one combined apply
+## Apply
 
-Consul and Nomad dev/prod are two independent, non-federated clusters
-with different credentials and different CA-signed certificate chains.
-Separate directories mean only one environment can ever be touched by
-a given `apply` — there's no shared backend or shared code path where
-a mistake could silently cross environments.
+`dev/` and `prod/` don't depend on each other or on `mgmt/` — apply either, any order, for whichever environments actually exist (set upstream by `terraform/compute`'s `active_environments`; `mgmt/`'s `nomad_provisioned`/`nomad_environments` need to match).
 
-## Apply order
+`mgmt/`'s `octopus` module normally needs `dev`/`prod` applied at least once first, since it reads `octopus-deploy-token-{dev,prod}` from Secret Manager once they exist. To bring `mgmt/` up before either does, set `use_dummy_secrets = true` on the `octopus` module and fix the tokens later, from the Octopus UI or on `mgmt/`'s next apply.
 
-`dev/` and `prod/` have no dependency on `mgmt/` — apply either in any
-order, independently, at any time.
+Providers reach Vault/Octopus/Consul/Nomad through an IAP tunnel, so first time on a machine:
 
-`mgmt/` has one dependency: it reads `octopus-deploy-token-{dev,prod}`
-from Secret Manager, written by `dev/`'s and `prod/`'s `nomad` module.
-So `dev/` and `prod/` must each be applied at least once before
-`mgmt/`'s first successful apply of the Octopus deployment variables.
-After that, all three are independent on every subsequent apply.
-
+```bash
+./scripts/update-hosts.sh   # one-time, follow its instructions
 ```
-# One-time, per machine:
-./scripts/update-hosts.sh   # then follow its instructions
 
+Then per root module — `pre-apply-env.sh`/`pre-apply-mgmt.sh` fetch that module's operator tokens (Consul/Nomad/Vault, or Vault/Octopus for `mgmt`) from Secret Manager and export them as `TF_VAR_*` so the provider blocks can authenticate:
+
+```bash
 source ./scripts/pre-apply-env.sh <project-id> dev
 ./scripts/open-tunnel.sh dev <project-id> <zone>
 cd dev && terraform apply
 cd .. && ./scripts/close-tunnels.sh
-
-source ./scripts/pre-apply-env.sh <project-id> prod
-./scripts/open-tunnel.sh prod <project-id> <zone>
-cd prod && terraform apply
-cd .. && ./scripts/close-tunnels.sh
-
-source ./scripts/pre-apply-mgmt.sh <project-id>
-cd mgmt && terraform apply
 ```
+
+Repeat for `prod`, then `mgmt` via `source ./scripts/pre-apply-mgmt.sh <project-id>`.
 
 ## Cross-module handoffs
 
-Every value one module needs from another goes through GCP Secret
-Manager — never `terraform_remote_state`, since these are genuinely
-separate states with no reason to read each other's raw resource
-attributes.
-
-- `dev/`'s and `prod/`'s `nomad` module writes `octopus-deploy-token-{env}`
-- `mgmt/`'s `octopus` module reads it back, as the `NomadAclToken`
-  library variable
-- Everything Consul writes (agent/Nomad-integration tokens, Traefik's
-  token) is consumed by Ansible/VM startup scripts only — no other
-  `platform-config` module reads them
-
-`vault/` has no cross-module dependency at all. `nomad-sentinel`
-authenticates to both Vault and Nomad's own API using Workload
-Identity — no static token is minted or relayed between modules for
-it.
-
-## Design notes
-
-- **No Octopus/Vault integration.** Octopus reads every value it needs
-  (Nomad API URL/token/CA cert, Slack webhook) directly from Secret
-  Manager. Nothing routes through Vault.
-- **Consul sidecar tokens are not statically managed.** Nomad 1.7+
-  requests a scoped Consul Service Identity token automatically at
-  allocation time via a job spec's `connect { sidecar_service {} }`
-  block, using the `nomad-client` policy's `acl:write` grant. No static
-  per-service token is pre-created or distributed.
-- **Vault Workload Identity is the default authentication path for
-  Nomad tasks.** Static ACL tokens are commented out in
-  `modules/nomad/acl.tf` and should only be enabled for a workload that
-  genuinely cannot use Workload Identity.
-- **`vault-admin`'s database credential is a dedicated role**, separate
-  from the Postgres container's own bootstrap superuser — created by
-  that superuser during initialization, holding `CREATEROLE` plus
-  ownership of both databases, never the superuser account itself.
-  Vault's own `rotate-root` feature could later replace this
-  credential with a value nobody (including the operator) can read
-  back out, closing the gap where the Terraform-generated password
-  sitting in state could otherwise be used to bypass Vault directly.
-  Not implemented — noted here as a deliberate, considered next step.
-
-## Things flagged for verification before applying
-
-1. ~~**`consul_acl_token.id`**~~ — **Resolved.** That attribute is the
-   accessor ID, not something any consumer can authenticate with.
-   Every `google_secret_manager_secret_version` in `modules/consul/`
-   now reads from a `consul_acl_token_secret_id` data source instead
-   (confirmed against the provider's own docs — see the comment on
-   `data.consul_acl_token_secret_id.agent` in `modules/consul/agent.tf`).
-2. **Octopus provider schema** — the lifecycle retention blocks,
-   `octopusdeploy_process`/`process_step`/`process_steps_order`, and
-   the Cloud Region deployment target resources are written from the
-   current provider documentation but not independently exercised
-   against a live Octopus instance. Verify field names before the
-   first real apply.
-3. **Postgres connection resolution** — Vault's database connections
-   point at `${traefik_internal_address}:15432`/`15433`, a dedicated
-   TCP passthrough per environment on traefik-internal's dev-internal/
-   prod-internal instances (mgmt-vm has no local Consul agent of its
-   own any more to resolve `postgres.service.consul` directly, and
-   Postgres has no static IP since it's scheduled onto whichever
-   on-demand client node has room). **Not yet wired end to end**: the
-   traefik role doesn't have these two TCP entrypoints, and the
-   Postgres Nomad job spec doesn't have the `traefik.tcp.routers.*`
-   service tags to be discovered by them. `verify_connection = false`
-   on both connections means this module still applies cleanly in the
-   meantime, but no credential can actually be issued until that
-   follow-up lands.
-4. **`postgresql` as one destination for two databases** assumes a
-   single Postgres Nomad job hosting both the `metrics` and
-   `monitoring` databases via separate `CREATE DATABASE` statements,
-   rather than two separate Postgres jobs. Confirm before job specs are
-   written.
-5. **Job-scoped ACL policy binding for `nomad-sentinel`** — Workload
-   Identity requires associating the policy with the specific job
-   (via `-job`/`-group`/`-task` scoping) rather than a standalone
-   token. The exact Terraform resource argument for this hasn't been
-   confirmed against the provider's current schema.
-
-## Service intentions call graph
-
-Derived from the application's own service-to-service wiring — see
-`modules/consul/locals.tf`. L4-only (`Sources[].Action`) throughout;
-the resource type supports full L7 matching (path/method/header/JWT-
-claim authorization) without restructuring anything here, if
-finer-grained rules are ever needed.
+Every value one module needs from another goes through Secret Manager, never `terraform_remote_state` — these are genuinely separate states with no reason to read each other's resource attributes.
 
 ## Deployment scripts
 
-`.github/workflows/scripts/` holds the five scripts each project's
-deployment process runs: validate, deploy, wait for healthy, smoke
-test, notify Slack. These are packaged with each release artifact and
-extracted by Octopus at deploy time — kept here for now as plain shell
-scripts so they can move into a dedicated deployment package later
-without changing how the deployment process calls them.
+`.github/workflows/scripts/` holds the five scripts each deploy runs (validate, deploy, wait-healthy, smoke test, notify Slack) — packaged with the release artifact and extracted by Octopus at deploy time.

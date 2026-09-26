@@ -133,10 +133,10 @@ tasks:
     desc: "Configure the complete Nomad + Consul layer for dev and prod"
     deps: [check-env]
     cmds:
-      - task: nomad-servers
-        vars:
-          ENV: '{{.ENV}}'
-      - task: nomad-clients
+      # - task: nomad-servers  # Configs are already baked in the nomad-server image via packer
+      #   vars:
+      #     ENV: '{{.ENV}}'
+      # - task: nomad-clients # Configs are already baked in the nomad-client image via packer
       - task: consul-acl-bootstrap
         vars:
           ENV: '{{.ENV}}'
