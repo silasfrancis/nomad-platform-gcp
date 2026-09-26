@@ -66,7 +66,7 @@ Google's Online Boutique runs as the reference workload, alongside two custom mo
 ```
 ## Getting Started
 
-The platform is deployed in dependency order. Every root terraform module below (`bootstrap`, `network`, `compute`, and each of `platform-config`'s `mgmt`/`dev`/`prod`) uses partial backend configuration, so the first time you touch any of them, initialize it with its own state file before anything else:
+The platform is deployed in dependency order. Every terraform root module mentioned below (`bootstrap`, `network`, `compute`, and each of `platform-config`'s `mgmt`/`dev`/`prod`) uses partial backend configuration, so the first time you touch any of them, initialize it with its own state file before anything else:
 
 ```bash
 terraform init -backend-config="./state.conf"
