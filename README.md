@@ -75,7 +75,7 @@ terraform init -backend-config="./state.conf"
 
 ### 1. Bootstrap
 
-**`terraform/bootstrap`** - project-wide primitives: APIs, KMS, GCS state/artifact buckets, Artifact Registry, service accounts (including `packer-builder-sa`). Applied once.
+**`terraform/bootstrap`** - project-wide primitives: APIs, KMS, GCS state/artifact buckets, Artifact Registry, service accounts (including Packer's Service Account for building the platform's machine images). Applied once.
 
 ### 2. Network
 
