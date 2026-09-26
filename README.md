@@ -75,7 +75,7 @@ terraform init -backend-config="./state.conf"
 
 ### 1. Bootstrap
 
-**`terraform/bootstrap`** - project-wide primitives: APIs, KMS, GCS state/artifact buckets, Artifact Registry, service accounts (including `packer-builder-sa`). Applied once.
+**`terraform/bootstrap`** - project-wide primitives: APIs, KMS, GCS state/artifact buckets, Artifact Registry, service accounts (including Packer's Service Account for building the platform's machine images). Applied once.
 
 ### 2. Network
 
@@ -105,7 +105,7 @@ This must run before step 5's instances actually boot - every startup script fet
 
 **`terraform/compute`** - creates the real VMs/MIGs from the images built in step 3. Instances boot, run their startup scripts, and fetch the PKI material from step 4.
 
-`active_environments` controls which of `dev`/`prod` actually get created - resources for an environment left out aren't stopped, they're never provisioned at all. `mgmt-vm` and `traefik-internal` are unconditional and get created regardless. Defaults to `["dev"]`; add `"prod"` once dev is validated:
+The `active_environments` variable controls which of `dev`/`prod` actually get created - resources for an environment left out aren't stopped, they're never provisioned at all. `mgmt-vm` and `traefik-internal` are unconditional and get created regardless. Defaults to `["dev"]`; add `"prod"` once dev is validated:
 
 ```hcl
 active_environments    = ["dev", "prod"]
