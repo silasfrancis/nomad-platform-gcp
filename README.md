@@ -64,7 +64,6 @@ Google's Online Boutique runs as the reference workload, alongside two custom mo
 ├── services/         # Google Online Boutique microservices
 └── terraform/        # bootstrap → network → compute → platform-config
 ```
-
 ## Getting Started
 
 The platform is deployed in dependency order. Every root terraform module below (`bootstrap`, `network`, `compute`, and each of `platform-config`'s `mgmt`/`dev`/`prod`) uses partial backend configuration, so the first time you touch any of them, initialize it with its own state file before anything else:
@@ -95,15 +94,28 @@ One shared template and two variable files, each pointing to an Ansible playbook
 
 Per-environment values (certificates, gossip keys, and datacenter) are not baked into the images; they're fetched at boot, which is why this step has no dependency on PKI existing yet.
 
-### 4. Generate and push PKI
+### 4. Build and push the Octopus worker image
+
+**`octopus/worker`** extends Octopus's official Tentacle image with the CLI tools used by the deployment scripts (`nomad`, `consul`, and `jq`). It is maintained as a separate image so CLI version changes do not require rebuilding or redeploying `octopus-server`.
+
+```bash
+cd octopus/worker
+./build-push.sh <region> <project-id> <repository>
+```
+
+The script automatically increments the SemVer tag in Artifact Registry, starting at `0.0.1` if no previous tags exist.
+
+This step must be completed before the Ansible run in step 7. The `mgmt-vm` Docker Compose configuration pulls `octopus-worker:${OCTOPUS_WORKER_TAG}` directly from Artifact Registry. Since `OCTOPUS_WORKER_TAG` defaults to `0.0.1`, the `mgmt` task will fail if that image has not been pushed first.
+
+### 5. Generate and push PKI
 
 **`scripts/generate-and-push-pki.sh`** - generates the three CAs and every leaf cert/gossip key, pushes them to Secret Manager.
 
-This must run before step 5's instances actually boot - every startup script fetches its TLS material from Secret Manager with nothing to fall back to.
+This must run before step 6's instances actually boot - every startup script fetches its TLS material from Secret Manager with nothing to fall back to.
 
-### 5. Provision compute
+### 6. Provision compute
 
-**`terraform/compute`** - creates the real VMs/MIGs from the images built in step 3. Instances boot, run their startup scripts, and fetch the PKI material from step 4.
+**`terraform/compute`** - creates the real VMs/MIGs from the images built in step 3. Instances boot, run their startup scripts, and fetch the PKI material from step 5.
 
 The `active_environments` variable controls which of `dev`/`prod` actually get created - resources for an environment left out aren't stopped, they're never provisioned at all. `mgmt-vm` and `traefik-internal` are unconditional and get created regardless. Defaults to `["dev"]`; add `"prod"` once dev is validated:
 
@@ -112,9 +124,9 @@ active_environments    = ["dev", "prod"]
 nomad_dev_server_count = 1   # 1-3; prod is always a fixed 3-node Raft cluster
 ```
 
-Whatever you choose here has to match `mgmt/`'s `nomad_environments` in step 7.
+Whatever you choose here has to match `mgmt/`'s `nomad_environments` in step 8.
 
-### 6. Configure with Ansible
+### 7. Configure with Ansible
 
 Export `GCP_PROJECT_ID` once per shell, then run the grouped tasks in order:
 
@@ -130,13 +142,13 @@ task traefik ENV=dev        # traefik-internal, traefik-public - repeat with ENV
 
 See [`ansible/Taskfile.yaml`](ansible/Taskfile.yaml) for what each grouped task chains together, and run the individual `task <name> ENV=...` commands instead if you need finer control over a single step.
 
-`nomad-consul` is what pushes the Consul/Nomad operator tokens step 7 needs into Secret Manager.
+`nomad-consul` is what pushes the Consul/Nomad operator tokens step 8 needs into Secret Manager.
 
-### 7. Configure core platform runtime services
+### 8. Configure core platform runtime services
 
 **`terraform/platform-config`** - Vault engines/policies, Consul/Nomad ACL tokens, Octopus projects and environments, as three independent root modules: `dev/`, `prod/`, and `mgmt/`.
 
-Which environments exist at all is a choice made back in step 5 - `terraform/compute`'s `active_environments` variable controls whether `dev`, `prod`, or both get provisioned. `mgmt/`'s own `nomad_provisioned` / `nomad_environments` variables need to match whatever you actually built.
+Which environments exist at all is a choice made back in step 6 - `terraform/compute`'s `active_environments` variable controls whether `dev`, `prod`, or both get provisioned. `mgmt/`'s own `nomad_provisioned` / `nomad_environments` variables need to match whatever you actually built.
 
 `dev/` and `prod/` have no dependency on `mgmt/` or on each other - apply either, in any order, whenever its environment exists. `mgmt/`'s `octopus` module normally reads `octopus-deploy-token-{dev,prod}` from Secret Manager, written by each environment's `nomad` module, so it's simplest to apply `dev`/`prod` first. If you need `mgmt/` up before either exists, set `use_dummy_secrets = true` on the `octopus` module instead - it applies with placeholder tokens you fix later, either from the Octopus UI or on a follow-up apply once the real tokens land.
 
@@ -158,11 +170,11 @@ cd .. && ./scripts/close-tunnels.sh
 
 Repeat for `prod`, then `mgmt` via `source ./scripts/pre-apply-mgmt.sh <project-id>` (also exports `TF_VAR_vault_token` and `TF_VAR_octopus_api_key`) - see [`terraform/platform-config/README.md`](terraform/platform-config/README.md) for the full dependency notes.
 
-### 8. Deploy cluster plugins
+### 9. Deploy cluster plugins
 
 **`nomad-jobs/plugins/deploy-plugins.sh`** - CSI plugin and Autoscaler, deployed directly outside Octopus because these are cluster infrastructure with no real release lifecycle.
 
-### 9. Deploy workloads
+### 10. Deploy workloads
 
 Pushes to `main` trigger GitHub Actions. Octopus deploys to dev automatically. The build is promoted to prod after the manual approval gate.
 
