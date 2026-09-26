@@ -123,7 +123,7 @@ cd ansible
 export GCP_PROJECT_ID=<project-id>
 
 task install                # collections + control-node deps
-task mgmt-vm                # mgmt, vault-init, grafana - mgmt-vm
+task mgmt-vm                # mgmt (vault, gh runner, octopus deploy), vault-init, grafana - mgmt-vm
 task nomad-consul ENV=dev   # consul-acl-bootstrap, nomad-acl-bootstrap - repeat with ENV=prod
 task traefik ENV=dev        # traefik-internal, traefik-public - repeat with ENV=prod (traefik-internal re-runs each time, harmless)
 ```
@@ -156,7 +156,7 @@ cd dev && terraform apply
 cd .. && ./scripts/close-tunnels.sh
 ```
 
-Repeat for `prod`, then `mgmt` via `source ./scripts/pre-apply-mgmt.sh <project-id>` (also exports `TF_VAR_octopus_api_key`) - see [`terraform/platform-config/README.md`](terraform/platform-config/README.md) for the full dependency notes.
+Repeat for `prod`, then `mgmt` via `source ./scripts/pre-apply-mgmt.sh <project-id>` (also exports `TF_VAR_vault_token` and `TF_VAR_octopus_api_key`) - see [`terraform/platform-config/README.md`](terraform/platform-config/README.md) for the full dependency notes.
 
 ### 8. Deploy cluster plugins
 
