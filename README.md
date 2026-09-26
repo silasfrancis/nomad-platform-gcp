@@ -67,7 +67,11 @@ Google's Online Boutique runs as the reference workload, alongside two custom mo
 
 ## Getting Started
 
-The platform is deployed in dependency order:
+The platform is deployed in dependency order. Every root terraform module below (`bootstrap`, `network`, `compute`, and each of `platform-config`'s `mgmt`/`dev`/`prod`) uses partial backend configuration, so the first time you touch any of them, initialize it with its own state file before anything else:
+
+```bash
+terraform init -backend-config="./state.conf"
+```
 
 ### 1. Bootstrap
 
@@ -101,30 +105,58 @@ This must run before step 5's instances actually boot - every startup script fet
 
 **`terraform/compute`** - creates the real VMs/MIGs from the images built in step 3. Instances boot, run their startup scripts, and fetch the PKI material from step 4.
 
+`active_environments` controls which of `dev`/`prod` actually get created - resources for an environment left out aren't stopped, they're never provisioned at all. `mgmt-vm` and `traefik-internal` are unconditional and get created regardless. Defaults to `["dev"]`; add `"prod"` once dev is validated:
+
+```hcl
+active_environments    = ["dev", "prod"]
+nomad_dev_server_count = 1   # 1-3; prod is always a fixed 3-node Raft cluster
+```
+
+Whatever you choose here has to match `mgmt/`'s `nomad_environments` in step 7.
+
 ### 6. Configure with Ansible
 
-Run Ansible one step at a time:
+Export `GCP_PROJECT_ID` once per shell, then run the grouped tasks in order:
 
 ```bash
 cd ansible
+export GCP_PROJECT_ID=<project-id>
 
-task install                       # collections + control-node deps
-task mgmt                          # Vault, Octopus, GitHub runner, backup timers - mgmt-vm
-task vault-init                    # one-time Vault operator init (after mgmt succeeds)
-task consul-acl-bootstrap ENV=dev  # repeat with ENV=prod - must precede step 7
-task nomad-acl-bootstrap ENV=dev   # repeat with ENV=prod - must precede step 7
-task traefik-internal
-task traefik-public ENV=dev        # repeat with ENV=prod
-task grafana
+task install                # collections + control-node deps
+task mgmt-vm                # mgmt, vault-init, grafana - mgmt-vm
+task nomad-consul ENV=dev   # consul-acl-bootstrap, nomad-acl-bootstrap - repeat with ENV=prod
+task traefik ENV=dev        # traefik-internal, traefik-public - repeat with ENV=prod (traefik-internal re-runs each time, harmless)
 ```
 
-`task bootstrap-all` runs the same sequence unattended. See [`ansible/Taskfile.yaml`](ansible/Taskfile.yaml) for the task definitions.
+See [`ansible/Taskfile.yaml`](ansible/Taskfile.yaml) for what each grouped task chains together, and run the individual `task <name> ENV=...` commands instead if you need finer control over a single step.
+
+`nomad-consul` is what pushes the Consul/Nomad operator tokens step 7 needs into Secret Manager.
 
 ### 7. Configure core platform runtime services
 
-**`terraform/platform-config`** (`mgmt` → `dev` → `prod`) - Vault engines/policies, Consul/Nomad ACL tokens, Octopus projects and environments.
+**`terraform/platform-config`** - Vault engines/policies, Consul/Nomad ACL tokens, Octopus projects and environments, as three independent root modules: `dev/`, `prod/`, and `mgmt/`.
 
-This needs the operator tokens produced in step 6.
+Which environments exist at all is a choice made back in step 5 - `terraform/compute`'s `active_environments` variable controls whether `dev`, `prod`, or both get provisioned. `mgmt/`'s own `nomad_provisioned` / `nomad_environments` variables need to match whatever you actually built.
+
+`dev/` and `prod/` have no dependency on `mgmt/` or on each other - apply either, in any order, whenever its environment exists. `mgmt/`'s `octopus` module normally reads `octopus-deploy-token-{dev,prod}` from Secret Manager, written by each environment's `nomad` module, so it's simplest to apply `dev`/`prod` first. If you need `mgmt/` up before either exists, set `use_dummy_secrets = true` on the `octopus` module instead - it applies with placeholder tokens you fix later, either from the Octopus UI or on a follow-up apply once the real tokens land.
+
+Providers here reach Vault/Octopus/Consul/Nomad through an IAP tunnel to `traefik-internal`, not a public address, so the first time on a given machine:
+
+```bash
+cd terraform/platform-config
+./scripts/update-hosts.sh   # one-time: follow its printed instructions
+```
+
+Then per root module:
+
+```bash
+source ./scripts/pre-apply-env.sh <project-id> dev   # exports TF_VAR_consul_token / TF_VAR_nomad_token / TF_VAR_vault_token
+./scripts/open-tunnel.sh dev <project-id> <zone>
+cd dev && terraform apply
+cd .. && ./scripts/close-tunnels.sh
+```
+
+Repeat for `prod`, then `mgmt` via `source ./scripts/pre-apply-mgmt.sh <project-id>` (also exports `TF_VAR_octopus_api_key`) - see [`terraform/platform-config/README.md`](terraform/platform-config/README.md) for the full dependency notes.
 
 ### 8. Deploy cluster plugins
 
@@ -139,9 +171,19 @@ Pushes to `main` trigger GitHub Actions. Octopus deploys to dev automatically. T
 The platform doesn't care what's running on it - Online Boutique just proves it works. To add your own service:
 
 1. Drop a job spec in `nomad-jobs/<namespace>/` (pick the namespace that fits, or add one).
-2. If the job requires a new namespace, add the namespace to `local.intentions` in `terraform/modules/nomad/locals.tf` before apply.
-3. Add it to `local.intentions` in `terraform/modules/consul/locals.tf` if it needs to talk to another mesh service - deny-by-default means nothing connects until it's listed.
-4. Give it a Vault policy by adding an entry to `platform-config`'s `vault_consumers` map - the JWT role and KV/database access get derived from that automatically.
+2. If the job requires a new namespace, add the namespace to `local.namespaces` in `terraform/modules/nomad/locals.tf` before apply.
+3. Add that same job to `local.intentions` in `terraform/modules/consul/locals.tf` if it needs to talk to mesh services. Every consul agent has `deny-by-default` enabled so nothing connects until it's listed.
+4. If the job needs Vault access, add an entry to `vault_consumers` in `terraform/modules/vault/locals.tf`: the JWT role and any KV/PKI/database access get derived from that entry automatically. The job's `namespace` config is required (it's used for vault's jwt auth `bound_claims`); `kv_paths`, `pki_paths`, and `db_role` are all optional depending on what the job actually needs:
+
+```hcl
+   "nomad-sentinel" = {
+     namespace = "monitoring"
+     kv_paths  = ["nomad-sentinel/config"]
+     pki_paths = ["nomad-ca"]
+     db_role   = "monitoring"
+   }
+```
+
 5. Add it to the matching `.github/configs/*.json` so CI picks it up, and give it an Octopus project (or fold it into an existing one) for deployment.
 
 ## Documentation
